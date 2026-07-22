@@ -40,9 +40,7 @@ const ROLES: Record<string, { label: string; color: string; perms: string[] }> =
 
 const PAY_METHODS = [
   { id: "efectivo",      label: "Efectivo CUP" },
-  { id: "mlc",           label: "Efectivo MLC" },
   { id: "transferencia", label: "Transferencia (Zun/Enzona)" },
-  { id: "tarjeta",       label: "Tarjeta magnética" },
 ];
 
 const CATEGORIES = ["Alimentos","Higiene","Bebidas","Limpieza","Electrónica","Ropa","Otros"];
@@ -349,8 +347,8 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
       </div>
 
       {loading ? <Spinner/> : (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflow:"hidden" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+          <table style={{ width:"100%", minWidth:700, borderCollapse:"collapse" }}>
             <thead><tr style={{ background:"#faf8f6" }}>
               {["Código","Producto","Categoría","Precio","Costo","Stock","Estado","Acciones"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase", letterSpacing:"0.5px", whiteSpace:"nowrap" }}>{h}</th>
@@ -449,10 +447,8 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   const [lastReceipt, setLastReceipt] = useState<any>(null);
   const [processing, setProcessing]   = useState(false);
 
-  const TAX_RATE = 0.10;
   const subtotal = cart.reduce((a,i)=>a+i.price*i.qty,0);
-  const tax      = Math.round(subtotal * TAX_RATE);
-  const total    = subtotal + tax;
+  const total    = subtotal;
   const change   = Number(cashGiven) - total;
 
   useEffect(()=>{
@@ -557,8 +553,6 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
           ))}
         </div>
         <div style={{ padding:"14px 20px", borderTop:"1px solid #e8e0d8", background:"#faf8f6" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, color:"#5a4a3a", marginBottom:6 }}><span>Subtotal</span><span>${fmt(subtotal)}</span></div>
-          <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, color:"#5a4a3a", marginBottom:10 }}><span>Imp. 10% ONAT</span><span>${fmt(tax)}</span></div>
           <div style={{ display:"flex", justifyContent:"space-between", fontSize:20, fontWeight:800, color:"#1a1410", marginBottom:14 }}><span>Total</span><span>${fmt(total)} CUP</span></div>
           <Field label="Método de Pago">
             <select style={{ ...sel, fontSize:13 }} value={payMethod} onChange={e=>setPayMethod(e.target.value)}>
@@ -598,8 +592,6 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
               </div>
             ))}
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
-            <div style={{ display:"flex", justifyContent:"space-between" }}><span>Subtotal:</span><span>${fmt(lastReceipt.subtotal)}</span></div>
-            <div style={{ display:"flex", justifyContent:"space-between" }}><span>Impuesto 10%:</span><span>${fmt(lastReceipt.tax)}</span></div>
             <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14, marginTop:4 }}><span>TOTAL:</span><span>${fmt(lastReceipt.total)} CUP</span></div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
             <div style={{ textAlign:"center", fontSize:10, color:"#888" }}>Conforme Resolución 286/2019 MINFIN<br/>Gracias por su preferencia</div>
@@ -665,8 +657,8 @@ const Facturacion = ({ showToast }: { showToast: (m:string,t:string)=>void }) =>
         </div>
       </div>
       {loading ? <Spinner/> : (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflow:"hidden" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+          <table style={{ width:"100%", minWidth:700, borderCollapse:"collapse" }}>
             <thead><tr style={{ background:"#faf8f6" }}>
               {["No. Factura","Fecha","Cliente","NIT","Total CUP","Método","Estado","Ver"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase", letterSpacing:"0.5px", whiteSpace:"nowrap" }}>{h}</th>
@@ -710,8 +702,6 @@ const Facturacion = ({ showToast }: { showToast: (m:string,t:string)=>void }) =>
               </div>
             ))}
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
-            <div style={{ display:"flex", justifyContent:"space-between" }}><span>Subtotal:</span><span>${fmt(viewInv.subtotal)}</span></div>
-            <div style={{ display:"flex", justifyContent:"space-between" }}><span>Impuesto 10% ONAT:</span><span>${fmt(viewInv.tax)}</span></div>
             <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14, marginTop:4 }}><span>TOTAL:</span><span>${fmt(viewInv.total)} CUP</span></div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
             <div style={{ textAlign:"center", fontSize:10, color:"#888" }}>Conforme Resolución 286/2019 MINFIN · Ley 149/2022</div>
@@ -732,7 +722,7 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
   const [sales, setSales]       = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [tab, setTab]           = useState("resumen");
+  const [tab, setTab]           = useState("ingresos");
   const [modal, setModal]       = useState(false);
   const [form, setForm]         = useState({ date:today(), concept:"", amount:"", category:"Compras", method:"efectivo" });
   const [saving, setSaving]     = useState(false);
@@ -749,8 +739,55 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
 
   const totalIncome = sales.filter(s=>s.status==="emitida").reduce((a,s)=>a+Number(s.total),0);
   const totalExp    = expenses.reduce((a,e)=>a+Number(e.amount),0);
-  const totalTax    = sales.filter(s=>s.status==="emitida").reduce((a,s)=>a+Number(s.tax),0);
   const net         = totalIncome - totalExp;
+
+  const exportarInforme = () => {
+    const TAX_RATE = 0.10;
+    const totalIncome = sales.filter((s:any)=>s.status==="emitida").reduce((a:number,s:any)=>a+Number(s.total),0);
+    const totalExp    = expenses.reduce((a:number,e:any)=>a+Number(e.amount),0);
+    const totalTax    = Math.round(totalIncome * TAX_RATE);
+    const net         = totalIncome - totalExp;
+    const mes         = new Date().toLocaleString("es-CU",{month:"long",year:"numeric"});
+    const win = window.open("","_blank","width=700,height=900");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+      <title>Informe Fiscal CubaGest</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:40px;color:#1a1410;max-width:600px;margin:0 auto}
+        h1{color:#8B1A1A;font-size:20px;margin-bottom:4px}
+        .sub{color:#8a7060;font-size:13px;margin-bottom:32px}
+        table{width:100%;border-collapse:collapse;margin-bottom:24px}
+        th{text-align:left;font-size:11px;text-transform:uppercase;color:#8a7060;padding:8px 0;border-bottom:2px solid #e8e0d8}
+        td{padding:10px 0;border-bottom:1px solid #f0ebe4;font-size:14px}
+        .total{font-weight:800;font-size:16px}
+        .red{color:#8B1A1A} .green{color:#1A7A3C}
+        .box{border:1px solid #e8e0d8;border-radius:8px;padding:16px;margin-bottom:16px}
+        .note{font-size:11px;color:#8a7060;margin-top:32px;border-top:1px solid #e8e0d8;padding-top:12px}
+        @media print{button{display:none}}
+      </style></head><body>
+      <h1>CubaGest — Informe Fiscal</h1>
+      <p class="sub">Período: ${mes} · Generado: ${new Date().toLocaleDateString("es-CU")}</p>
+      <div class="box">
+        <table>
+          <tr><th>Concepto</th><th style="text-align:right">Monto (CUP)</th></tr>
+          <tr><td>Ingresos brutos por ventas</td><td style="text-align:right">${fmt(totalIncome)}</td></tr>
+          <tr><td class="red">Impuesto estimado ONAT (10%)</td><td class="red" style="text-align:right">${fmt(totalTax)}</td></tr>
+          <tr><td class="red">Total egresos registrados</td><td class="red" style="text-align:right">${fmt(totalExp)}</td></tr>
+          <tr class="total"><td class="${net>=0?"green":"red"}">Utilidad neta</td><td class="${net>=0?"green":"red"}" style="text-align:right">${fmt(net)}</td></tr>
+        </table>
+      </div>
+      <h3 style="font-size:14px;margin-bottom:12px">Detalle de Egresos</h3>
+      <table>
+        <tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th style="text-align:right">Monto</th></tr>
+        ${expenses.map((e:any)=>`<tr><td>${(e.date||e.createdAt||"").split("T")[0]}</td><td>${e.concept}</td><td>${e.category}</td><td style="text-align:right">${fmt(Number(e.amount))}</td></tr>`).join("")}
+      </table>
+      <p class="note">Este informe es generado automáticamente por CubaGest para uso interno.<br/>
+      El cálculo del impuesto es estimado. Consulte con su contador para la declaración oficial ante la ONAT.<br/>
+      Conforme a Decreto-Ley 44/2021 y Resolución 286/2019 MINFIN.</p>
+      <br/><button onclick="window.print()" style="background:#8B1A1A;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:14px">🖨 Imprimir / Guardar PDF</button>
+    </body></html>`);
+    win.document.close();
+  };
 
   const addExpense = async()=>{
     if (!form.concept||!form.amount) return showToast("Complete los campos requeridos","error");
@@ -765,11 +802,6 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
     finally { setSaving(false); }
   };
 
-  const SumRow = ({ label, value, bold, color }: any) => (
-    <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid #f0ebe4", fontWeight:bold?"800":"400", color:color||"#1a1410", fontSize:bold?16:14 }}>
-      <span>{label}</span><span>${fmt(value)} CUP</span>
-    </div>
-  );
 
   if (loading) return <Spinner/>;
 
@@ -778,65 +810,28 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
         <div>
           <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1a1410" }}>Contabilidad</h2>
-          <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>Régimen simplificado ONAT</p>
+          <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>Registro contable</p>
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
+          <button style={btn("secondary")} onClick={exportarInforme}><Icon name="print" size={15}/>Informe Fiscal</button>
           <button style={btn("primary")} onClick={()=>setModal(true)}><Icon name="plus" size={16}/>Registrar Gasto</button>
         </div>
       </div>
 
       <div style={{ display:"flex", gap:4, background:"#f0ebe4", borderRadius:10, padding:4, width:"fit-content" }}>
-        {[["resumen","Resumen ONAT"],["ingresos","Ingresos"],["gastos","Egresos"]].map(([v,l])=>(
+        {[["ingresos","Ingresos"],["gastos","Egresos"]].map(([v,l])=>(
           <button key={v} onClick={()=>setTab(v)} style={{ ...btn(tab===v?"primary":"ghost"), padding:"7px 16px", fontSize:13, borderRadius:7 }}>{l}</button>
         ))}
       </div>
 
-      {tab==="resumen" && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
-          <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", padding:24 }}>
-            <h3 style={{ margin:"0 0 16px", fontSize:15, fontWeight:700, color:"#1a1410" }}>📋 Resumen para Declaración ONAT</h3>
-            <div style={{ background:"#faf8f6", borderRadius:8, padding:16 }}>
-              <SumRow label="Total Ingresos Brutos" value={totalIncome}/>
-              <SumRow label="Impuesto retenido (10%)" value={totalTax} color="#8B1A1A"/>
-              <SumRow label="Total Egresos" value={totalExp} color="#8B1A1A"/>
-              <SumRow label="Utilidad Neta" value={net} bold color={net>=0?"#1A7A3C":"#8B1A1A"}/>
-            </div>
-            <div style={{ marginTop:16, background:"#f0f8f4", border:"1px solid #90d0a8", borderRadius:8, padding:14 }}>
-              <p style={{ margin:0, fontSize:13, color:"#1A5A30", fontWeight:600 }}>✓ Datos listos para presentar en ONAT</p>
-              <p style={{ margin:"4px 0 0", fontSize:12, color:"#2a7a4a" }}>Impuesto a pagar: <strong>${fmt(totalTax)} CUP</strong></p>
-            </div>
-            <div style={{ marginTop:12, padding:12, background:"#fffbf0", border:"1px solid #f0d070", borderRadius:8, fontSize:12, color:"#7a4a00" }}>
-              ⚠ Declaración mensual antes del día 20 del mes siguiente (Res. MINFIN)
-            </div>
-          </div>
-          <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", padding:24 }}>
-            <h3 style={{ margin:"0 0 16px", fontSize:15, fontWeight:700, color:"#1a1410" }}>Egresos por Categoría</h3>
-            {EXPENSE_CATS.map(cat=>{
-              const catTotal = expenses.filter(e=>e.category===cat).reduce((a,e)=>a+Number(e.amount),0);
-              if (!catTotal) return null;
-              const pct = Math.round(catTotal/Math.max(totalExp,1)*100);
-              return (
-                <div key={cat} style={{ marginBottom:12 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:13 }}>
-                    <span style={{ color:"#5a4a3a", fontWeight:600 }}>{cat}</span>
-                    <span style={{ color:"#1a1410", fontWeight:700 }}>${fmt(catTotal)} <span style={{ color:"#8a7060", fontSize:11 }}>({pct}%)</span></span>
-                  </div>
-                  <div style={{ height:6, background:"#f0ebe4", borderRadius:3, overflow:"hidden" }}>
-                    <div style={{ height:"100%", width:pct+"%", background:"linear-gradient(90deg,#8B1A1A,#c94040)", borderRadius:3 }}/>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+
 
       {tab==="ingresos" && (
         <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflow:"hidden" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr style={{ background:"#faf8f6" }}>
-              {["No. Factura","Fecha","Cliente","Subtotal","Impuesto","Total","Método"].map(h=>(
+              {["No. Factura","Fecha","Cliente","Total","Método"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase" }}>{h}</th>
               ))}
             </tr></thead>
@@ -846,8 +841,6 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#8B1A1A", fontFamily:"monospace" }}>{s.id}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13 }}>{s.client}</td>
-                  <td style={{ padding:"11px 14px", fontSize:13 }}>${fmt(s.subtotal)}</td>
-                  <td style={{ padding:"11px 14px", fontSize:13, color:"#8B1A1A" }}>${fmt(s.tax)}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
                   <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
                 </tr>
@@ -967,8 +960,8 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
       </div>
 
       {loading ? <Spinner/> : (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflow:"hidden" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+          <table style={{ width:"100%", minWidth:700, borderCollapse:"collapse" }}>
             <thead><tr style={{ background:"#faf8f6" }}>
               {["Nombre","Correo","Rol","Permisos","Acciones"].map(h=>(
                 <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase", letterSpacing:"0.5px" }}>{h}</th>
