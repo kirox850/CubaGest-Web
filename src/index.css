@@ -1,0 +1,8 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f0ea; }
+input, select, button, textarea { font-family: inherit; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media print {
+  nav, aside, header { display: none !important; }
+  .no-print { display: none !important; }
+}
