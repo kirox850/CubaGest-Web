@@ -33,8 +33,8 @@ async function apiFetch(path: string, opts: { method?: string; body?: object; au
 // ─── ROLES (igual que backend) ────────────────────────────────────────────────
 const ROLES: Record<string, { label: string; color: string; perms: string[] }> = {
   admin:       { label: "Administrador", color: "#8B1A1A", perms: ["dashboard","inventario","pos","facturacion","contabilidad","usuarios","config"] },
-  cajero:      { label: "Cajero",        color: "#1A5C8B", perms: ["dashboard","pos","facturacion"] },
-  contador:    { label: "Contador",      color: "#1A7A3C", perms: ["dashboard","contabilidad","facturacion"] },
+  cajero:      { label: "Cajero",        color: "#1A5C8B", perms: ["dashboard","pos"] },
+  contador:    { label: "Contador",      color: "#1A7A3C", perms: ["dashboard","contabilidad"] },
   almacenista: { label: "Almacenista",   color: "#7A5C1A", perms: ["dashboard","inventario"] },
 };
 
@@ -176,7 +176,10 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
             {loading ? "Verificando..." : "Iniciar sesión"}
           </button>
         </div>
-        <p style={{ textAlign:"center", marginTop:24, fontSize:11, color:"#b0a090" }}>Conforme a Resolución 286/2019 MINFIN · Ley 149/2022</p>
+        <button style={{ ...btn("ghost"), width:"100%", justifyContent:"center", marginTop:8, fontSize:13 }} onClick={()=>alert("Para registrar su negocio en CubaGest contacte a: soporte@cubagest.cu")}>
+            Crear mi negocio (primera vez)
+          </button>
+        <p style={{ textAlign:"center", marginTop:16, fontSize:11, color:"#b0a090" }}>Conforme a Resolución 286/2019 MINFIN · Ley 149/2022</p>
       </div>
     </div>
   );
@@ -314,6 +317,14 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
     finally { setSaving(false); }
   };
 
+  const reactivateProduct = async (id: string) => {
+    try {
+      await apiFetch(`/products/${id}`, { method:"PUT", body:{ active: true } });
+      showToast("Producto reactivado","success");
+      load();
+    } catch(e:any) { showToast(e.message,"error"); }
+  };
+
   const deleteProduct = async (id: string) => {
     if (!confirm("¿Desactivar este producto? No se eliminará, solo se ocultará.")) return;
     try {
@@ -372,6 +383,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
                       {canManage && <button style={{ ...btn("ghost"), padding:"5px 9px", fontSize:12 }} onClick={()=>openAdjust(p)} title="Ajustar stock">±</button>}
                       {canManage && <button style={{ ...btn("ghost"), padding:"5px 9px" }} onClick={()=>openEdit(p)}><Icon name="edit" size={14}/></button>}
                       {canManage && p.active && <button style={{ ...btn("danger"), padding:"5px 9px" }} onClick={()=>deleteProduct(p.id)}><Icon name="trash" size={14}/></button>}
+                      {canManage && !p.active && <button style={{ ...btn("secondary"), padding:"5px 9px", fontSize:11 }} onClick={()=>reactivateProduct(p.id)}>Activar</button>}
                     </div>
                   </td>
                 </tr>
@@ -607,7 +619,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 };
 
 // ─── FACTURACIÓN ──────────────────────────────────────────────────────────────
-const Facturacion = ({ showToast }: { showToast: (m:string,t:string)=>void }) => {
+const Facturacion = ({ showToast, user }: { showToast: (m:string,t:string)=>void; user: any }) => {
   const [sales, setSales]   = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -713,6 +725,35 @@ const Facturacion = ({ showToast }: { showToast: (m:string,t:string)=>void }) =>
           </div>
         </Modal>
       )}
+
+      {/* Suscripción a la plataforma */}
+      <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", padding:24, marginTop:8 }}>
+        <h3 style={{ margin:"0 0 4px", fontSize:16, fontWeight:700, color:"#1a1410" }}>Suscripción a CubaGest</h3>
+        <p style={{ margin:"0 0 20px", fontSize:13, color:"#8a7060" }}>Gestiona tu plan y método de pago</p>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:16, marginBottom:20 }}>
+          {[
+            { plan:"Básico", price:"Gratis", features:["1 usuario","Inventario","POS básico"], color:"#8a7060", current: false },
+            { plan:"Profesional", price:"$15/mes CUP", features:["5 usuarios","Todas las funciones","Soporte prioritario"], color:"#1A5C8B", current: true },
+            { plan:"Empresarial", price:"$35/mes CUP", features:["Usuarios ilimitados","Multi-sucursal","API access"], color:"#8B1A1A", current: false },
+          ].map(p=>(
+            <div key={p.plan} style={{ border:`2px solid ${p.current?"#8B1A1A":"#e8e0d8"}`, borderRadius:10, padding:18, position:"relative" as any }}>
+              {p.current && <span style={{ position:"absolute" as any, top:-10, left:16, background:"#8B1A1A", color:"#fff", fontSize:10, fontWeight:700, padding:"2px 10px", borderRadius:20 }}>PLAN ACTUAL</span>}
+              <div style={{ fontWeight:800, fontSize:15, color:"#1a1410", marginBottom:4 }}>{p.plan}</div>
+              <div style={{ fontWeight:700, fontSize:18, color:p.color, marginBottom:12 }}>{p.price}</div>
+              {p.features.map((f:string)=>(
+                <div key={f} style={{ display:"flex", gap:8, alignItems:"center", fontSize:13, color:"#5a4a3a", marginBottom:6 }}>
+                  <Icon name="check" size={14} color="#1A7A3C"/>{f}
+                </div>
+              ))}
+              {!p.current && <button style={{ ...btn("secondary"), width:"100%", justifyContent:"center", marginTop:12, fontSize:13 }}>Cambiar plan</button>}
+            </div>
+          ))}
+        </div>
+        <div style={{ background:"#faf8f6", borderRadius:8, padding:16, fontSize:13, color:"#5a4a3a" }}>
+          <strong>Próxima renovación:</strong> 23 de agosto 2026 · <strong>Método:</strong> Transferencia Zun/Enzona<br/>
+          <span style={{ color:"#8a7060", fontSize:12 }}>Para cambiar el plan o método de pago contacte a soporte: soporte@cubagest.cu</span>
+        </div>
+      </div>
     </div>
   );
 };
@@ -820,7 +861,7 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
       </div>
 
       <div style={{ display:"flex", gap:4, background:"#f0ebe4", borderRadius:10, padding:4, width:"fit-content" }}>
-        {[["ingresos","Ingresos"],["gastos","Egresos"]].map(([v,l])=>(
+        {[["ingresos","Ingresos"],["gastos","Egresos"],["facturas","Facturas"]].map(([v,l])=>(
           <button key={v} onClick={()=>setTab(v)} style={{ ...btn(tab===v?"primary":"ghost"), padding:"7px 16px", fontSize:13, borderRadius:7 }}>{l}</button>
         ))}
       </div>
@@ -828,8 +869,8 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
 
 
       {tab==="ingresos" && (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflow:"hidden" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+          <table style={{ width:"100%", minWidth:600, borderCollapse:"collapse" }}>
             <thead><tr style={{ background:"#faf8f6" }}>
               {["No. Factura","Fecha","Cliente","Total","Método"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase" }}>{h}</th>
@@ -851,8 +892,8 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
       )}
 
       {tab==="gastos" && (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflow:"hidden" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+          <table style={{ width:"100%", minWidth:500, borderCollapse:"collapse" }}>
             <thead><tr style={{ background:"#faf8f6" }}>
               {["Fecha","Concepto","Categoría","Método","Monto"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase" }}>{h}</th>
@@ -871,6 +912,31 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
             </tbody>
           </table>
           {expenses.length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060" }}>No hay egresos registrados</div>}
+        </div>
+      )}
+
+      {tab==="facturas" && (
+        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+          <table style={{ width:"100%", minWidth:650, borderCollapse:"collapse" }}>
+            <thead><tr style={{ background:"#faf8f6" }}>
+              {["No. Factura","Fecha","Cliente","Total","Método","Estado"].map(h=>(
+                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase" as any, whiteSpace:"nowrap" as any }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {sales.filter((s:any)=>s.status==="emitida").map((s:any)=>(
+                <tr key={s.id} style={{ borderTop:"1px solid #f0ebe4" }}>
+                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#8B1A1A", fontFamily:"monospace" }}>{s.id}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13 }}>{s.client}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find((p:any)=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label="Emitida" color="#1A7A3C"/></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {sales.filter((s:any)=>s.status==="emitida").length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060" }}>No hay facturas emitidas</div>}
         </div>
       )}
 
@@ -1010,6 +1076,31 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
         </div>
       </div>
 
+      {tab==="facturas" && (
+        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+          <table style={{ width:"100%", minWidth:650, borderCollapse:"collapse" }}>
+            <thead><tr style={{ background:"#faf8f6" }}>
+              {["No. Factura","Fecha","Cliente","Total","Método","Estado"].map(h=>(
+                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase" as any, whiteSpace:"nowrap" as any }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {sales.filter((s:any)=>s.status==="emitida").map((s:any)=>(
+                <tr key={s.id} style={{ borderTop:"1px solid #f0ebe4" }}>
+                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#8B1A1A", fontFamily:"monospace" }}>{s.id}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13 }}>{s.client}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find((p:any)=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label="Emitida" color="#1A7A3C"/></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {sales.filter((s:any)=>s.status==="emitida").length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060" }}>No hay facturas emitidas</div>}
+        </div>
+      )}
+
       {modal && (
         <Modal title={editUser?"Editar Usuario":"Nuevo Usuario"} onClose={()=>setModal(false)} width={440}>
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
@@ -1043,8 +1134,6 @@ export default function App() {
   const [checkingAuth, setChecking] = useState(true);
   const [activeModule, setActiveModule] = useState("dashboard");
   const [toast, setToast]           = useState<any>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-
   // Restaurar sesión al recargar
   useEffect(()=>{
     const token = getToken();
@@ -1074,62 +1163,63 @@ export default function App() {
     { id:"usuarios",     label:"Usuarios",       icon:"usuarios" },
   ].filter(n=>perms.includes(n.id));
 
+  const [profileOpen, setProfileOpen] = useState(false);
+
   return (
-    <div style={{ display:"flex", height:"100vh", background:"#f5f0ea", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
-      {/* Sidebar */}
-      <div style={{ width:sidebarOpen?240:64, background:"#1a0a05", transition:"width 0.2s", display:"flex", flexDirection:"column", overflow:"hidden", flexShrink:0 }}>
-        <div style={{ padding:"20px 16px", borderBottom:"1px solid rgba(255,255,255,0.08)", display:"flex", alignItems:"center", gap:12, minHeight:70 }}>
-          <div style={{ width:36, height:36, background:"linear-gradient(135deg,#8B1A1A,#c94040)", borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-            <svg width="20" height="20" viewBox="0 0 32 32" fill="none"><path d="M8 24L16 8L24 24" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M10.5 19h11" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
+    <div style={{ display:"flex", flexDirection:"column", height:"100vh", background:"#f5f0ea", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
+
+      {/* Top header */}
+      <div style={{ background:"#1a0a05", padding:"0 16px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, zIndex:10 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ width:32, height:32, background:"linear-gradient(135deg,#8B1A1A,#c94040)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <svg width="18" height="18" viewBox="0 0 32 32" fill="none"><path d="M8 24L16 8L24 24" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M10.5 19h11" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
           </div>
-          {sidebarOpen && <div><div style={{ color:"#fff", fontWeight:800, fontSize:16 }}>CubaGest</div><div style={{ color:"rgba(255,255,255,0.4)", fontSize:10 }}>ERP para PYMEs</div></div>}
+          <div style={{ color:"#fff", fontWeight:800, fontSize:15 }}>CubaGest</div>
         </div>
-        <nav style={{ flex:1, padding:"12px 8px", overflow:"auto" }}>
-          {navItems.map(item=>(
-            <button key={item.id} onClick={()=>setActiveModule(item.id)} style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"10px 12px", borderRadius:8, border:"none", cursor:"pointer", marginBottom:2, textAlign:"left", background:activeModule===item.id?"#8B1A1A":"transparent", color:activeModule===item.id?"#fff":"rgba(255,255,255,0.6)" }}>
-              <span style={{ flexShrink:0 }}><Icon name={item.icon} size={18} color={activeModule===item.id?"#fff":"rgba(255,255,255,0.6)"}/></span>
-              {sidebarOpen && <span style={{ fontSize:14, fontWeight:activeModule===item.id?700:400, whiteSpace:"nowrap" }}>{item.label}</span>}
-            </button>
-          ))}
-        </nav>
-        <div style={{ padding:"12px 8px", borderTop:"1px solid rgba(255,255,255,0.08)" }}>
-          {sidebarOpen && (
-            <div style={{ padding:"10px 12px", marginBottom:8 }}>
-              <div style={{ color:"#fff", fontSize:13, fontWeight:700 }}>{user.name}</div>
-              <div style={{ color:"rgba(255,255,255,0.4)", fontSize:11 }}>{ROLES[user.role]?.label}</div>
+        {/* Profile button */}
+        <div style={{ position:"relative" as any }}>
+          <button onClick={()=>setProfileOpen(v=>!v)} style={{ width:36, height:36, borderRadius:"50%", background:ROLES[user.role]?.color||"#888", color:"#fff", border:"none", cursor:"pointer", fontSize:14, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            {user.name?.charAt(0)}
+          </button>
+          {profileOpen && (
+            <div style={{ position:"absolute" as any, right:0, top:44, background:"#fff", borderRadius:10, boxShadow:"0 8px 32px rgba(0,0,0,0.18)", border:"1px solid #e8e0d8", minWidth:200, zIndex:200 }}>
+              <div style={{ padding:"14px 16px", borderBottom:"1px solid #f0ebe4" }}>
+                <div style={{ fontWeight:700, fontSize:14, color:"#1a1410" }}>{user.name}</div>
+                <div style={{ fontSize:12, color:"#8a7060" }}>{user.email}</div>
+                <div style={{ marginTop:4 }}><Badge label={ROLES[user.role]?.label||user.role} color={ROLES[user.role]?.color||"#888"}/></div>
+              </div>
+              <div style={{ padding:8 }}>
+                <button onClick={()=>{handleLogout();setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:8, border:"none", cursor:"pointer", background:"none", color:"#8B1A1A", fontSize:14, fontWeight:600 }}>
+                  <Icon name="logout" size={16} color="#8B1A1A"/>Cerrar sesión
+                </button>
+              </div>
             </div>
           )}
-          <button onClick={handleLogout} style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"10px 12px", borderRadius:8, border:"none", cursor:"pointer", background:"transparent", color:"rgba(255,255,255,0.5)" }}>
-            <Icon name="logout" size={18}/>{sidebarOpen && <span style={{ fontSize:14 }}>Cerrar sesión</span>}
-          </button>
         </div>
       </div>
 
-      {/* Main */}
-      <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
-        <div style={{ background:"#fff", borderBottom:"1px solid #e8e0d8", padding:"0 24px", height:56, display:"flex", alignItems:"center", gap:16, flexShrink:0 }}>
-          <button onClick={()=>setSidebarOpen(v=>!v)} style={{ background:"none", border:"none", cursor:"pointer", color:"#5a4a3a", padding:4 }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-          </button>
-          <div style={{ flex:1 }}/>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <div style={{ width:32, height:32, borderRadius:50, background:ROLES[user.role]?.color||"#888", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800 }}>{user.name?.charAt(0)}</div>
-            <div>
-              <div style={{ fontSize:13, fontWeight:700, color:"#1a1410" }}>{user.name}</div>
-              <div style={{ fontSize:11, color:"#8a7060" }}>{ROLES[user.role]?.label}</div>
-            </div>
-          </div>
-        </div>
-        <div style={{ flex:1, overflow:"auto", padding:24 }}>
-          {activeModule==="dashboard"    && <Dashboard user={user}/>}
-          {activeModule==="inventario"   && <Inventario user={user} showToast={showToast}/>}
-          {activeModule==="pos"          && <POS user={user} showToast={showToast}/>}
-          {activeModule==="facturacion"  && <Facturacion showToast={showToast}/>}
-          {activeModule==="contabilidad" && <Contabilidad showToast={showToast}/>}
-          {activeModule==="usuarios"     && <Usuarios currentUser={user} showToast={showToast}/>}
-        </div>
+      {/* Content */}
+      <div style={{ flex:1, overflow:"auto", padding:16, paddingBottom:80 }}>
+        {activeModule==="dashboard"    && <Dashboard user={user}/>}
+        {activeModule==="inventario"   && <Inventario user={user} showToast={showToast}/>}
+        {activeModule==="pos"          && <POS user={user} showToast={showToast}/>}
+        {activeModule==="facturacion"  && <Facturacion showToast={showToast} user={user}/>}
+        {activeModule==="contabilidad" && <Contabilidad showToast={showToast}/>}
+        {activeModule==="usuarios"     && <Usuarios currentUser={user} showToast={showToast}/>}
       </div>
 
+      {/* Bottom navigation */}
+      <div style={{ position:"fixed" as any, bottom:0, left:0, right:0, background:"#fff", borderTop:"1px solid #e8e0d8", display:"flex", zIndex:100, paddingBottom:"env(safe-area-inset-bottom)" }}>
+        {navItems.map(item=>(
+          <button key={item.id} onClick={()=>{ setActiveModule(item.id); setProfileOpen(false); }} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"10px 4px 8px", border:"none", cursor:"pointer", background:"none", color:activeModule===item.id?"#8B1A1A":"#8a7060", gap:4, minWidth:0 }}>
+            <Icon name={item.icon} size={22} color={activeModule===item.id?"#8B1A1A":"#8a7060"}/>
+            <span style={{ fontSize:10, fontWeight:activeModule===item.id?700:400, whiteSpace:"nowrap" as any, overflow:"hidden", textOverflow:"ellipsis", maxWidth:"100%" }}>{item.label}</span>
+            {activeModule===item.id && <div style={{ width:4, height:4, borderRadius:"50%", background:"#8B1A1A" }}/>}
+          </button>
+        ))}
+      </div>
+
+      {profileOpen && <div onClick={()=>setProfileOpen(false)} style={{ position:"fixed" as any, inset:0, zIndex:150 }}/>}
       {toast && <Toast key={toast.key} msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
     </div>
   );
