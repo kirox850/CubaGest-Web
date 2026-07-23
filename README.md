@@ -12,7 +12,7 @@
 5. Listo — tu URL será algo como `cubagest-web.pages.dev`
 
 ## Backend
-Ya conectado a: https://cubagest-backend-production.up.railway.app/api
+Ya conectado  a: https://cubagest-backend-production.up.railway.app/api
 
 ## Desarrollo local
 ```bash
