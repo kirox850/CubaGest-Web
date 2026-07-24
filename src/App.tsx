@@ -1233,6 +1233,7 @@ export default function App() {
     { id:"dashboard",    label:"Dashboard",      icon:"dashboard" },
     { id:"inventario",   label:"Inventario",     icon:"inventario" },
     { id:"pos",          label:"Punto de Venta", icon:"pos" },
+    { id:"facturacion",  label:"Facturas",        icon:"facturacion" },
     { id:"contabilidad", label:"Contabilidad",   icon:"contabilidad" },
     { id:"usuarios",     label:"Usuarios",       icon:"usuarios" },
   ].filter(n=>perms.includes(n.id));
@@ -1255,7 +1256,7 @@ export default function App() {
             {user.name?.charAt(0)}
           </button>
           {profileOpen && (
-            <div style={{ position:"absolute" as any, right:0, top:44, background:"#fff", borderRadius:10, boxShadow:"0 8px 32px rgba(0,0,0,0.18)", border:"1px solid #e8e0d8", minWidth:200, zIndex:200 }}>
+            <div style={{ position:"absolute" as any, right:0, top:44, background:"#fff", borderRadius:10, boxShadow:"0 8px 32px rgba(0,0,0,0.18)", border:"1px solid #e8e0d8", minWidth:200, zIndex:300 }}>
               <div style={{ padding:"14px 16px", borderBottom:"1px solid #f0ebe4" }}>
                 <div style={{ fontWeight:700, fontSize:14, color:"#1a1410" }}>{user.name}</div>
                 <div style={{ fontSize:12, color:"#8a7060" }}>{user.email}</div>
@@ -1295,7 +1296,7 @@ export default function App() {
         ))}
       </div>
 
-      {profileOpen && <div onClick={()=>setProfileOpen(false)} style={{ position:"fixed" as any, inset:0, zIndex:150 }}/>}
+      {profileOpen && <div onClick={()=>setProfileOpen(false)} style={{ position:"fixed" as any, inset:0, zIndex:149 }}/>}
       {planOpen && <PlanModal onClose={()=>setPlanOpen(false)}/>}
       {toast && <Toast key={toast.key} msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
     </div>
