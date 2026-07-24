@@ -33,7 +33,7 @@ async function apiFetch(path: string, opts: { method?: string; body?: object; au
 // ─── ROLES (igual que backend) ────────────────────────────────────────────────
 const ROLES: Record<string, { label: string; color: string; perms: string[] }> = {
   admin:       { label: "Administrador", color: "#8B1A1A", perms: ["dashboard","inventario","pos","contabilidad","usuarios","config"] },
-  cajero:      { label: "Cajero",        color: "#1A5C8B", perms: ["dashboard","pos"] },
+  cajero:      { label: "Cajero",        color: "#1A5C8B", perms: ["dashboard","pos","facturacion"] },
   contador:    { label: "Contador",      color: "#1A7A3C", perms: ["dashboard","contabilidad"] },
   almacenista: { label: "Almacenista",   color: "#7A5C1A", perms: ["dashboard","inventario"] },
 };
@@ -658,6 +658,167 @@ const PlanModal = ({ onClose }: { onClose: () => void }) => (
 );
 
 // ─── CONTABILIDAD ─────────────────────────────────────────────────────────────
+// ─── FACTURACIÓN (cajero + admin) ────────────────────────────────────────────
+const Facturacion = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>void }) => {
+  const [sales, setSales]     = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch]   = useState("");
+  const [viewInv, setViewInv] = useState<any>(null);
+  const [editModal, setEditModal] = useState(false);
+  const [editForm, setEditForm]   = useState<any>({});
+  const [saving, setSaving]   = useState(false);
+
+  const load = useCallback(async()=>{
+    try { setLoading(true); const list = await apiFetch("/sales"); setSales(list); }
+    catch(e:any) { showToast(e.message,"error"); }
+    finally { setLoading(false); }
+  },[]);
+  useEffect(()=>{ load(); },[load]);
+
+  const filtered = sales.filter(s=>
+    (s.invoiceNumber||s.id||"").toLowerCase().includes(search.toLowerCase()) ||
+    (s.clientName||s.client||"").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const openEdit = (s:any) => {
+    setEditForm({
+      clientName: s.clientName || s.client || "",
+      clientNit:  s.clientNit  || "",
+      clientPhone:s.clientPhone|| "",
+      payMethod:  s.payMethod  || "efectivo",
+    });
+    setEditModal(true);
+  };
+
+  const saveEdit = async () => {
+    setSaving(true);
+    try {
+      await apiFetch(`/sales/${viewInv.id}`, { method:"PUT", body: editForm });
+      showToast("Factura actualizada","success");
+      setEditModal(false);
+      load();
+      setViewInv(null);
+    } catch(e:any) { showToast(e.message,"error"); }
+    finally { setSaving(false); }
+  };
+
+  const voidSale = async (id:string) => {
+    if (!confirm("¿Anular esta factura? El stock se repondrá automáticamente.")) return;
+    try {
+      await apiFetch(`/sales/${id}/void`, { method:"POST" });
+      showToast("Factura anulada. Stock repuesto.","warning");
+      setViewInv(null);
+      load();
+    } catch(e:any) { showToast(e.message,"error"); }
+  };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
+        <div>
+          <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1a1410" }}>Facturas</h2>
+          <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>{sales.filter(s=>s.status==="emitida").length} emitidas · ${fmt(sales.filter(s=>s.status==="emitida").reduce((a,s)=>a+Number(s.total),0))} CUP</p>
+        </div>
+        <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
+      </div>
+
+      <div style={{ position:"relative" as any }}>
+        <span style={{ position:"absolute" as any, left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" as any }}><Icon name="search" size={15} color="#8a7060"/></span>
+        <input style={{ ...inp, paddingLeft:34 }} placeholder="Buscar por No. factura o cliente..." value={search} onChange={e=>setSearch(e.target.value)}/>
+      </div>
+
+      {loading ? <Spinner/> : (
+        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+          <table style={{ width:"100%", minWidth:700, borderCollapse:"collapse" }}>
+            <thead><tr style={{ background:"#faf8f6" }}>
+              {["No. Factura","Fecha","Cliente","Total","Método","Estado",""].map(h=>(
+                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase" as any, whiteSpace:"nowrap" as any }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {filtered.map(s=>(
+                <tr key={s.id} style={{ borderTop:"1px solid #f0ebe4", opacity:s.status==="anulada"?0.5:1 }}>
+                  <td style={{ padding:"11px 14px", fontSize:12, fontWeight:700, color:"#8B1A1A", fontFamily:"monospace" }}>{s.invoiceNumber||s.id}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13 }}>{s.clientName||s.client}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={s.status==="emitida"?"Emitida":"Anulada"} color={s.status==="emitida"?"#1A7A3C":"#8B1A1A"}/></td>
+                  <td style={{ padding:"11px 14px" }}>
+                    <button style={{ ...btn("ghost"), padding:"5px 10px", fontSize:12 }} onClick={()=>setViewInv(s)}>
+                      <Icon name="eye" size={14}/>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060" }}>No hay facturas</div>}
+        </div>
+      )}
+
+      {viewInv && (
+        <Modal title={`Factura ${viewInv.invoiceNumber||viewInv.id}`} onClose={()=>setViewInv(null)} width={520}>
+          <div style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.9, background:"#faf8f6", padding:20, borderRadius:8, border:"1px solid #e8e0d8" }}>
+            <div style={{ textAlign:"center", marginBottom:14 }}>
+              <div style={{ fontWeight:800, fontSize:15 }}>CUBAGEST</div>
+              <div>FACTURA No. <strong style={{ color:"#8B1A1A" }}>{viewInv.invoiceNumber||viewInv.id}</strong></div>
+              {viewInv.status==="anulada" && <div style={{ color:"#8B1A1A", fontWeight:800 }}>⚠ ANULADA</div>}
+            </div>
+            <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
+            <div>Fecha: {(viewInv.date||viewInv.createdAt||"").split("T")[0]}</div>
+            <div>Cliente: {viewInv.clientName||viewInv.client}</div>
+            {viewInv.clientNit && <div>NIT: {viewInv.clientNit}</div>}
+            {viewInv.clientPhone && <div>Teléfono: {viewInv.clientPhone}</div>}
+            <div>Método: {PAY_METHODS.find(p=>p.id===viewInv.payMethod)?.label||viewInv.payMethod}</div>
+            <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
+            {(viewInv.items||viewInv.SaleItems||[]).map((item:any,i:number)=>(
+              <div key={i} style={{ display:"flex", justifyContent:"space-between" }}>
+                <span>{item.qty}x {item.name}</span>
+                <span>${fmt(item.total||item.price*item.qty)}</span>
+              </div>
+            ))}
+            <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
+            <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14 }}><span>TOTAL:</span><span>${fmt(viewInv.total)} CUP</span></div>
+          </div>
+          <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:16, flexWrap:"wrap" as any }}>
+            {viewInv.status==="emitida" && (
+              <>
+                <button style={btn("danger")} onClick={()=>voidSale(viewInv.id)}>Anular</button>
+                <button style={btn("secondary")} onClick={()=>openEdit(viewInv)}><Icon name="edit" size={14}/>Editar datos</button>
+              </>
+            )}
+            <button style={btn("secondary")} onClick={()=>setViewInv(null)}>Cerrar</button>
+            <button style={btn("primary")} onClick={()=>window.print()}><Icon name="print" size={15}/>Imprimir</button>
+          </div>
+        </Modal>
+      )}
+
+      {editModal && viewInv && (
+        <Modal title="Editar datos de factura" onClose={()=>setEditModal(false)} width={440}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{ background:"#fffbf0", border:"1px solid #f0d070", borderRadius:8, padding:12, fontSize:12, color:"#7a4a00" }}>
+              ⚠ Solo se pueden editar los datos del cliente y método de pago. Los productos y totales no cambian.
+            </div>
+            <Field label="Nombre del cliente"><input style={inp} value={editForm.clientName} onChange={e=>setEditForm((f:any)=>({...f,clientName:e.target.value}))}/></Field>
+            <Field label="NIT"><input style={inp} value={editForm.clientNit} onChange={e=>setEditForm((f:any)=>({...f,clientNit:e.target.value}))} maxLength={11}/></Field>
+            <Field label="Teléfono"><input style={inp} value={editForm.clientPhone} onChange={e=>setEditForm((f:any)=>({...f,clientPhone:e.target.value}))}/></Field>
+            <Field label="Método de pago">
+              <select style={sel} value={editForm.payMethod} onChange={e=>setEditForm((f:any)=>({...f,payMethod:e.target.value}))}>
+                {PAY_METHODS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            </Field>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+              <button style={btn("secondary")} onClick={()=>setEditModal(false)}>Cancelar</button>
+              <button style={{ ...btn("primary"), opacity:saving?0.6:1 }} onClick={saveEdit} disabled={saving}>{saving?"Guardando...":"Guardar"}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+};
+
 const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) => {
   const [sales, setSales]       = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -1118,6 +1279,7 @@ export default function App() {
         {activeModule==="dashboard"    && <Dashboard user={user}/>}
         {activeModule==="inventario"   && <Inventario user={user} showToast={showToast}/>}
         {activeModule==="pos"          && <POS user={user} showToast={showToast}/>}
+        {activeModule==="facturacion"  && <Facturacion user={user} showToast={showToast}/>}
         {activeModule==="contabilidad" && <Contabilidad showToast={showToast}/>}
         {activeModule==="usuarios"     && <Usuarios currentUser={user} showToast={showToast}/>}
       </div>
