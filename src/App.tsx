@@ -32,7 +32,7 @@ async function apiFetch(path: string, opts: { method?: string; body?: object; au
 
 // ─── ROLES (igual que backend) ────────────────────────────────────────────────
 const ROLES: Record<string, { label: string; color: string; perms: string[] }> = {
-  admin:       { label: "Administrador", color: "#8B1A1A", perms: ["dashboard","inventario","pos","facturacion","contabilidad","usuarios","config"] },
+  admin:       { label: "Administrador", color: "#8B1A1A", perms: ["dashboard","inventario","pos","contabilidad","usuarios","config"] },
   cajero:      { label: "Cajero",        color: "#1A5C8B", perms: ["dashboard","pos"] },
   contador:    { label: "Contador",      color: "#1A7A3C", perms: ["dashboard","contabilidad"] },
   almacenista: { label: "Almacenista",   color: "#7A5C1A", perms: ["dashboard","inventario"] },
@@ -453,8 +453,9 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   const [cart, setCart]         = useState<any[]>([]);
   const [search, setSearch]     = useState("");
   const [payMethod, setPayMethod] = useState("efectivo");
-  const [clientName, setClientName] = useState("Consumidor Final");
-  const [clientNit, setClientNit]   = useState("00000000000");
+  const [clientName, setClientName] = useState("");
+  const [clientNit, setClientNit]   = useState("");
+  const [clientPhone, setClientPhone] = useState("");
   const [cashGiven, setCashGiven]   = useState("");
   const [lastReceipt, setLastReceipt] = useState<any>(null);
   const [processing, setProcessing]   = useState(false);
@@ -462,6 +463,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   const subtotal = cart.reduce((a,i)=>a+i.price*i.qty,0);
   const total    = subtotal;
   const change   = Number(cashGiven) - total;
+  const needsTransferData = payMethod === "transferencia";
 
   useEffect(()=>{
     apiFetch("/products").then(list=>{setProducts(list.filter((p:any)=>p.active&&p.stock>0));setLoading(false);}).catch(e=>{showToast(e.message,"error");setLoading(false);});
@@ -469,26 +471,31 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
   const avail = products.filter(p=>p.name.toLowerCase().includes(search.toLowerCase()));
 
-  const addToCart = (p:any) => {
+  const qtyFor = (id:string) => cart.find(i=>i.id===id)?.qty || 0;
+
+  const setQty = (p:any, newQty:number) => {
+    if (newQty <= 0) { setCart(prev=>prev.filter(i=>i.id!==p.id)); return; }
+    if (newQty > p.stock) { showToast("Stock insuficiente","warning"); return; }
     setCart(prev=>{
       const ex = prev.find(i=>i.id===p.id);
-      if (ex) {
-        if (ex.qty>=p.stock){showToast("Stock insuficiente","warning");return prev;}
-        return prev.map(i=>i.id===p.id?{...i,qty:i.qty+1}:i);
-      }
-      return [...prev,{...p,qty:1}];
+      if (ex) return prev.map(i=>i.id===p.id?{...i,qty:newQty}:i);
+      return [...prev,{...p,qty:newQty}];
     });
   };
-  const updateQty = (id:string,delta:number) => setCart(prev=>prev.map(i=>i.id===id?{...i,qty:Math.max(1,i.qty+delta)}:i).filter(i=>i.qty>0));
+
   const removeFromCart = (id:string) => setCart(prev=>prev.filter(i=>i.id!==id));
 
   const processSale = async () => {
     if (cart.length===0) return showToast("El carrito está vacío","error");
+    if (needsTransferData && (!clientName || !clientNit || !clientPhone)) {
+      return showToast("Complete nombre, NIT y teléfono del cliente para transferencia","error");
+    }
     setProcessing(true);
     try {
       const invoice = await apiFetch("/sales", { method:"POST", body:{
-        client: clientName,
-        clientNit,
+        client: needsTransferData ? clientName : "Consumidor Final",
+        clientNit: needsTransferData ? clientNit : "00000000000",
+        clientPhone: needsTransferData ? clientPhone : undefined,
         items: cart.map(i=>({ productId:i.id, qty:i.qty, price:i.price })),
         payMethod,
         currency:"CUP",
@@ -497,6 +504,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
       setCart([]);
       setSearch("");
       setCashGiven("");
+      setClientName(""); setClientNit(""); setClientPhone("");
       // Recargar productos para reflejar nuevo stock
       const updated = await apiFetch("/products");
       setProducts(updated.filter((p:any)=>p.active&&p.stock>0));
@@ -506,83 +514,84 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   };
 
   return (
-    <div style={{ display:"flex", gap:20, height:"calc(100vh - 140px)" }}>
-      <div style={{ flex:1, display:"flex", flexDirection:"column", gap:12, overflow:"auto" }}>
-        <h2 style={{ margin:0, fontSize:20, fontWeight:800, color:"#1a1410" }}>Punto de Venta</h2>
-        <div style={{ position:"relative" }}>
-          <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}><Icon name="search" size={15} color="#8a7060"/></span>
-          <input style={{ ...inp, paddingLeft:34 }} placeholder="Buscar producto..." value={search} onChange={e=>setSearch(e.target.value)}/>
-        </div>
-        {loading ? <Spinner/> : (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))", gap:10, overflow:"auto", paddingRight:4 }}>
-            {avail.map(p=>(
-              <button key={p.id} onClick={()=>addToCart(p)} style={{ background:"#fff", border:"1px solid #e8e0d8", borderRadius:10, padding:14, cursor:"pointer", textAlign:"left", display:"flex", flexDirection:"column", gap:4 }}
-                onMouseEnter={e=>(e.currentTarget.style.borderColor="#8B1A1A")}
-                onMouseLeave={e=>(e.currentTarget.style.borderColor="#e8e0d8")}>
-                <div style={{ width:36, height:36, background:"#faf8f6", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:4 }}>
-                  <Icon name="inventario" size={18} color="#8a7060"/>
-                </div>
-                <p style={{ margin:0, fontSize:13, fontWeight:700, color:"#1a1410", lineHeight:1.3 }}>{p.name}</p>
-                <p style={{ margin:0, fontSize:11, color:"#8a7060" }}>Stock: {p.stock} {p.unit}</p>
-                <p style={{ margin:0, fontSize:15, fontWeight:800, color:"#8B1A1A" }}>${fmt(p.price)}</p>
-              </button>
-            ))}
-            {avail.length===0 && <div style={{ gridColumn:"1/-1", textAlign:"center", padding:40, color:"#8a7060", fontSize:14 }}>No hay productos disponibles</div>}
-          </div>
-        )}
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      <h2 style={{ margin:0, fontSize:20, fontWeight:800, color:"#1a1410" }}>Punto de Venta</h2>
+
+      <div style={{ position:"relative" }}>
+        <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}><Icon name="search" size={15} color="#8a7060"/></span>
+        <input style={{ ...inp, paddingLeft:34 }} placeholder="Buscar producto..." value={search} onChange={e=>setSearch(e.target.value)}/>
       </div>
 
-      <div style={{ width:360, background:"#fff", borderRadius:14, border:"1px solid #e8e0d8", display:"flex", flexDirection:"column", overflow:"hidden" }}>
-        <div style={{ padding:"16px 20px", borderBottom:"1px solid #e8e0d8", background:"#faf8f6" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <Icon name="cart" size={18} color="#8B1A1A"/>
-            <h3 style={{ margin:0, fontSize:15, fontWeight:700, color:"#1a1410" }}>Carrito</h3>
-            <span style={{ marginLeft:"auto", background:"#8B1A1A", color:"#fff", borderRadius:20, padding:"1px 10px", fontSize:12, fontWeight:700 }}>{cart.length}</span>
+      {loading ? <Spinner/> : (
+        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflow:"hidden" }}>
+          {avail.map((p,idx)=>{
+            const q = qtyFor(p.id);
+            return (
+              <div key={p.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", borderTop: idx===0?"none":"1px solid #f0ebe4" }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <p style={{ margin:0, fontSize:13, fontWeight:700, color:"#1a1410", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</p>
+                  <p style={{ margin:0, fontSize:11, color:"#8a7060" }}>Stock: {p.stock} {p.unit} · ${fmt(p.price)}</p>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+                  <button onClick={()=>setQty(p, q-1)} disabled={q===0} style={{ width:28, height:28, background:"#f0ebe4", border:"none", borderRadius:6, cursor: q===0?"default":"pointer", opacity:q===0?0.4:1, display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="minus" size={13}/></button>
+                  <span style={{ width:22, textAlign:"center", fontSize:14, fontWeight:700 }}>{q}</span>
+                  <button onClick={()=>setQty(p, q+1)} style={{ width:28, height:28, background:"#8B1A1A", border:"none", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="plus" size={13} color="#fff"/></button>
+                </div>
+              </div>
+            );
+          })}
+          {avail.length===0 && <div style={{ textAlign:"center", padding:40, color:"#8a7060", fontSize:14 }}>No hay productos disponibles</div>}
+        </div>
+      )}
+
+      <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", padding:16, display:"flex", flexDirection:"column", gap:12 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <Icon name="cart" size={18} color="#8B1A1A"/>
+          <h3 style={{ margin:0, fontSize:15, fontWeight:700, color:"#1a1410" }}>Carrito</h3>
+          <span style={{ marginLeft:"auto", background:"#8B1A1A", color:"#fff", borderRadius:20, padding:"1px 10px", fontSize:12, fontWeight:700 }}>{cart.length}</span>
+        </div>
+
+        {cart.length===0 ? (
+          <div style={{ textAlign:"center", padding:16, color:"#8a7060", fontSize:13 }}>Use los botones + para agregar productos</div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {cart.map(item=>(
+              <div key={item.id} style={{ display:"flex", justifyContent:"space-between", fontSize:13 }}>
+                <span style={{ color:"#5a4a3a" }}>{item.qty}× {item.name}</span>
+                <span style={{ fontWeight:700 }}>${fmt(item.price*item.qty)}</span>
+              </div>
+            ))}
           </div>
-        </div>
-        <div style={{ padding:"12px 16px", borderBottom:"1px solid #f0ebe4" }}>
-          <input style={{ ...inp, fontSize:12, marginBottom:8 }} placeholder="Cliente" value={clientName} onChange={e=>setClientName(e.target.value)}/>
-          <input style={{ ...inp, fontSize:12, fontFamily:"monospace" }} placeholder="NIT del cliente (11 dígitos)" value={clientNit} onChange={e=>setClientNit(e.target.value)} maxLength={11}/>
-        </div>
-        <div style={{ flex:1, overflow:"auto", padding:"8px 16px" }}>
-          {cart.length===0 && <div style={{ textAlign:"center", padding:30, color:"#8a7060", fontSize:13 }}>Seleccione productos del catálogo</div>}
-          {cart.map(item=>(
-            <div key={item.id} style={{ borderBottom:"1px solid #f5f0eb", padding:"10px 0", display:"flex", gap:10, alignItems:"center" }}>
-              <div style={{ flex:1 }}>
-                <p style={{ margin:0, fontSize:13, fontWeight:600, color:"#1a1410" }}>{item.name}</p>
-                <p style={{ margin:0, fontSize:12, color:"#8a7060" }}>${fmt(item.price)} c/u</p>
-              </div>
-              <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                <button onClick={()=>updateQty(item.id,-1)} style={{ width:24, height:24, background:"#f0ebe4", border:"none", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="minus" size={12}/></button>
-                <span style={{ width:28, textAlign:"center", fontSize:14, fontWeight:700 }}>{item.qty}</span>
-                <button onClick={()=>updateQty(item.id,+1)} style={{ width:24, height:24, background:"#f0ebe4", border:"none", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="plus" size={12}/></button>
-              </div>
-              <div style={{ textAlign:"right", minWidth:64 }}>
-                <p style={{ margin:0, fontSize:14, fontWeight:700 }}>${fmt(item.price*item.qty)}</p>
-              </div>
-              <button onClick={()=>removeFromCart(item.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"#c88" }}><Icon name="x" size={14}/></button>
-            </div>
-          ))}
-        </div>
-        <div style={{ padding:"14px 20px", borderTop:"1px solid #e8e0d8", background:"#faf8f6" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", fontSize:20, fontWeight:800, color:"#1a1410", marginBottom:14 }}><span>Total</span><span>${fmt(total)} CUP</span></div>
-          <Field label="Método de Pago">
-            <select style={{ ...sel, fontSize:13 }} value={payMethod} onChange={e=>setPayMethod(e.target.value)}>
-              {PAY_METHODS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
+        )}
+
+        <Field label="Método de Pago">
+          <select style={{ ...sel, fontSize:13 }} value={payMethod} onChange={e=>setPayMethod(e.target.value)}>
+            {PAY_METHODS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
+          </select>
+        </Field>
+
+        {needsTransferData && (
+          <>
+            <Field label="Nombre del cliente" required><input style={{ ...inp, fontSize:13 }} value={clientName} onChange={e=>setClientName(e.target.value)} placeholder="Nombre completo"/></Field>
+            <Field label="NIT del cliente" required><input style={{ ...inp, fontSize:13, fontFamily:"monospace" }} value={clientNit} onChange={e=>setClientNit(e.target.value)} maxLength={11} placeholder="00000000000"/></Field>
+            <Field label="Teléfono del cliente" required><input style={{ ...inp, fontSize:13 }} value={clientPhone} onChange={e=>setClientPhone(e.target.value)} placeholder="+53 5xxxxxxx"/></Field>
+          </>
+        )}
+
+        {payMethod === "efectivo" && (
+          <Field label="Efectivo entregado">
+            <input style={{ ...inp, fontSize:13 }} type="number" value={cashGiven} onChange={e=>setCashGiven(e.target.value)} placeholder="0.00"/>
           </Field>
-          {payMethod==="efectivo" && (
-            <div style={{ marginTop:10 }}>
-              <Field label="Efectivo entregado">
-                <input style={{ ...inp, fontSize:13 }} type="number" value={cashGiven} onChange={e=>setCashGiven(e.target.value)} placeholder="0.00"/>
-              </Field>
-              {cashGiven && Number(cashGiven)>=total && <p style={{ margin:"8px 0 0", fontSize:14, fontWeight:700, color:"#1A7A3C" }}>Cambio: ${fmt(change)} CUP</p>}
-            </div>
-          )}
-          <button style={{ ...btn("primary"), width:"100%", justifyContent:"center", padding:"13px", fontSize:15, marginTop:14, opacity:processing?0.6:1 }} onClick={processSale} disabled={cart.length===0||processing}>
-            <Icon name="check" size={16}/>{processing?"Procesando...":"Cobrar y Emitir Factura"}
-          </button>
-        </div>
+        )}
+        {payMethod === "efectivo" && cashGiven && Number(cashGiven)>=total && (
+          <p style={{ margin:0, fontSize:14, fontWeight:700, color:"#1A7A3C" }}>Cambio: ${fmt(change)} CUP</p>
+        )}
+
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:20, fontWeight:800, color:"#1a1410" }}><span>Total</span><span>${fmt(total)} CUP</span></div>
+
+        <button style={{ ...btn("primary"), width:"100%", justifyContent:"center", padding:"13px", fontSize:15, opacity:processing?0.6:1 }} onClick={processSale} disabled={cart.length===0||processing}>
+          <Icon name="check" size={16}/>{processing?"Procesando...":"Cobrar y Emitir Factura"}
+        </button>
       </div>
 
       {lastReceipt && (
@@ -618,145 +627,35 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   );
 };
 
-// ─── FACTURACIÓN ──────────────────────────────────────────────────────────────
-const Facturacion = ({ showToast, user }: { showToast: (m:string,t:string)=>void; user: any }) => {
-  const [sales, setSales]   = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("todas");
-  const [viewInv, setViewInv] = useState<any>(null);
-
-  const load = useCallback(async()=>{
-    try { setLoading(true); const list = await apiFetch("/sales"); setSales(list); }
-    catch(e:any) { showToast(e.message,"error"); }
-    finally { setLoading(false); }
-  },[]);
-  useEffect(()=>{ load(); },[load]);
-
-  const filtered = sales.filter(s=>
-    (filter==="todas"||s.status===filter) &&
-    ((s.id||"").toLowerCase().includes(search.toLowerCase())||(s.client||"").toLowerCase().includes(search.toLowerCase()))
-  );
-
-  const annul = async(id:string)=>{
-    if (!confirm("¿Anular esta factura? La acción queda registrada en auditoría.")) return;
-    try {
-      await apiFetch(`/sales/${id}/void`, { method:"POST" });
-      showToast("Factura anulada. Registro de auditoría guardado.","warning");
-      setViewInv(null);
-      load();
-    } catch(e:any) { showToast(e.message,"error"); }
-  };
-
-  return (
-    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
-        <div>
-          <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1a1410" }}>Facturación</h2>
-          <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>{sales.length} facturas · Total: ${fmt(sales.filter(s=>s.status==="emitida").reduce((a,s)=>a+Number(s.total),0))} CUP</p>
-        </div>
-        <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
-      </div>
-      <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
-        <div style={{ position:"relative", flex:1, minWidth:200 }}>
-          <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}><Icon name="search" size={15} color="#8a7060"/></span>
-          <input style={{ ...inp, paddingLeft:34 }} placeholder="Buscar por No. factura o cliente..." value={search} onChange={e=>setSearch(e.target.value)}/>
-        </div>
-        <div style={{ display:"flex", gap:8 }}>
-          {[["todas","Todas"],["emitida","Emitidas"],["anulada","Anuladas"]].map(([v,l])=>(
-            <button key={v} style={{ ...btn(filter===v?"primary":"secondary"), padding:"8px 14px", fontSize:13 }} onClick={()=>setFilter(v)}>{l}</button>
-          ))}
-        </div>
-      </div>
-      {loading ? <Spinner/> : (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
-          <table style={{ width:"100%", minWidth:700, borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:"#faf8f6" }}>
-              {["No. Factura","Fecha","Cliente","NIT","Total CUP","Método","Estado","Ver"].map(h=>(
-                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase", letterSpacing:"0.5px", whiteSpace:"nowrap" }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {filtered.map(s=>(
-                <tr key={s.id} style={{ borderTop:"1px solid #f0ebe4", opacity:s.status==="anulada"?0.55:1 }}>
-                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700, color:"#8B1A1A", fontFamily:"monospace" }}>{s.id}</td>
-                  <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
-                  <td style={{ padding:"11px 14px", fontSize:13 }}>{s.client}</td>
-                  <td style={{ padding:"11px 14px", fontSize:12, color:"#8a7060", fontFamily:"monospace" }}>{s.clientNit}</td>
-                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={s.status==="emitida"?"Emitida":"Anulada"} color={s.status==="emitida"?"#1A7A3C":"#8B1A1A"}/></td>
-                  <td style={{ padding:"11px 14px" }}><button style={{ ...btn("ghost"), padding:"5px 10px", fontSize:12 }} onClick={()=>setViewInv(s)}><Icon name="eye" size={14}/></button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filtered.length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060", fontSize:14 }}>No se encontraron facturas</div>}
-        </div>
-      )}
-      {viewInv && (
-        <Modal title={`Factura ${viewInv.id}`} onClose={()=>setViewInv(null)} width={520}>
-          <div style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.9, background:"#faf8f6", padding:20, borderRadius:8, border:"1px solid #e8e0d8" }}>
-            <div style={{ textAlign:"center", marginBottom:14 }}>
-              <div style={{ fontWeight:800, fontSize:15 }}>CUBAGEST</div>
-              <div>FACTURA COMERCIAL No. <strong style={{ color:"#8B1A1A", fontSize:15 }}>{viewInv.id}</strong></div>
-              {viewInv.status==="anulada" && <div style={{ color:"#8B1A1A", fontWeight:800 }}>⚠ ANULADA</div>}
-            </div>
-            <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
-            <div>Fecha: {(viewInv.date||viewInv.createdAt||"").split("T")[0]}</div>
-            <div>Cliente: {viewInv.client} · NIT: {viewInv.clientNit}</div>
-            <div>Método: {PAY_METHODS.find(p=>p.id===viewInv.payMethod)?.label||viewInv.payMethod}</div>
-            <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
-            {(viewInv.items||viewInv.SaleItems||[]).map((item:any,i:number)=>(
-              <div key={i} style={{ display:"flex", justifyContent:"space-between" }}>
-                <span>{item.qty}x {item.name||item.Product?.name}</span>
-                <span>${fmt(item.total||item.price*item.qty)}</span>
-              </div>
-            ))}
-            <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
-            <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14, marginTop:4 }}><span>TOTAL:</span><span>${fmt(viewInv.total)} CUP</span></div>
-            <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
-            <div style={{ textAlign:"center", fontSize:10, color:"#888" }}>Conforme Resolución 286/2019 MINFIN · Ley 149/2022</div>
-          </div>
-          <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:16 }}>
-            {viewInv.status==="emitida" && <button style={btn("danger")} onClick={()=>annul(viewInv.id)}>Anular Factura</button>}
-            <button style={btn("secondary")} onClick={()=>setViewInv(null)}>Cerrar</button>
-            <button style={btn("primary")} onClick={()=>window.print()}><Icon name="print" size={15}/>Imprimir</button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Suscripción a la plataforma */}
-      <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", padding:24, marginTop:8 }}>
-        <h3 style={{ margin:"0 0 4px", fontSize:16, fontWeight:700, color:"#1a1410" }}>Suscripción a CubaGest</h3>
-        <p style={{ margin:"0 0 20px", fontSize:13, color:"#8a7060" }}>Gestiona tu plan y método de pago</p>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:16, marginBottom:20 }}>
-          {[
-            { plan:"Básico", price:"Gratis", features:["1 usuario","Inventario","POS básico"], color:"#8a7060", current: false },
-            { plan:"Profesional", price:"$15/mes CUP", features:["5 usuarios","Todas las funciones","Soporte prioritario"], color:"#1A5C8B", current: true },
-            { plan:"Empresarial", price:"$35/mes CUP", features:["Usuarios ilimitados","Multi-sucursal","API access"], color:"#8B1A1A", current: false },
-          ].map(p=>(
-            <div key={p.plan} style={{ border:`2px solid ${p.current?"#8B1A1A":"#e8e0d8"}`, borderRadius:10, padding:18, position:"relative" as any }}>
-              {p.current && <span style={{ position:"absolute" as any, top:-10, left:16, background:"#8B1A1A", color:"#fff", fontSize:10, fontWeight:700, padding:"2px 10px", borderRadius:20 }}>PLAN ACTUAL</span>}
-              <div style={{ fontWeight:800, fontSize:15, color:"#1a1410", marginBottom:4 }}>{p.plan}</div>
-              <div style={{ fontWeight:700, fontSize:18, color:p.color, marginBottom:12 }}>{p.price}</div>
-              {p.features.map((f:string)=>(
-                <div key={f} style={{ display:"flex", gap:8, alignItems:"center", fontSize:13, color:"#5a4a3a", marginBottom:6 }}>
-                  <Icon name="check" size={14} color="#1A7A3C"/>{f}
-                </div>
-              ))}
-              {!p.current && <button style={{ ...btn("secondary"), width:"100%", justifyContent:"center", marginTop:12, fontSize:13 }}>Cambiar plan</button>}
+// ─── PLAN Y SUSCRIPCIÓN (modal desde el perfil) ────────────────────────────────
+const PlanModal = ({ onClose }: { onClose: () => void }) => (
+  <Modal title="Plan y Suscripción" onClose={onClose} width={640}>
+    <p style={{ margin:"0 0 20px", fontSize:13, color:"#8a7060" }}>Gestiona tu plan y método de pago</p>
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:16, marginBottom:20 }}>
+      {[
+        { plan:"Básico", price:"Gratis", features:["1 usuario","Inventario","POS básico"], color:"#8a7060", current: false },
+        { plan:"Profesional", price:"$15/mes CUP", features:["5 usuarios","Todas las funciones","Soporte prioritario"], color:"#1A5C8B", current: true },
+        { plan:"Empresarial", price:"$35/mes CUP", features:["Usuarios ilimitados","Multi-sucursal","API access"], color:"#8B1A1A", current: false },
+      ].map(p=>(
+        <div key={p.plan} style={{ border:`2px solid ${p.current?"#8B1A1A":"#e8e0d8"}`, borderRadius:10, padding:18, position:"relative" as any }}>
+          {p.current && <span style={{ position:"absolute" as any, top:-10, left:16, background:"#8B1A1A", color:"#fff", fontSize:10, fontWeight:700, padding:"2px 10px", borderRadius:20 }}>PLAN ACTUAL</span>}
+          <div style={{ fontWeight:800, fontSize:15, color:"#1a1410", marginBottom:4 }}>{p.plan}</div>
+          <div style={{ fontWeight:700, fontSize:18, color:p.color, marginBottom:12 }}>{p.price}</div>
+          {p.features.map((f:string)=>(
+            <div key={f} style={{ display:"flex", gap:8, alignItems:"center", fontSize:13, color:"#5a4a3a", marginBottom:6 }}>
+              <Icon name="check" size={14} color="#1A7A3C"/>{f}
             </div>
           ))}
+          {!p.current && <button style={{ ...btn("secondary"), width:"100%", justifyContent:"center", marginTop:12, fontSize:13 }}>Cambiar plan</button>}
         </div>
-        <div style={{ background:"#faf8f6", borderRadius:8, padding:16, fontSize:13, color:"#5a4a3a" }}>
-          <strong>Próxima renovación:</strong> 23 de agosto 2026 · <strong>Método:</strong> Transferencia Zun/Enzona<br/>
-          <span style={{ color:"#8a7060", fontSize:12 }}>Para cambiar el plan o método de pago contacte a soporte: soporte@cubagest.cu</span>
-        </div>
-      </div>
+      ))}
     </div>
-  );
-};
+    <div style={{ background:"#faf8f6", borderRadius:8, padding:16, fontSize:13, color:"#5a4a3a" }}>
+      <strong>Próxima renovación:</strong> 23 de agosto 2026 · <strong>Método:</strong> Transferencia Zun/Enzona<br/>
+      <span style={{ color:"#8a7060", fontSize:12 }}>Para cambiar el plan o método de pago contacte a soporte: soporte@cubagest.cu</span>
+    </div>
+  </Modal>
+);
 
 // ─── CONTABILIDAD ─────────────────────────────────────────────────────────────
 const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) => {
@@ -1110,6 +1009,7 @@ export default function App() {
   const [activeModule, setActiveModule] = useState("dashboard");
   const [toast, setToast]           = useState<any>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   // Restaurar sesión al recargar
   useEffect(()=>{
     const token = getToken();
@@ -1134,7 +1034,6 @@ export default function App() {
     { id:"dashboard",    label:"Dashboard",      icon:"dashboard" },
     { id:"inventario",   label:"Inventario",     icon:"inventario" },
     { id:"pos",          label:"Punto de Venta", icon:"pos" },
-    { id:"facturacion",  label:"Facturación",    icon:"facturacion" },
     { id:"contabilidad", label:"Contabilidad",   icon:"contabilidad" },
     { id:"usuarios",     label:"Usuarios",       icon:"usuarios" },
   ].filter(n=>perms.includes(n.id));
@@ -1164,6 +1063,9 @@ export default function App() {
                 <div style={{ marginTop:4 }}><Badge label={ROLES[user.role]?.label||user.role} color={ROLES[user.role]?.color||"#888"}/></div>
               </div>
               <div style={{ padding:8 }}>
+                <button onClick={()=>{setPlanOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:8, border:"none", cursor:"pointer", background:"none", color:"#5a4a3a", fontSize:14, fontWeight:600 }}>
+                  <Icon name="facturacion" size={16} color="#5a4a3a"/>Plan
+                </button>
                 <button onClick={()=>{handleLogout();setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:8, border:"none", cursor:"pointer", background:"none", color:"#8B1A1A", fontSize:14, fontWeight:600 }}>
                   <Icon name="logout" size={16} color="#8B1A1A"/>Cerrar sesión
                 </button>
@@ -1178,7 +1080,6 @@ export default function App() {
         {activeModule==="dashboard"    && <Dashboard user={user}/>}
         {activeModule==="inventario"   && <Inventario user={user} showToast={showToast}/>}
         {activeModule==="pos"          && <POS user={user} showToast={showToast}/>}
-        {activeModule==="facturacion"  && <Facturacion showToast={showToast} user={user}/>}
         {activeModule==="contabilidad" && <Contabilidad showToast={showToast}/>}
         {activeModule==="usuarios"     && <Usuarios currentUser={user} showToast={showToast}/>}
       </div>
@@ -1195,6 +1096,7 @@ export default function App() {
       </div>
 
       {profileOpen && <div onClick={()=>setProfileOpen(false)} style={{ position:"fixed" as any, inset:0, zIndex:150 }}/>}
+      {planOpen && <PlanModal onClose={()=>setPlanOpen(false)}/>}
       {toast && <Toast key={toast.key} msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
     </div>
   );
