@@ -514,50 +514,56 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
     finally { setProcessing(false); }
   };
 
-  return (
-    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <h2 style={{ margin:0, fontSize:20, fontWeight:800, color:"#1a1410" }}>Punto de Venta</h2>
+  // Altura del carrito fijo abajo (estimada)
+  const cartH = needsTransferData ? 420 : payMethod==="efectivo" ? 320 : 260;
 
-      <div style={{ position:"relative" }}>
+  return (
+    <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 120px)", gap:0 }}>
+      <h2 style={{ margin:"0 0 12px", fontSize:20, fontWeight:800, color:"#1a1410", flexShrink:0 }}>Punto de Venta</h2>
+
+      {/* Buscador fijo */}
+      <div style={{ position:"relative", flexShrink:0, marginBottom:10 }}>
         <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}><Icon name="search" size={15} color="#8a7060"/></span>
         <input style={{ ...inp, paddingLeft:34 }} placeholder="Buscar producto..." value={search} onChange={e=>setSearch(e.target.value)}/>
       </div>
 
-      {loading ? <Spinner/> : (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflow:"hidden" }}>
-          {avail.map((p,idx)=>{
-            const q = qtyFor(p.id);
-            return (
-              <div key={p.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", borderTop: idx===0?"none":"1px solid #f0ebe4" }}>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <p style={{ margin:0, fontSize:13, fontWeight:700, color:"#1a1410", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</p>
-                  <p style={{ margin:0, fontSize:11, color:"#8a7060" }}>Stock: {p.stock} {p.unit} · ${fmt(p.price)}</p>
+      {/* Lista de productos — scroll independiente */}
+      <div style={{ flex:1, overflowY:"auto", marginBottom:10, WebkitOverflowScrolling:"touch" as any }}>
+        {loading ? <Spinner/> : (
+          <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflow:"hidden" }}>
+            {avail.map((p,idx)=>{
+              const q = qtyFor(p.id);
+              return (
+                <div key={p.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", borderTop: idx===0?"none":"1px solid #f0ebe4" }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <p style={{ margin:0, fontSize:13, fontWeight:700, color:"#1a1410", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</p>
+                    <p style={{ margin:0, fontSize:11, color:"#8a7060" }}>Stock: {p.stock} {p.unit} · ${fmt(p.price)}</p>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+                    <button onClick={()=>setQty(p, q-1)} disabled={q===0} style={{ width:28, height:28, background:"#f0ebe4", border:"none", borderRadius:6, cursor:q===0?"default":"pointer", opacity:q===0?0.4:1, display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="minus" size={13}/></button>
+                    <span style={{ width:22, textAlign:"center", fontSize:14, fontWeight:700, color:q>0?"#8B1A1A":"#1a1410" }}>{q}</span>
+                    <button onClick={()=>setQty(p, q+1)} style={{ width:28, height:28, background:"#8B1A1A", border:"none", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="plus" size={13} color="#fff"/></button>
+                  </div>
                 </div>
-                <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-                  <button onClick={()=>setQty(p, q-1)} disabled={q===0} style={{ width:28, height:28, background:"#f0ebe4", border:"none", borderRadius:6, cursor: q===0?"default":"pointer", opacity:q===0?0.4:1, display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="minus" size={13}/></button>
-                  <span style={{ width:22, textAlign:"center", fontSize:14, fontWeight:700 }}>{q}</span>
-                  <button onClick={()=>setQty(p, q+1)} style={{ width:28, height:28, background:"#8B1A1A", border:"none", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="plus" size={13} color="#fff"/></button>
-                </div>
-              </div>
-            );
-          })}
-          {avail.length===0 && <div style={{ textAlign:"center", padding:40, color:"#8a7060", fontSize:14 }}>No hay productos disponibles</div>}
-        </div>
-      )}
+              );
+            })}
+            {avail.length===0 && <div style={{ textAlign:"center", padding:40, color:"#8a7060", fontSize:14 }}>No hay productos disponibles</div>}
+          </div>
+        )}
+      </div>
 
-      <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", padding:16, display:"flex", flexDirection:"column", gap:12 }}>
+      {/* Carrito fijo abajo */}
+      <div style={{ flexShrink:0, background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", padding:14, display:"flex", flexDirection:"column", gap:10 }}>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           <Icon name="cart" size={18} color="#8B1A1A"/>
-          <h3 style={{ margin:0, fontSize:15, fontWeight:700, color:"#1a1410" }}>Carrito</h3>
+          <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:"#1a1410" }}>Carrito</h3>
           <span style={{ marginLeft:"auto", background:"#8B1A1A", color:"#fff", borderRadius:20, padding:"1px 10px", fontSize:12, fontWeight:700 }}>{cart.length}</span>
         </div>
 
-        {cart.length===0 ? (
-          <div style={{ textAlign:"center", padding:16, color:"#8a7060", fontSize:13 }}>Use los botones + para agregar productos</div>
-        ) : (
-          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+        {cart.length>0 && (
+          <div style={{ maxHeight:80, overflowY:"auto", display:"flex", flexDirection:"column", gap:4 }}>
             {cart.map(item=>(
-              <div key={item.id} style={{ display:"flex", justifyContent:"space-between", fontSize:13 }}>
+              <div key={item.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
                 <span style={{ color:"#5a4a3a" }}>{item.qty}× {item.name}</span>
                 <span style={{ fontWeight:700 }}>${fmt(item.price*item.qty)}</span>
               </div>
@@ -565,34 +571,39 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
           </div>
         )}
 
-        <Field label="Método de Pago">
-          <select style={{ ...sel, fontSize:13 }} value={payMethod} onChange={e=>setPayMethod(e.target.value)}>
-            {PAY_METHODS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
-          </select>
-        </Field>
+        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" as any }}>
+          <Field label="Pago">
+            <select style={{ ...sel, fontSize:12, padding:"6px 10px" }} value={payMethod} onChange={e=>setPayMethod(e.target.value)}>
+              {PAY_METHODS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </Field>
+          {payMethod==="efectivo" && (
+            <Field label="Efectivo">
+              <input style={{ ...inp, fontSize:12, padding:"6px 10px" }} type="number" value={cashGiven} onChange={e=>setCashGiven(e.target.value)} placeholder="0.00"/>
+            </Field>
+          )}
+        </div>
+
+        {payMethod==="efectivo" && cashGiven && Number(cashGiven)>=total && (
+          <p style={{ margin:0, fontSize:13, fontWeight:700, color:"#1A7A3C" }}>Cambio: ${fmt(change)} CUP</p>
+        )}
 
         {needsTransferData && (
-          <>
-            <Field label="Nombre del cliente" required><input style={{ ...inp, fontSize:13 }} value={clientName} onChange={e=>setClientName(e.target.value)} placeholder="Nombre completo"/></Field>
-            <Field label="NIT del cliente" required><input style={{ ...inp, fontSize:13, fontFamily:"monospace" }} value={clientNit} onChange={e=>setClientNit(e.target.value)} maxLength={11} placeholder="00000000000"/></Field>
-            <Field label="Teléfono del cliente" required><input style={{ ...inp, fontSize:13 }} value={clientPhone} onChange={e=>setClientPhone(e.target.value)} placeholder="+53 5xxxxxxx"/></Field>
-          </>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            <input style={{ ...inp, fontSize:12 }} value={clientName} onChange={e=>setClientName(e.target.value)} placeholder="Nombre del cliente *"/>
+            <div style={{ display:"flex", gap:8 }}>
+              <input style={{ ...inp, fontSize:12, flex:1, fontFamily:"monospace" }} value={clientNit} onChange={e=>setClientNit(e.target.value)} maxLength={11} placeholder="NIT *"/>
+              <input style={{ ...inp, fontSize:12, flex:1 }} value={clientPhone} onChange={e=>setClientPhone(e.target.value)} placeholder="Teléfono *"/>
+            </div>
+          </div>
         )}
 
-        {payMethod === "efectivo" && (
-          <Field label="Efectivo entregado">
-            <input style={{ ...inp, fontSize:13 }} type="number" value={cashGiven} onChange={e=>setCashGiven(e.target.value)} placeholder="0.00"/>
-          </Field>
-        )}
-        {payMethod === "efectivo" && cashGiven && Number(cashGiven)>=total && (
-          <p style={{ margin:0, fontSize:14, fontWeight:700, color:"#1A7A3C" }}>Cambio: ${fmt(change)} CUP</p>
-        )}
-
-        <div style={{ display:"flex", justifyContent:"space-between", fontSize:20, fontWeight:800, color:"#1a1410" }}><span>Total</span><span>${fmt(total)} CUP</span></div>
-
-        <button style={{ ...btn("primary"), width:"100%", justifyContent:"center", padding:"13px", fontSize:15, opacity:processing?0.6:1 }} onClick={processSale} disabled={cart.length===0||processing}>
-          <Icon name="check" size={16}/>{processing?"Procesando...":"Cobrar y Emitir Factura"}
-        </button>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ fontSize:18, fontWeight:800, color:"#1a1410" }}>Total: ${fmt(total)} CUP</div>
+          <button style={{ ...btn("primary"), padding:"10px 20px", fontSize:14, opacity:processing?0.6:1 }} onClick={processSale} disabled={cart.length===0||processing}>
+            <Icon name="check" size={15}/>{processing?"...":"Cobrar"}
+          </button>
+        </div>
       </div>
 
       {lastReceipt && (
