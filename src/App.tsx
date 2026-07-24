@@ -664,6 +664,7 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
   const [loading, setLoading]   = useState(true);
   const [tab, setTab]           = useState("ingresos");
   const [modal, setModal]       = useState(false);
+  const [viewInv, setViewInv]   = useState<any>(null);
   const [form, setForm]         = useState({ date:today(), concept:"", amount:"", category:"Compras", method:"efectivo" });
   const [saving, setSaving]     = useState(false);
 
@@ -769,18 +770,20 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
 
       {tab==="ingresos" && (
         <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
-          <table style={{ width:"100%", minWidth:600, borderCollapse:"collapse" }}>
+          <table style={{ width:"100%", minWidth:750, borderCollapse:"collapse" }}>
             <thead><tr style={{ background:"#faf8f6" }}>
-              {["No. Factura","Fecha","Cliente","Total","Método"].map(h=>(
+              {["No. Factura","Fecha","Cliente","NIT","Teléfono","Total","Método"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase" }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {sales.filter(s=>s.status==="emitida").map(s=>(
-                <tr key={s.id} style={{ borderTop:"1px solid #f0ebe4" }}>
+                <tr key={s.id} onClick={()=>setViewInv(s)} style={{ borderTop:"1px solid #f0ebe4", cursor:"pointer" }}>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#8B1A1A", fontFamily:"monospace" }}>{s.id}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13 }}>{s.client}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:"#8a7060", fontFamily:"monospace" }}>{s.clientNit || "—"}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:"#8a7060" }}>{s.clientPhone || "—"}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
                   <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
                 </tr>
@@ -816,18 +819,20 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
 
       {tab==="facturas" && (
         <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
-          <table style={{ width:"100%", minWidth:650, borderCollapse:"collapse" }}>
+          <table style={{ width:"100%", minWidth:800, borderCollapse:"collapse" }}>
             <thead><tr style={{ background:"#faf8f6" }}>
-              {["No. Factura","Fecha","Cliente","Total","Método","Estado"].map(h=>(
+              {["No. Factura","Fecha","Cliente","NIT","Teléfono","Total","Método","Estado"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase" as any, whiteSpace:"nowrap" as any }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {sales.filter((s:any)=>s.status==="emitida").map((s:any)=>(
-                <tr key={s.id} style={{ borderTop:"1px solid #f0ebe4" }}>
+                <tr key={s.id} onClick={()=>setViewInv(s)} style={{ borderTop:"1px solid #f0ebe4", cursor:"pointer" }}>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#8B1A1A", fontFamily:"monospace" }}>{s.id}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13 }}>{s.client}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:"#8a7060", fontFamily:"monospace" }}>{s.clientNit || "—"}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:"#8a7060" }}>{s.clientPhone || "—"}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
                   <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find((p:any)=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
                   <td style={{ padding:"11px 14px" }}><Badge label="Emitida" color="#1A7A3C"/></td>
@@ -837,6 +842,39 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
           </table>
           {sales.filter((s:any)=>s.status==="emitida").length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060" }}>No hay facturas emitidas</div>}
         </div>
+      )}
+
+      {viewInv && (
+        <Modal title={`Factura ${viewInv.id}`} onClose={()=>setViewInv(null)} width={520}>
+          <div style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.9, background:"#faf8f6", padding:20, borderRadius:8, border:"1px solid #e8e0d8" }}>
+            <div style={{ textAlign:"center", marginBottom:14 }}>
+              <div style={{ fontWeight:800, fontSize:15 }}>CUBAGEST</div>
+              <div>FACTURA COMERCIAL No. <strong style={{ color:"#8B1A1A", fontSize:15 }}>{viewInv.id}</strong></div>
+              {viewInv.status==="anulada" && <div style={{ color:"#8B1A1A", fontWeight:800 }}>⚠ ANULADA</div>}
+            </div>
+            <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
+            <div>Fecha: {(viewInv.date||viewInv.createdAt||"").split("T")[0]}</div>
+            <div>Cliente: {viewInv.client}</div>
+            <div>NIT: {viewInv.clientNit || "—"}</div>
+            <div>Teléfono: {viewInv.clientPhone || "—"}</div>
+            <div>Método: {PAY_METHODS.find(p=>p.id===viewInv.payMethod)?.label||viewInv.payMethod}</div>
+            <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
+            {(viewInv.items||viewInv.SaleItems||[]).map((item:any,i:number)=>(
+              <div key={i} style={{ display:"flex", justifyContent:"space-between" }}>
+                <span>{item.qty}x {item.name||item.Product?.name}</span>
+                <span>${fmt(item.total||item.price*item.qty)}</span>
+              </div>
+            ))}
+            <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
+            <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14, marginTop:4 }}><span>TOTAL:</span><span>${fmt(viewInv.total)} CUP</span></div>
+            <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
+            <div style={{ textAlign:"center", fontSize:10, color:"#888" }}>Conforme Resolución 286/2019 MINFIN · Ley 149/2022</div>
+          </div>
+          <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:16 }}>
+            <button style={btn("secondary")} onClick={()=>setViewInv(null)}>Cerrar</button>
+            <button style={btn("primary")} onClick={()=>window.print()}><Icon name="print" size={15}/>Imprimir</button>
+          </div>
+        </Modal>
       )}
 
       {modal && (
