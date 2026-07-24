@@ -1109,6 +1109,7 @@ export default function App() {
   const [checkingAuth, setChecking] = useState(true);
   const [activeModule, setActiveModule] = useState("dashboard");
   const [toast, setToast]           = useState<any>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   // Restaurar sesión al recargar
   useEffect(()=>{
     const token = getToken();
@@ -1138,7 +1139,6 @@ export default function App() {
     { id:"usuarios",     label:"Usuarios",       icon:"usuarios" },
   ].filter(n=>perms.includes(n.id));
 
-  const [profileOpen, setProfileOpen] = useState(false);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100vh", background:"#f5f0ea", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
