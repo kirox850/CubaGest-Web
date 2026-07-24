@@ -820,7 +820,7 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
       <h3 style="font-size:14px;margin-bottom:12px">Detalle de Egresos</h3>
       <table>
         <tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th style="text-align:right">Monto</th></tr>
-        ${expenses.map((e:any)=>`<tr><td>${(e.date||e.createdAt||"").split("T")[0]}</td><td>${e.concept}</td><td>${e.category}</td><td style="text-align:right">${fmt(Number(e.amount))}</td></tr>`).join("")}
+        ${expenses.map((e:any)=>"<tr><td>"+(e.date||e.createdAt||"").split("T")[0]+"</td><td>"+e.concept+"</td><td>"+e.category+"</td><td style=\"text-align:right\">"+fmt(Number(e.amount))+"</td></tr>").join("")}
       </table>
       <p class="note">Este informe es generado automáticamente por CubaGest para uso interno.<br/>
       El cálculo del impuesto es estimado. Consulte con su contador para la declaración oficial ante la ONAT.<br/>
@@ -924,19 +924,19 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
               ))}
             </tr></thead>
             <tbody>
-              {sales.filter(s=>s.status==="emitida").map(s=>(
+              {sales.filter((s:any)=>s.status==="emitida").map((s:any)=>(
                 <tr key={s.id} style={{ borderTop:"1px solid #f0ebe4" }}>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#8B1A1A", fontFamily:"monospace" }}>{s.id}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13 }}>{s.client}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find((p:any)=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
                   <td style={{ padding:"11px 14px" }}><Badge label="Emitida" color="#1A7A3C"/></td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {sales.filter(s=>s.status==="emitida").length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060" }}>No hay facturas emitidas</div>}
+          {sales.filter((s:any)=>s.status==="emitida").length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060" }}>No hay facturas emitidas</div>}
         </div>
       )}
 
