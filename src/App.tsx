@@ -1,4 +1,4 @@
-//v2
+// CubaGest v1.2.1 - build 202607240523
 import { useState, useEffect, useCallback } from "react";
 
 // ─── API CLIENT ───────────────────────────────────────────────────────────────
