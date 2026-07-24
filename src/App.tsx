@@ -924,19 +924,19 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
               ))}
             </tr></thead>
             <tbody>
-              {sales.filter((s:any)=>s.status==="emitida").map((s:any)=>(
+              {sales.filter(s=>s.status==="emitida").map(s=>(
                 <tr key={s.id} style={{ borderTop:"1px solid #f0ebe4" }}>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#8B1A1A", fontFamily:"monospace" }}>{s.id}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13 }}>{s.client}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find((p:any)=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
                   <td style={{ padding:"11px 14px" }}><Badge label="Emitida" color="#1A7A3C"/></td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {sales.filter((s:any)=>s.status==="emitida").length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060" }}>No hay facturas emitidas</div>}
+          {sales.filter(s=>s.status==="emitida").length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060" }}>No hay facturas emitidas</div>}
         </div>
       )}
 
@@ -1075,31 +1075,6 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
           ))}
         </div>
       </div>
-
-      {tab==="facturas" && (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
-          <table style={{ width:"100%", minWidth:650, borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:"#faf8f6" }}>
-              {["No. Factura","Fecha","Cliente","Total","Método","Estado"].map(h=>(
-                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase" as any, whiteSpace:"nowrap" as any }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {sales.filter((s:any)=>s.status==="emitida").map((s:any)=>(
-                <tr key={s.id} style={{ borderTop:"1px solid #f0ebe4" }}>
-                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#8B1A1A", fontFamily:"monospace" }}>{s.id}</td>
-                  <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
-                  <td style={{ padding:"11px 14px", fontSize:13 }}>{s.client}</td>
-                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find((p:any)=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
-                  <td style={{ padding:"11px 14px" }}><Badge label="Emitida" color="#1A7A3C"/></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {sales.filter((s:any)=>s.status==="emitida").length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060" }}>No hay facturas emitidas</div>}
-        </div>
-      )}
 
       {modal && (
         <Modal title={editUser?"Editar Usuario":"Nuevo Usuario"} onClose={()=>setModal(false)} width={440}>
