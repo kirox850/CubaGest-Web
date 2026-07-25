@@ -1480,7 +1480,8 @@ export default function App() {
       if (conflicts > 0) showToast(`${conflicts} conflicto(s) de stock — revisa Facturas`,"warning");
 
       try { const updated = await apiFetch("/products"); await cacheProducts(updated); } catch {}
-        syncPending();
+    };
+    syncPending();
   }, [online, user]);
 
   const showToast = (msg: string, type = "info") => setToast({ msg, type, key: Date.now() });
