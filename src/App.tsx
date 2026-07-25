@@ -278,7 +278,7 @@ const Dashboard = ({ user }: { user: any }) => {
   }, [dashOnline]);
 
   if (loading) return <Spinner/>;
-  if (error)   return <div style={{ color:"#8B1A1A", padding:24 }}>Error: {error}</div>;
+  if (!summary && error) return <div style={{ color:"#8B1A1A", padding:24 }}>Error: {error}</div>;
   if (!summary) return null;
 
   const { totalRevenue=0, totalExpenses=0, netProfit=0, salesCount=0, lowStockProducts=[] } = summary;
@@ -303,6 +303,7 @@ const Dashboard = ({ user }: { user: any }) => {
       <div>
         <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1a1410" }}>Panel Principal</h2>
         <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>Bienvenido, {user.name} · {ROLES[user.role]?.label}</p>
+        {error && <p style={{ margin:"4px 0 0", fontSize:12, color:"#c17a00" }}>⚡ {error}</p>}
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:16 }}>
         <StatCard label="Ingresos del Mes"   value={`$${fmt(totalRevenue)} CUP`}  sub={`${salesCount} facturas emitidas`}                                color="#1A7A3C" icon="trend_up"/>
@@ -904,14 +905,59 @@ const Facturacion = ({ user, showToast, onSyncRefresh }: { user: any; showToast:
           {showOffline && (
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
               {offlineSales.filter(s=>s.status==="pending"||s.status==="conflict").map(s=>(
-                <div key={s.localId} style={{ background:"#fff", borderRadius:8, padding:"10px 14px", border:`1px solid ${s.status==="conflict"?"#f0c0c0":"#f0d070"}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <div>
-                    <span style={{ fontWeight:700, fontSize:13, fontFamily:"monospace", color:"#8B1A1A" }}>{s.localId}</span>
-                    <span style={{ fontSize:12, color:"#8a7060", marginLeft:8 }}>{new Date(s.timestamp).toLocaleString("es-CU")}</span>
-                    <div style={{ fontSize:12, color:"#5a4a3a" }}>{s.client} · ${fmt(s.total)} · {s.items.length} producto(s)</div>
-                    {s.status==="conflict" && <div style={{ fontSize:11, color:"#8B1A1A", fontWeight:600 }}>⚠ Conflicto: {s.conflictReason}</div>}
+                <div key={s.localId} style={{ background:"#fff", borderRadius:8, padding:"12px 14px", border:`1px solid ${s.status==="conflict"?"#f0c0c0":"#f0d070"}` }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
+                    <div>
+                      <span style={{ fontWeight:700, fontSize:13, fontFamily:"monospace", color:"#8B1A1A" }}>{s.localId}</span>
+                      <span style={{ fontSize:11, color:"#8a7060", marginLeft:8 }}>{new Date(s.timestamp).toLocaleString("es-CU")}</span>
+                    </div>
+                    <Badge label={s.status==="conflict"?"Conflicto":"Pendiente"} color={s.status==="conflict"?"#8B1A1A":"#c17a00"}/>
                   </div>
-                  <Badge label={s.status==="conflict"?"Conflicto":"Pendiente"} color={s.status==="conflict"?"#8B1A1A":"#c17a00"}/>
+                  <div style={{ fontSize:12, color:"#5a4a3a", marginBottom:4 }}>
+                    {s.client} · <strong>${fmt(s.total)}</strong> · {s.items.map((i:any)=>`${i.qty}x ${i.name}`).join(", ")}
+                  </div>
+                  {s.status==="conflict" && (
+                    <div style={{ fontSize:11, color:"#8B1A1A", marginBottom:8 }}>⚠ {s.conflictReason}</div>
+                  )}
+                  <div style={{ display:"flex", gap:6, flexWrap:"wrap" as any, marginTop:6 }}>
+                    {s.status==="conflict" && (
+                      <button style={{ ...btn("primary"), fontSize:11, padding:"5px 10px" }}
+                        onClick={async()=>{
+                          // Reintentar manualmente
+                          const { updateSaleStatus: upd } = await import("./offlineDB");
+                          await upd(s.localId, "pending");
+                          load();
+                          if(onSyncRefresh) onSyncRefresh();
+                        }}>
+                        ↺ Reintentar
+                      </button>
+                    )}
+                    <button style={{ ...btn("danger"), fontSize:11, padding:"5px 10px" }}
+                      onClick={async()=>{
+                        if(!confirm(`¿Descartar la venta ${s.localId}? El stock local ya fue restaurado.`)) return;
+                        const { updateSaleStatus: upd, restoreLocalStock: rls } = await import("./offlineDB");
+                        if(s.status==="pending") await rls(s.items);
+                        await upd(s.localId, "synced"); // marcar como procesada para ocultarla
+                        load();
+                        if(onSyncRefresh) onSyncRefresh();
+                      }}>
+                      🗑 Descartar
+                    </button>
+                    <button style={{ ...btn("secondary"), fontSize:11, padding:"5px 10px" }}
+                      onClick={()=>{
+                        alert(`Venta: ${s.localId}
+Cliente: ${s.client}
+Total: $${fmt(s.total)}
+Productos:
+${s.items.map((i:any)=>`  - ${i.qty}x ${i.name} @ $${fmt(i.price)}`).join("
+")}
+
+Estado: ${s.status}
+${s.conflictReason||""}`);
+                      }}>
+                      👁 Ver detalle
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
