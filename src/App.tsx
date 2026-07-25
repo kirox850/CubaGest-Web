@@ -1,10 +1,39 @@
 //v2
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  cacheProducts, getOfflineProducts, saveSaleOffline, getPendingSales,
+  getAllOfflineSales, updateSaleStatus, getPendingCount, saveSyncLog,
+  getLastSync, restoreLocalStock, type OfflineSale, type OfflineProduct,
+} from "./offlineDB";
 
 // ─── API CLIENT ───────────────────────────────────────────────────────────────
 const API_URL = "https://cubagest-backend-production.up.railway.app/api";
 
 let _token: string | null = null;
+
+// ─── OFFLINE HOOKS ────────────────────────────────────────────────────────────
+function useOnlineStatus() {
+  const [online, setOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
+  return online;
+}
+
+function usePendingCount() {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const update = () => getPendingCount().then(setCount);
+    update();
+    const interval = setInterval(update, 5000);
+    return () => clearInterval(interval);
+  }, []);
+  return { count, refresh: () => getPendingCount().then(setCount) };
+}
 
 const getToken = () => _token || localStorage.getItem("cubagest_token");
 const saveToken = (t: string | null) => {
@@ -105,6 +134,26 @@ const Modal = ({ title, onClose, children, width = 560 }: { title: string; onClo
   </div>
 );
 
+// ─── OFFLINE BANNER ──────────────────────────────────────────────────────────
+const OfflineBanner = ({ online, syncing, pending, conflicts }: { online: boolean; syncing: boolean; pending: number; conflicts: number }) => {
+  if (online && !syncing && pending === 0 && conflicts === 0) return null;
+
+  const bg = !online ? '#8B1A1A' : syncing ? '#1A5C8B' : conflicts > 0 ? '#c17a00' : '#1A7A3C';
+  const msg = !online
+    ? `Sin conexión — modo offline${pending > 0 ? ` · ${pending} ventas en cola` : ''}`
+    : syncing
+    ? 'Sincronizando ventas...'
+    : conflicts > 0
+    ? `${conflicts} venta(s) con conflicto — revisa en Facturas`
+    : `✓ ${pending === 0 ? 'Todo sincronizado' : `${pending} pendientes`}`;
+
+  return (
+    <div style={{ background: bg, color: '#fff', padding: '8px 16px', fontSize: 12, fontWeight: 600, textAlign: 'center' as any, flexShrink: 0 }}>
+      {msg}
+    </div>
+  );
+};
+
 // ─── UI ATOMS ─────────────────────────────────────────────────────────────────
 const Badge = ({ label, color = "#1A5C8B", bg }: { label: string; color?: string; bg?: string }) => (
   <span style={{ display:"inline-flex", alignItems:"center", padding:"2px 10px", borderRadius:20, fontSize:12, fontWeight:600, color, background:bg||color+"20", letterSpacing:"0.3px" }}>{label}</span>
@@ -192,11 +241,41 @@ const Dashboard = ({ user }: { user: any }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
 
+  const dashOnline = useOnlineStatus();
+
   useEffect(() => {
-    apiFetch("/dashboard/summary")
-      .then(d => { setSummary(d); setLoading(false); })
-      .catch(e => { setError(e.message); setLoading(false); });
-  }, []);
+    if (dashOnline) {
+      apiFetch("/dashboard/summary")
+        .then(d => {
+          setSummary(d);
+          // Cache dashboard data
+          localStorage.setItem('cubagest_dashboard', JSON.stringify({ data: d, cachedAt: Date.now() }));
+          setLoading(false);
+        })
+        .catch(e => {
+          // Try cache
+          const cached = localStorage.getItem('cubagest_dashboard');
+          if (cached) {
+            const { data, cachedAt } = JSON.parse(cached);
+            setSummary(data);
+            setError(`Datos del ${new Date(cachedAt).toLocaleDateString("es-CU")}`);
+          } else {
+            setError(e.message);
+          }
+          setLoading(false);
+        });
+    } else {
+      const cached = localStorage.getItem('cubagest_dashboard');
+      if (cached) {
+        const { data, cachedAt } = JSON.parse(cached);
+        setSummary(data);
+        setError(`Sin conexión · Datos del ${new Date(cachedAt).toLocaleDateString("es-CU")}`);
+      } else {
+        setError("Sin conexión y sin datos cacheados");
+      }
+      setLoading(false);
+    }
+  }, [dashOnline]);
 
   if (loading) return <Spinner/>;
   if (error)   return <div style={{ color:"#8B1A1A", padding:24 }}>Error: {error}</div>;
@@ -266,14 +345,30 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
 
   const canManage = ["admin","almacenista"].includes(user.role);
 
+  const invOnline = useOnlineStatus();
+
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const list = await apiFetch("/products");
-      setProducts(list);
-    } catch(e:any) { showToast(e.message,"error"); }
-    finally { setLoading(false); }
-  }, []);
+      if (invOnline) {
+        const list = await apiFetch("/products");
+        await cacheProducts(list);
+        setProducts(list);
+      } else {
+        const cached = await getOfflineProducts();
+        setProducts(cached as any[]);
+        showToast("Mostrando inventario offline","info");
+      }
+    } catch(e:any) {
+      const cached = await getOfflineProducts();
+      if (cached.length > 0) {
+        setProducts(cached as any[]);
+        showToast("Sin conexión — inventario cacheado","warning");
+      } else {
+        showToast(e.message,"error");
+      }
+    } finally { setLoading(false); }
+  }, [invOnline]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -340,11 +435,15 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
         <div>
           <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1a1410" }}>Inventario</h2>
-          <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>{products.filter(p=>p.active).length} productos activos</p>
+          <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>
+            {products.filter((p:any)=>p.active!==false).length} productos
+            {!invOnline && <span style={{ marginLeft:8, background:"#c17a00", color:"#fff", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700 }}>OFFLINE</span>}
+          </p>
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
-          {canManage && <button style={btn("primary")} onClick={openAdd}><Icon name="plus" size={16}/>Nuevo Producto</button>}
+          {canManage && invOnline && <button style={btn("primary")} onClick={openAdd}><Icon name="plus" size={16}/>Nuevo Producto</button>}
+          {canManage && !invOnline && <span style={{ fontSize:12, color:"#c17a00", padding:"8px 0" }}>Edición requiere conexión</span>}
         </div>
       </div>
 
@@ -466,9 +565,29 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   const change   = Number(cashGiven) - total;
   const needsTransferData = payMethod === "transferencia";
 
+  const online = useOnlineStatus();
+
   useEffect(()=>{
-    apiFetch("/products").then(list=>{setProducts(list.filter((p:any)=>p.active&&p.stock>0));setLoading(false);}).catch(e=>{showToast(e.message,"error");setLoading(false);});
-  },[]);
+    if (online) {
+      apiFetch("/products")
+        .then(async list => {
+          await cacheProducts(list);
+          setProducts(list.filter((p:any)=>p.active && p.stock>0));
+          setLoading(false);
+        })
+        .catch(async e => {
+          showToast("Sin conexión — cargando productos offline","warning");
+          const cached = await getOfflineProducts();
+          setProducts(cached.filter(p=>p.localStock>0));
+          setLoading(false);
+        });
+    } else {
+      getOfflineProducts().then(cached => {
+        setProducts(cached.filter(p=>p.localStock>0));
+        setLoading(false);
+      });
+    }
+  },[online]);
 
   const avail = products.filter(p=>p.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -493,23 +612,41 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
     }
     setProcessing(true);
     try {
-      const invoice = await apiFetch("/sales", { method:"POST", body:{
+      const saleData = {
         client: needsTransferData ? clientName : "Consumidor Final",
         clientNit: needsTransferData ? clientNit : "00000000000",
         clientPhone: needsTransferData ? clientPhone : undefined,
-        items: cart.map(i=>({ productId:i.id, qty:i.qty, price:i.price })),
+        items: cart.map(i=>({ productId:i.id, name:i.name, qty:i.qty, price:i.price, total:i.price*i.qty })),
         payMethod,
+        subtotal: cart.reduce((a,i)=>a+i.price*i.qty,0),
+        total: cart.reduce((a,i)=>a+i.price*i.qty,0),
         currency:"CUP",
-      }});
-      setLastReceipt(invoice);
-      setCart([]);
-      setSearch("");
-      setCashGiven("");
-      setClientName(""); setClientNit(""); setClientPhone("");
-      // Recargar productos para reflejar nuevo stock
-      const updated = await apiFetch("/products");
-      setProducts(updated.filter((p:any)=>p.active&&p.stock>0));
-      showToast(`Factura ${invoice.id} emitida correctamente`,"success");
+      };
+
+      if (!online) {
+        // Guardar offline
+        const offlineSale = await saveSaleOffline(saleData);
+        setLastReceipt({ ...offlineSale, id: offlineSale.localId, isOffline: true });
+        setCart([]);
+        setSearch(""); setCashGiven("");
+        setClientName(""); setClientNit(""); setClientPhone("");
+        // Actualizar lista con stock local
+        const cached = await getOfflineProducts();
+        setProducts(cached.filter(p=>p.localStock>0));
+        showToast(`Factura ${offlineSale.localId} guardada offline`,"info");
+      } else {
+        // Online normal
+        const invoice = await apiFetch("/sales", { method:"POST", body: saleData });
+        // Actualizar cache de productos
+        const updated = await apiFetch("/products");
+        await cacheProducts(updated);
+        setProducts(updated.filter((p:any)=>p.active&&p.stock>0));
+        setLastReceipt(invoice);
+        setCart([]);
+        setSearch(""); setCashGiven("");
+        setClientName(""); setClientNit(""); setClientPhone("");
+        showToast(`Factura ${invoice.id} emitida correctamente`,"success");
+      }
     } catch(e:any) { showToast(e.message,"error"); }
     finally { setProcessing(false); }
   };
@@ -609,10 +746,11 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
       {lastReceipt && (
         <Modal title="Factura Emitida" onClose={()=>setLastReceipt(null)} width={480}>
           <div style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.8, background:"#faf8f6", padding:20, borderRadius:8, border:"1px solid #e8e0d8" }}>
+            {lastReceipt.isOffline && <div style={{ background:"#fff3cd", color:"#856404", padding:"6px 10px", borderRadius:6, marginBottom:10, fontSize:11, textAlign:"center" as any }}>⚡ GUARDADA OFFLINE — se sincronizará al recuperar conexión</div>}
             <div style={{ textAlign:"center", marginBottom:16 }}>
               <div style={{ fontWeight:800, fontSize:16 }}>CUBAGEST</div>
               <div style={{ fontWeight:700, fontSize:14, color:"#8B1A1A" }}>FACTURA COMERCIAL</div>
-              <div>No. <strong>{lastReceipt.id}</strong> · Fecha: {lastReceipt.date?.split("T")[0]||today()}</div>
+              <div>No. <strong>{lastReceipt.id || lastReceipt.localId}</strong> · Fecha: {lastReceipt.date?.split("T")[0]||lastReceipt.syncedAt||new Date().toISOString().split("T")[0]}</div>
             </div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
             <div>Cliente: {lastReceipt.client}</div>
@@ -677,20 +815,32 @@ const PlanModal = ({ onClose }: { onClose: () => void }) => (
 
 // ─── CONTABILIDAD ─────────────────────────────────────────────────────────────
 // ─── FACTURACIÓN (cajero + admin) ────────────────────────────────────────────
-const Facturacion = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>void }) => {
+const Facturacion = ({ user, showToast, onSyncRefresh }: { user: any; showToast: (m:string,t:string)=>void; onSyncRefresh?: ()=>void }) => {
   const [sales, setSales]     = useState<any[]>([]);
+  const [offlineSales, setOfflineSales] = useState<OfflineSale[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch]   = useState("");
   const [viewInv, setViewInv] = useState<any>(null);
   const [editModal, setEditModal] = useState(false);
   const [editForm, setEditForm]   = useState<any>({});
   const [saving, setSaving]   = useState(false);
+  const [showOffline, setShowOffline] = useState(true);
+  const facOnline = useOnlineStatus();
 
   const load = useCallback(async()=>{
-    try { setLoading(true); const list = await apiFetch("/sales"); setSales(list); }
-    catch(e:any) { showToast(e.message,"error"); }
+    try {
+      setLoading(true);
+      // Cargar facturas offline siempre
+      const offline = await getAllOfflineSales();
+      setOfflineSales(offline);
+      // Cargar del servidor si hay conexión
+      if (facOnline) {
+        const list = await apiFetch("/sales");
+        setSales(list);
+      }
+    } catch(e:any) { showToast(e.message,"error"); }
     finally { setLoading(false); }
-  },[]);
+  },[facOnline]);
   useEffect(()=>{ load(); },[load]);
 
   const filtered = sales.filter(s=>
@@ -735,10 +885,39 @@ const Facturacion = ({ user, showToast }: { user: any; showToast: (m:string,t:st
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
         <div>
           <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1a1410" }}>Facturas</h2>
-          <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>{sales.filter(s=>s.status==="emitida").length} emitidas · ${fmt(sales.filter(s=>s.status==="emitida").reduce((a,s)=>a+Number(s.total),0))} CUP</p>
+          <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>
+            {sales.filter(s=>s.status==="emitida").length} emitidas · ${fmt(sales.filter(s=>s.status==="emitida").reduce((a,s)=>a+Number(s.total),0))} CUP
+            {offlineSales.filter(s=>s.status==="pending").length > 0 && <span style={{ marginLeft:8, background:"#c17a00", color:"#fff", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700 }}>{offlineSales.filter(s=>s.status==="pending").length} offline</span>}
+            {offlineSales.filter(s=>s.status==="conflict").length > 0 && <span style={{ marginLeft:4, background:"#8B1A1A", color:"#fff", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700 }}>{offlineSales.filter(s=>s.status==="conflict").length} conflicto</span>}
+          </p>
         </div>
         <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
       </div>
+
+      {/* Ventas offline pendientes */}
+      {offlineSales.filter(s=>s.status==="pending"||s.status==="conflict").length > 0 && (
+        <div style={{ background:"#fffbf0", border:"1px solid #f0d070", borderRadius:12, padding:16 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+            <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:"#7a4a00" }}>⚡ Ventas offline</h3>
+            <button style={{ ...btn("ghost"), fontSize:12, padding:"4px 10px" }} onClick={()=>setShowOffline(v=>!v)}>{showOffline?"Ocultar":"Mostrar"}</button>
+          </div>
+          {showOffline && (
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {offlineSales.filter(s=>s.status==="pending"||s.status==="conflict").map(s=>(
+                <div key={s.localId} style={{ background:"#fff", borderRadius:8, padding:"10px 14px", border:`1px solid ${s.status==="conflict"?"#f0c0c0":"#f0d070"}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div>
+                    <span style={{ fontWeight:700, fontSize:13, fontFamily:"monospace", color:"#8B1A1A" }}>{s.localId}</span>
+                    <span style={{ fontSize:12, color:"#8a7060", marginLeft:8 }}>{new Date(s.timestamp).toLocaleString("es-CU")}</span>
+                    <div style={{ fontSize:12, color:"#5a4a3a" }}>{s.client} · ${fmt(s.total)} · {s.items.length} producto(s)</div>
+                    {s.status==="conflict" && <div style={{ fontSize:11, color:"#8B1A1A", fontWeight:600 }}>⚠ Conflicto: {s.conflictReason}</div>}
+                  </div>
+                  <Badge label={s.status==="conflict"?"Conflicto":"Pendiente"} color={s.status==="conflict"?"#8B1A1A":"#c17a00"}/>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ position:"relative" as any }}>
         <span style={{ position:"absolute" as any, left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" as any }}><Icon name="search" size={15} color="#8a7060"/></span>
@@ -1227,12 +1406,82 @@ export default function App() {
   const [toast, setToast]           = useState<any>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const [syncing, setSyncing]       = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [conflictCount, setConflictCount] = useState(0);
+  const online = useOnlineStatus();
+  const syncRef = useRef(false);
   // Restaurar sesión al recargar
   useEffect(()=>{
     const token = getToken();
     if (!token) { setChecking(false); return; }
     apiFetch("/auth/me").then(u=>{ setUser(u); setChecking(false); }).catch(()=>{ saveToken(null); setChecking(false); });
   },[]);
+
+  // Actualizar contador de pendientes
+  const refreshPending = useCallback(async () => {
+    const sales = await getAllOfflineSales();
+    setPendingCount(sales.filter(s=>s.status==='pending').length);
+    setConflictCount(sales.filter(s=>s.status==='conflict').length);
+  }, []);
+
+  useEffect(() => { refreshPending(); }, []);
+
+  // Sincronizar cuando vuelve la conexión
+  useEffect(() => {
+    if (!online || !user || syncRef.current) return;
+    const syncPending = async () => {
+      const pending = await getPendingSales();
+      if (pending.length === 0) return;
+      syncRef.current = true;
+      setSyncing(true);
+      let synced = 0; let conflicts = 0;
+
+      try {
+        for (const sale of pending) await updateSaleStatus(sale.localId, 'syncing');
+
+        const { results } = await apiFetch("/sales/sync", {
+          method: "POST",
+          body: {
+            sales: pending.map(s => ({
+              localId: s.localId,
+              client: s.client,
+              clientNit: s.clientNit,
+              clientPhone: s.clientPhone,
+              items: s.items.map(i=>({ productId:i.productId, name:i.name, qty:i.qty, price:i.price })),
+              payMethod: s.payMethod,
+              currency: "CUP",
+              offlineTimestamp: s.timestamp,
+            }))
+          }
+        });
+
+        for (const result of results) {
+          if (result.status === 'synced') {
+            await updateSaleStatus(result.localId, 'synced', result.serverId);
+            synced++;
+          } else {
+            await updateSaleStatus(result.localId, 'conflict', undefined, result.reason);
+            const sale = pending.find(s=>s.localId===result.localId);
+            if (sale) await restoreLocalStock(sale.items);
+            conflicts++;
+          }
+        }
+      } catch(e:any) {
+        for (const sale of pending) await updateSaleStatus(sale.localId, 'pending');
+        showToast("Error al sincronizar — se reintentará al reconectar","error");
+      }
+
+      await saveSyncLog({ timestamp: Date.now(), salesSynced: synced, salesConflict: conflicts });
+      await refreshPending();
+      setSyncing(false);
+      syncRef.current = false;
+      if (synced > 0) showToast(`${synced} venta(s) sincronizada(s)`,"success");
+      if (conflicts > 0) showToast(`${conflicts} conflicto(s) de stock — revisa Facturas`,"warning");
+
+      try { const updated = await apiFetch("/products"); await cacheProducts(updated); } catch {}
+        syncPending();
+  }, [online, user]);
 
   const showToast = (msg: string, type = "info") => setToast({ msg, type, key: Date.now() });
 
@@ -1300,12 +1549,15 @@ export default function App() {
         </div>
       </div>
 
+      {/* Offline banner */}
+      <OfflineBanner online={online} syncing={syncing} pending={pendingCount} conflicts={conflictCount}/>
+
       {/* Content */}
       <div style={{ flex:1, overflow:"auto", padding:16, paddingBottom:80 }}>
         {activeModule==="dashboard"    && <Dashboard user={user}/>}
         {activeModule==="inventario"   && <Inventario user={user} showToast={showToast}/>}
         {activeModule==="pos"          && <POS user={user} showToast={showToast}/>}
-        {activeModule==="facturacion"  && <Facturacion user={user} showToast={showToast}/>}
+        {activeModule==="facturacion"  && <Facturacion user={user} showToast={showToast} onSyncRefresh={refreshPending}/>}
         {activeModule==="contabilidad" && <Contabilidad showToast={showToast}/>}
         {activeModule==="usuarios"     && <Usuarios currentUser={user} showToast={showToast}/>}
       </div>
