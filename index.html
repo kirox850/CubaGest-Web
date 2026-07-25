@@ -2,12 +2,69 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>CubaGest — Sistema de Gestión Empresarial</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8B1A1A" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- iOS específico -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="CubaGest" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
+
+    <!-- Splash screens iOS (opcional pero mejora la experiencia) -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- SEO básico -->
+    <meta name="description" content="Sistema de gestión empresarial para PYMEs cubanas. POS, inventario, facturación y contabilidad offline." />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+
+    <!-- Registrar Service Worker -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(reg => {
+              console.log('[CubaGest] SW registrado:', reg.scope);
+
+              // Notificar al usuario cuando hay una actualización disponible
+              reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                if (!newWorker) return;
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    // Hay una nueva versión disponible
+                    if (confirm('Hay una actualización de CubaGest disponible. ¿Actualizar ahora?')) {
+                      newWorker.postMessage({ type: 'SKIP_WAITING' });
+                      window.location.reload();
+                    }
+                  }
+                });
+              });
+            })
+            .catch(err => console.warn('[CubaGest] SW error:', err));
+
+          // Escuchar mensajes del SW
+          navigator.serviceWorker.addEventListener('message', event => {
+            if (event.data?.type === 'SYNC_REQUESTED') {
+              // Disparar sync en la app
+              window.dispatchEvent(new CustomEvent('sw-sync-requested'));
+            }
+          });
+        });
+      }
+    </script>
   </body>
 </html>
