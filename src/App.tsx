@@ -54,31 +54,30 @@ async function apiFetch(path: string, opts: { method?: string; body?: object; au
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
 
-  let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, {
+    const res = await fetch(`${API_URL}${path}`, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
+    clearTimeout(timeout);
+    if (res.status === 204) return null;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+    return data;
   } catch(e: any) {
     clearTimeout(timeout);
     if (e.name === 'AbortError') throw new Error('Sin conexión');
     throw e;
   }
-  clearTimeout(timeout);
-  if (res.status === 204) return null;
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
-  return data;
 }
 
 // ─── ROLES (igual que backend) ────────────────────────────────────────────────
 const ROLES: Record<string, { label: string; color: string; perms: string[] }> = {
-  admin:       { label: "Administrador", color: "#8B1A1A", perms: ["dashboard","inventario","pos","facturacion","contabilidad","usuarios","config"] },
-  cajero:      { label: "Cajero",        color: "#1A5C8B", perms: ["dashboard","pos","facturacion"] },
-  contador:    { label: "Contador",      color: "#1A7A3C", perms: ["dashboard","contabilidad"] },
+  admin:       { label: "Administrador", color: "#3B82F6", perms: ["dashboard","inventario","pos","facturacion","contabilidad","usuarios","config"] },
+  cajero:      { label: "Cajero",        color: "#3B82F6", perms: ["dashboard","pos","facturacion"] },
+  contador:    { label: "Contador",      color: "#10B981", perms: ["dashboard","contabilidad"] },
   almacenista: { label: "Almacenista",   color: "#7A5C1A", perms: ["dashboard","inventario"] },
 };
 
@@ -98,11 +97,11 @@ const today = () => new Date().toISOString().split("T")[0];
 // ─── ICONS ────────────────────────────────────────────────────────────────────
 const Icon = ({ name, size = 18, color = "currentColor" }: { name: string; size?: number; color?: string }) => {
   const icons: Record<string, JSX.Element> = {
-    dashboard:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>,
-    inventario:   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>,
-    pos:          <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>,
-    facturacion:  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
-    contabilidad: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+    dashboard:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+    inventario:   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
+    pos:          <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="3"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 8h4"/><path d="M7 11h2"/></svg>,
+    facturacion:  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><polyline points="9 15 11 17 15 13"/></svg>,
+    contabilidad: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
     usuarios:     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
     plus:         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
     trash:        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>,
@@ -126,11 +125,11 @@ const Icon = ({ name, size = 18, color = "currentColor" }: { name: string; size?
 // ─── TOAST ────────────────────────────────────────────────────────────────────
 const Toast = ({ msg, type, onClose }: { msg: string; type: string; onClose: () => void }) => {
   useEffect(() => { const t = setTimeout(onClose, 3200); return () => clearTimeout(t); }, []);
-  const colors: Record<string, string> = { success:"#1A7A3C", error:"#8B1A1A", info:"#1A5C8B", warning:"#7A5C1A" };
+  const colors: Record<string, string> = { success:"#10B981", error:"#3B82F6", info:"#3B82F6", warning:"#7A5C1A" };
   return (
-    <div style={{ position:"fixed", bottom:24, right:24, zIndex:9999, background:colors[type]||colors.info, color:"#fff", padding:"12px 20px", borderRadius:8, maxWidth:340, boxShadow:"0 4px 20px rgba(0,0,0,0.25)", display:"flex", alignItems:"center", gap:10, fontSize:14, fontWeight:500 }}>
+    <div style={{ position:"fixed", bottom:24, right:24, zIndex:9999, background:colors[type]||colors.info, color:"#ffffff", padding:"12px 20px", borderRadius:12, maxWidth:340, boxShadow:"0 4px 20px rgba(0,0,0,0.25)", display:"flex", alignItems:"center", gap:10, fontSize:14, fontWeight:500 }}>
       {msg}
-      <button onClick={onClose} style={{ background:"none", border:"none", color:"#fff", cursor:"pointer", marginLeft:"auto", opacity:0.8 }}><Icon name="close" size={14}/></button>
+      <button onClick={onClose} style={{ background:"none", border:"none", color:"#ffffff", cursor:"pointer", marginLeft:"auto", opacity:0.8 }}><Icon name="close" size={14}/></button>
     </div>
   );
 };
@@ -138,9 +137,9 @@ const Toast = ({ msg, type, onClose }: { msg: string; type: string; onClose: () 
 // ─── MODAL ────────────────────────────────────────────────────────────────────
 const Modal = ({ title, onClose, children, width = 560 }: { title: string; onClose: () => void; children: React.ReactNode; width?: number }) => (
   <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={e => e.target===e.currentTarget && onClose()}>
-    <div style={{ background:"#fff", borderRadius:12, width:"100%", maxWidth:width, maxHeight:"90vh", overflow:"auto", boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
-      <div style={{ padding:"20px 24px", borderBottom:"1px solid #e8e0d8", display:"flex", justifyContent:"space-between", alignItems:"center", position:"sticky", top:0, background:"#fff", zIndex:1 }}>
-        <h3 style={{ margin:0, fontSize:17, fontWeight:700, color:"#1a1410" }}>{title}</h3>
+    <div style={{ background:"#ffffff", borderRadius:16, width:"100%", maxWidth:width, maxHeight:"90vh", overflow:"auto", boxShadow:"0 20px 60px rgba(15,23,42,0.2)" }}>
+      <div style={{ padding:"20px 24px", borderBottom:"1px solid #e8e0d8", display:"flex", justifyContent:"space-between", alignItems:"center", position:"sticky", top:0, background:"#ffffff", zIndex:1 }}>
+        <h3 style={{ margin:0, fontSize:17, fontWeight:700, color:"#1E293B" }}>{title}</h3>
         <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", color:"#666", padding:4 }}><Icon name="close" size={18}/></button>
       </div>
       <div style={{ padding:24 }}>{children}</div>
@@ -169,32 +168,32 @@ const OfflineBanner = ({ online, syncing, pending, conflicts }: { online: boolea
 };
 
 // ─── UI ATOMS ─────────────────────────────────────────────────────────────────
-const Badge = ({ label, color = "#1A5C8B", bg }: { label: string; color?: string; bg?: string }) => (
+const Badge = ({ label, color = "#3B82F6", bg }: { label: string; color?: string; bg?: string }) => (
   <span style={{ display:"inline-flex", alignItems:"center", padding:"2px 10px", borderRadius:20, fontSize:12, fontWeight:600, color, background:bg||color+"20", letterSpacing:"0.3px" }}>{label}</span>
 );
 
 const Field = ({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) => (
   <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-    <label style={{ fontSize:12, fontWeight:600, color:"#5a4a3a", letterSpacing:"0.5px", textTransform:"uppercase" }}>{label}{required && <span style={{ color:"#8B1A1A" }}> *</span>}</label>
+    <label style={{ fontSize:12, fontWeight:600, color:"#475569", letterSpacing:"0.5px", textTransform:"uppercase" }}>{label}{required && <span style={{ color:"#3B82F6" }}> *</span>}</label>
     {children}
   </div>
 );
 
 const Spinner = () => (
   <div style={{ display:"flex", alignItems:"center", justifyContent:"center", padding:48 }}>
-    <div style={{ width:32, height:32, border:"3px solid #e8e0d8", borderTopColor:"#8B1A1A", borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>
+    <div style={{ width:32, height:32, border:"3px solid #e8e0d8", borderTopColor:"#3B82F6", borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>
     <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
   </div>
 );
 
-const inp = { width:"100%", padding:"9px 12px", border:"1px solid #d8cfc4", borderRadius:7, fontSize:14, color:"#1a1410", background:"#faf8f6", boxSizing:"border-box" as const, outline:"none", fontFamily:"inherit" };
+const inp = { width:"100%", padding:"9px 12px", border:"1px solid #d8cfc4", borderRadius:12, fontSize:14, color:"#1E293B", background:"#F1F5F9", boxSizing:"border-box" as const, outline:"none", fontFamily:"inherit" };
 const sel = { ...inp };
 const btn = (variant = "primary") => ({
-  display:"inline-flex", alignItems:"center", gap:7, padding:"9px 18px", borderRadius:8, fontSize:14, fontWeight:600, cursor:"pointer", border:"none", transition:"all 0.15s",
-  ...(variant==="primary"   ? { background:"#8B1A1A", color:"#fff" } :
-      variant==="secondary" ? { background:"#f0ebe4", color:"#3a2a1a", border:"1px solid #d8cfc4" } :
-      variant==="ghost"     ? { background:"none", color:"#8B1A1A" } :
-      variant==="danger"    ? { background:"#fdf0f0", color:"#8B1A1A", border:"1px solid #f0c0c0" } : {}),
+  display:"inline-flex", alignItems:"center", gap:7, padding:"9px 18px", borderRadius:12, fontSize:14, fontWeight:600, cursor:"pointer", border:"none", transition:"all 0.15s",
+  ...(variant==="primary"   ? { background:"#3B82F6", color:"#ffffff" } :
+      variant==="secondary" ? { background:"#E2E8F0", color:"#1E293B", border:"1px solid #d8cfc4" } :
+      variant==="ghost"     ? { background:"none", color:"#3B82F6" } :
+      variant==="danger"    ? { background:"#fdf0f0", color:"#3B82F6", border:"1px solid #f0c0c0" } : {}),
 });
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
@@ -219,14 +218,14 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#1a0a05 0%,#3a1510 40%,#5c2015 100%)", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
-      <div style={{ background:"#fff", borderRadius:16, padding:"48px 40px", width:"100%", maxWidth:400, boxShadow:"0 30px 80px rgba(0,0,0,0.4)" }}>
+    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#0F172A 0%,#1E3A5F 50%,#1E293B 100%)", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+      <div style={{ background:"#ffffff", borderRadius:16, padding:"48px 40px", width:"100%", maxWidth:400, boxShadow:"0 30px 80px rgba(0,0,0,0.4)" }}>
         <div style={{ textAlign:"center", marginBottom:36 }}>
-          <div style={{ width:60, height:60, background:"linear-gradient(135deg,#8B1A1A,#c94040)", borderRadius:14, margin:"0 auto 16px", display:"flex", alignItems:"center", justifyContent:"center" }}>
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><path d="M8 24L16 8L24 24" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M10.5 19h11" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
+          <div style={{ width:60, height:60, background:"linear-gradient(135deg,#3B82F6,#60A5FA)", borderRadius:16, margin:"0 auto 16px", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 0 1-8 8" stroke="white" strokeWidth="2.5" strokeLinecap="round"/><path d="M12 4a8 8 0 0 0 0 16" stroke="white" strokeWidth="2.5" strokeLinecap="round"/><circle cx="16" cy="12" r="2" fill="white"/><circle cx="19.5" cy="12" r="2" fill="white"/></svg>
           </div>
-          <h1 style={{ margin:0, fontSize:26, fontWeight:800, color:"#1a0a05", letterSpacing:"-0.5px" }}>CubaGest</h1>
-          <p style={{ margin:"6px 0 0", fontSize:13, color:"#8a7060" }}>Sistema de Gestión Empresarial</p>
+          <h1 style={{ margin:0, fontSize:26, fontWeight:800, color:"#1E293B", letterSpacing:"-0.5px" }}>CubaGest</h1>
+          <p style={{ margin:"6px 0 0", fontSize:13, color:"#64748B" }}>Sistema de Gestión Empresarial</p>
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
           <Field label="Correo electrónico" required>
@@ -235,7 +234,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
           <Field label="Contraseña" required>
             <input style={inp} type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&handleSubmit()} autoComplete="current-password"/>
           </Field>
-          {error && <div style={{ background:"#fdf0f0", color:"#8B1A1A", padding:"10px 14px", borderRadius:8, fontSize:13, display:"flex", gap:8, alignItems:"center" }}><Icon name="alert" size={15} color="#8B1A1A"/>{error}</div>}
+          {error && <div style={{ background:"#fdf0f0", color:"#3B82F6", padding:"10px 14px", borderRadius:12, fontSize:13, display:"flex", gap:8, alignItems:"center" }}><Icon name="alert" size={15} color="#3B82F6"/>{error}</div>}
           <button style={{ ...btn("primary"), justifyContent:"center", padding:"12px", fontSize:15, marginTop:4, opacity:loading?0.7:1 }} onClick={handleSubmit} disabled={loading}>
             {loading ? "Verificando..." : "Iniciar sesión"}
           </button>
@@ -292,50 +291,50 @@ const Dashboard = ({ user }: { user: any }) => {
   }, [dashOnline]);
 
   if (loading) return <Spinner/>;
-  if (!summary && error) return <div style={{ color:"#8B1A1A", padding:24 }}>Error: {error}</div>;
+  if (!summary && error) return <div style={{ color:"#3B82F6", padding:24 }}>Error: {error}</div>;
   if (!summary) return null;
 
   const { totalRevenue=0, totalExpenses=0, netProfit=0, salesCount=0, lowStockProducts=[] } = summary;
 
   const StatCard = ({ label, value, sub, color, icon }: any) => (
-    <div style={{ background:"#fff", borderRadius:12, padding:"22px 24px", border:"1px solid #e8e0d8", display:"flex", flexDirection:"column", gap:8 }}>
+    <div style={{ background:"#ffffff", borderRadius:16, padding:"22px 24px", border:"1px solid #e8e0d8", display:"flex", flexDirection:"column", gap:8 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
         <div>
-          <p style={{ margin:0, fontSize:12, fontWeight:600, color:"#8a7060", textTransform:"uppercase", letterSpacing:"0.5px" }}>{label}</p>
-          <p style={{ margin:"6px 0 0", fontSize:24, fontWeight:800, color:color||"#1a1410", letterSpacing:"-0.5px" }}>{value}</p>
+          <p style={{ margin:0, fontSize:12, fontWeight:600, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.5px" }}>{label}</p>
+          <p style={{ margin:"6px 0 0", fontSize:24, fontWeight:800, color:color||"#1E293B", letterSpacing:"-0.5px" }}>{value}</p>
         </div>
-        <div style={{ width:42, height:42, background:(color||"#8B1A1A")+"15", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          <Icon name={icon} size={20} color={color||"#8B1A1A"}/>
+        <div style={{ width:42, height:42, background:(color||"#3B82F6")+"15", borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <Icon name={icon} size={20} color={color||"#3B82F6"}/>
         </div>
       </div>
-      {sub && <p style={{ margin:0, fontSize:12, color:"#8a7060" }}>{sub}</p>}
+      {sub && <p style={{ margin:0, fontSize:12, color:"#64748B" }}>{sub}</p>}
     </div>
   );
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
       <div>
-        <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1a1410" }}>Panel Principal</h2>
-        <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>Bienvenido, {user.name} · {ROLES[user.role]?.label}</p>
-        {error && <p style={{ margin:"4px 0 0", fontSize:12, color:"#c17a00" }}>⚡ {error}</p>}
+        <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1E293B" }}>Panel Principal</h2>
+        <p style={{ margin:0, fontSize:14, color:"#64748B" }}>Bienvenido, {user.name} · {ROLES[user.role]?.label}</p>
+        {error && <p style={{ margin:"4px 0 0", fontSize:12, color:"#F97316" }}>⚡ {error}</p>}
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:16 }}>
-        <StatCard label="Ingresos del Mes"   value={`$${fmt(totalRevenue)} CUP`}  sub={`${salesCount} facturas emitidas`}                                color="#1A7A3C" icon="trend_up"/>
-        <StatCard label="Gastos del Mes"     value={`$${fmt(totalExpenses)} CUP`} sub="Total de egresos registrados"                                    color="#8B1A1A" icon="contabilidad"/>
-        <StatCard label="Utilidad Neta"      value={`$${fmt(netProfit)} CUP`}     sub={`Margen: ${Math.round(netProfit/Math.max(totalRevenue,1)*100)}%`} color={netProfit>=0?"#1A5C8B":"#8B1A1A"} icon="facturacion"/>
-        <StatCard label="Alertas de Stock"   value={lowStockProducts.length}      sub={lowStockProducts.length ? lowStockProducts.map((p:any)=>p.name).join(", ").slice(0,60) : "Todos los productos OK"} color={lowStockProducts.length?"#c17a00":"#1A7A3C"} icon="alert"/>
+        <StatCard label="Ingresos del Mes"   value={`$${fmt(totalRevenue)} CUP`}  sub={`${salesCount} facturas emitidas`}                                color="#10B981" icon="trend_up"/>
+        <StatCard label="Gastos del Mes"     value={`$${fmt(totalExpenses)} CUP`} sub="Total de egresos registrados"                                    color="#3B82F6" icon="contabilidad"/>
+        <StatCard label="Utilidad Neta"      value={`$${fmt(netProfit)} CUP`}     sub={`Margen: ${Math.round(netProfit/Math.max(totalRevenue,1)*100)}%`} color={netProfit>=0?"#3B82F6":"#3B82F6"} icon="facturacion"/>
+        <StatCard label="Alertas de Stock"   value={lowStockProducts.length}      sub={lowStockProducts.length ? lowStockProducts.map((p:any)=>p.name).join(", ").slice(0,60) : "Todos los productos OK"} color={lowStockProducts.length?"#F97316":"#10B981"} icon="alert"/>
       </div>
       {lowStockProducts.length > 0 && (
-        <div style={{ background:"#fffbf0", border:"1px solid #f0d070", borderRadius:12, padding:20 }}>
+        <div style={{ background:"#FFF7ED", border:"1px solid #f0d070", borderRadius:16, padding:20 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
-            <Icon name="alert" size={18} color="#c17a00"/>
-            <h3 style={{ margin:0, fontSize:15, fontWeight:700, color:"#7a4a00" }}>Productos con Stock Bajo</h3>
+            <Icon name="alert" size={18} color="#F97316"/>
+            <h3 style={{ margin:0, fontSize:15, fontWeight:700, color:"#9A3412" }}>Productos con Stock Bajo</h3>
           </div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
             {lowStockProducts.map((p: any) => (
-              <div key={p.id} style={{ background:"#fff", border:"1px solid #f0d070", borderRadius:8, padding:"8px 14px", fontSize:13 }}>
-                <strong style={{ color:"#1a1410" }}>{p.name}</strong>
-                <span style={{ color:"#c17a00", marginLeft:8 }}>Stock: {p.stock} {p.unit} (mín: {p.minStock})</span>
+              <div key={p.id} style={{ background:"#ffffff", border:"1px solid #f0d070", borderRadius:12, padding:"8px 14px", fontSize:13 }}>
+                <strong style={{ color:"#1E293B" }}>{p.name}</strong>
+                <span style={{ color:"#F97316", marginLeft:8 }}>Stock: {p.stock} {p.unit} (mín: {p.minStock})</span>
               </div>
             ))}
           </div>
@@ -449,22 +448,22 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
         <div>
-          <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1a1410" }}>Inventario</h2>
-          <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>
+          <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1E293B" }}>Inventario</h2>
+          <p style={{ margin:0, fontSize:14, color:"#64748B" }}>
             {products.filter((p:any)=>p.active!==false).length} productos
-            {!invOnline && <span style={{ marginLeft:8, background:"#c17a00", color:"#fff", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700 }}>OFFLINE</span>}
+            {!invOnline && <span style={{ marginLeft:8, background:"#F97316", color:"#ffffff", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700 }}>OFFLINE</span>}
           </p>
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
           {canManage && invOnline && <button style={btn("primary")} onClick={openAdd}><Icon name="plus" size={16}/>Nuevo Producto</button>}
-          {canManage && !invOnline && <span style={{ fontSize:12, color:"#c17a00", padding:"8px 0" }}>Edición requiere conexión</span>}
+          {canManage && !invOnline && <span style={{ fontSize:12, color:"#F97316", padding:"8px 0" }}>Edición requiere conexión</span>}
         </div>
       </div>
 
       <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
         <div style={{ position:"relative", flex:1, minWidth:200 }}>
-          <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}><Icon name="search" size={15} color="#8a7060"/></span>
+          <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}><Icon name="search" size={15} color="#64748B"/></span>
           <input style={{ ...inp, paddingLeft:34 }} placeholder="Buscar por nombre o código..." value={search} onChange={e=>setSearch(e.target.value)}/>
         </div>
         <select style={{ ...sel, width:"auto" }} value={filterCat} onChange={e=>setFilterCat(e.target.value)}>
@@ -473,26 +472,26 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
       </div>
 
       {loading ? <Spinner/> : (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+        <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
           <table style={{ width:"100%", minWidth:700, borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:"#faf8f6" }}>
+            <thead><tr style={{ background:"#F1F5F9" }}>
               {["Código","Producto","Categoría","Precio","Costo","Stock","Estado","Acciones"].map(h=>(
-                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase", letterSpacing:"0.5px", whiteSpace:"nowrap" }}>{h}</th>
+                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.5px", whiteSpace:"nowrap" }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {filtered.map(p=>(
                 <tr key={p.id} style={{ borderTop:"1px solid #f0ebe4", opacity:p.active?1:0.5 }}>
-                  <td style={{ padding:"11px 14px", fontSize:12, fontWeight:600, color:"#8a7060", fontFamily:"monospace" }}>{p.code}</td>
-                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#1a1410" }}>{p.name} <span style={{ fontSize:11, color:"#aaa", fontWeight:400 }}>/{p.unit}</span></td>
+                  <td style={{ padding:"11px 14px", fontSize:12, fontWeight:600, color:"#64748B", fontFamily:"monospace" }}>{p.code}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#1E293B" }}>{p.name} <span style={{ fontSize:11, color:"#aaa", fontWeight:400 }}>/{p.unit}</span></td>
                   <td style={{ padding:"11px 14px" }}><Badge label={p.category||"—"} color="#5a3a1a"/></td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(p.price)}</td>
-                  <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>${fmt(p.cost)}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, color:"#475569" }}>${fmt(p.cost)}</td>
                   <td style={{ padding:"11px 14px" }}>
-                    <span style={{ fontWeight:700, color:p.stock<=p.minStock?"#c17a00":"#1A7A3C", fontSize:14 }}>{p.stock}</span>
-                    {p.stock<=p.minStock && <span style={{ marginLeft:6, fontSize:10, color:"#c17a00" }}>⚠ BAJO</span>}
+                    <span style={{ fontWeight:700, color:p.stock<=p.minStock?"#F97316":"#10B981", fontSize:14 }}>{p.stock}</span>
+                    {p.stock<=p.minStock && <span style={{ marginLeft:6, fontSize:10, color:"#F97316" }}>⚠ BAJO</span>}
                   </td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={p.active?"Activo":"Inactivo"} color={p.active?"#1A7A3C":"#888"}/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={p.active?"Activo":"Inactivo"} color={p.active?"#10B981":"#888"}/></td>
                   <td style={{ padding:"11px 14px" }}>
                     <div style={{ display:"flex", gap:4 }}>
                       {canManage && <button style={{ ...btn("ghost"), padding:"5px 9px", fontSize:12 }} onClick={()=>openAdjust(p)} title="Ajustar stock">±</button>}
@@ -505,7 +504,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
               ))}
             </tbody>
           </table>
-          {filtered.length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060", fontSize:14 }}>No se encontraron productos</div>}
+          {filtered.length===0 && <div style={{ padding:40, textAlign:"center", color:"#64748B", fontSize:14 }}>No se encontraron productos</div>}
         </div>
       )}
 
@@ -539,8 +538,8 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
       {modal==="adjust" && selected && (
         <Modal title={`Ajuste de Stock — ${selected.name}`} onClose={()=>setModal(null)} width={420}>
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-            <div style={{ background:"#faf8f6", borderRadius:8, padding:"12px 16px" }}>
-              <p style={{ margin:0, fontSize:13, color:"#5a4a3a" }}>Stock actual: <strong>{selected.stock} {selected.unit}</strong></p>
+            <div style={{ background:"#F1F5F9", borderRadius:12, padding:"12px 16px" }}>
+              <p style={{ margin:0, fontSize:13, color:"#475569" }}>Stock actual: <strong>{selected.stock} {selected.unit}</strong></p>
             </div>
             <Field label="Tipo de Movimiento">
               <div style={{ display:"flex", gap:10 }}>
@@ -671,52 +670,52 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 120px)", gap:0 }}>
-      <h2 style={{ margin:"0 0 12px", fontSize:20, fontWeight:800, color:"#1a1410", flexShrink:0 }}>Punto de Venta</h2>
+      <h2 style={{ margin:"0 0 12px", fontSize:20, fontWeight:800, color:"#1E293B", flexShrink:0 }}>Punto de Venta</h2>
 
       {/* Buscador fijo */}
       <div style={{ position:"relative", flexShrink:0, marginBottom:10 }}>
-        <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}><Icon name="search" size={15} color="#8a7060"/></span>
+        <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}><Icon name="search" size={15} color="#64748B"/></span>
         <input style={{ ...inp, paddingLeft:34 }} placeholder="Buscar producto..." value={search} onChange={e=>setSearch(e.target.value)}/>
       </div>
 
       {/* Lista de productos — scroll independiente */}
       <div style={{ flex:1, overflowY:"auto", marginBottom:10, WebkitOverflowScrolling:"touch" as any }}>
         {loading ? <Spinner/> : (
-          <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflow:"hidden" }}>
+          <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", overflow:"hidden" }}>
             {avail.map((p,idx)=>{
               const q = qtyFor(p.id);
               return (
                 <div key={p.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", borderTop: idx===0?"none":"1px solid #f0ebe4" }}>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <p style={{ margin:0, fontSize:13, fontWeight:700, color:"#1a1410", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</p>
-                    <p style={{ margin:0, fontSize:11, color:"#8a7060" }}>Stock: {p.stock} {p.unit} · ${fmt(p.price)}</p>
+                    <p style={{ margin:0, fontSize:13, fontWeight:700, color:"#1E293B", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</p>
+                    <p style={{ margin:0, fontSize:11, color:"#64748B" }}>Stock: {p.stock} {p.unit} · ${fmt(p.price)}</p>
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-                    <button onClick={()=>setQty(p, q-1)} disabled={q===0} style={{ width:28, height:28, background:"#f0ebe4", border:"none", borderRadius:6, cursor:q===0?"default":"pointer", opacity:q===0?0.4:1, display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="minus" size={13}/></button>
-                    <span style={{ width:22, textAlign:"center", fontSize:14, fontWeight:700, color:q>0?"#8B1A1A":"#1a1410" }}>{q}</span>
-                    <button onClick={()=>setQty(p, q+1)} style={{ width:28, height:28, background:"#8B1A1A", border:"none", borderRadius:6, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="plus" size={13} color="#fff"/></button>
+                    <button onClick={()=>setQty(p, q-1)} disabled={q===0} style={{ width:28, height:28, background:"#E2E8F0", border:"none", borderRadius:8, cursor:q===0?"default":"pointer", opacity:q===0?0.4:1, display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="minus" size={13}/></button>
+                    <span style={{ width:22, textAlign:"center", fontSize:14, fontWeight:700, color:q>0?"#3B82F6":"#1E293B" }}>{q}</span>
+                    <button onClick={()=>setQty(p, q+1)} style={{ width:28, height:28, background:"#3B82F6", border:"none", borderRadius:8, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="plus" size={13} color="#ffffff"/></button>
                   </div>
                 </div>
               );
             })}
-            {avail.length===0 && <div style={{ textAlign:"center", padding:40, color:"#8a7060", fontSize:14 }}>No hay productos disponibles</div>}
+            {avail.length===0 && <div style={{ textAlign:"center", padding:40, color:"#64748B", fontSize:14 }}>No hay productos disponibles</div>}
           </div>
         )}
       </div>
 
       {/* Carrito fijo abajo */}
-      <div style={{ flexShrink:0, background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", padding:14, display:"flex", flexDirection:"column", gap:10 }}>
+      <div style={{ flexShrink:0, background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", padding:14, display:"flex", flexDirection:"column", gap:10 }}>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <Icon name="cart" size={18} color="#8B1A1A"/>
-          <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:"#1a1410" }}>Carrito</h3>
-          <span style={{ marginLeft:"auto", background:"#8B1A1A", color:"#fff", borderRadius:20, padding:"1px 10px", fontSize:12, fontWeight:700 }}>{cart.length}</span>
+          <Icon name="cart" size={18} color="#3B82F6"/>
+          <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:"#1E293B" }}>Carrito</h3>
+          <span style={{ marginLeft:"auto", background:"#3B82F6", color:"#ffffff", borderRadius:20, padding:"1px 10px", fontSize:12, fontWeight:700 }}>{cart.length}</span>
         </div>
 
         {cart.length>0 && (
           <div style={{ maxHeight:80, overflowY:"auto", display:"flex", flexDirection:"column", gap:4 }}>
             {cart.map(item=>(
               <div key={item.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
-                <span style={{ color:"#5a4a3a" }}>{item.qty}× {item.name}</span>
+                <span style={{ color:"#475569" }}>{item.qty}× {item.name}</span>
                 <span style={{ fontWeight:700 }}>${fmt(item.price*item.qty)}</span>
               </div>
             ))}
@@ -737,7 +736,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
         </div>
 
         {payMethod==="efectivo" && cashGiven && Number(cashGiven)>=total && (
-          <p style={{ margin:0, fontSize:13, fontWeight:700, color:"#1A7A3C" }}>Cambio: ${fmt(change)} CUP</p>
+          <p style={{ margin:0, fontSize:13, fontWeight:700, color:"#10B981" }}>Cambio: ${fmt(change)} CUP</p>
         )}
 
         {needsTransferData && (
@@ -751,8 +750,8 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
         )}
 
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div style={{ fontSize:18, fontWeight:800, color:"#1a1410" }}>Total: ${fmt(total)} CUP</div>
-          <button style={{ ...btn("primary"), padding:"10px 20px", fontSize:14, opacity:processing?0.6:1 }} onClick={processSale} disabled={cart.length===0||processing}>
+          <div style={{ fontSize:18, fontWeight:800, color:"#1E293B" }}>Total: ${fmt(total)} CUP</div>
+          <button style={{ ...btn("primary"), padding:"10px 20px", fontSize:14, opacity:processing?0.6:1, background:"#10B981", boxShadow:"0 4px 12px rgba(16,185,129,0.3)" }} onClick={processSale} disabled={cart.length===0||processing}>
             <Icon name="check" size={15}/>{processing?"...":"Cobrar"}
           </button>
         </div>
@@ -760,11 +759,11 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
       {lastReceipt && (
         <Modal title="Factura Emitida" onClose={()=>setLastReceipt(null)} width={480}>
-          <div style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.8, background:"#faf8f6", padding:20, borderRadius:8, border:"1px solid #e8e0d8" }}>
-            {lastReceipt.isOffline && <div style={{ background:"#fff3cd", color:"#856404", padding:"6px 10px", borderRadius:6, marginBottom:10, fontSize:11, textAlign:"center" as any }}>⚡ GUARDADA OFFLINE — se sincronizará al recuperar conexión</div>}
+          <div style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.8, background:"#F1F5F9", padding:20, borderRadius:12, border:"1px solid #e8e0d8" }}>
+            {lastReceipt.isOffline && <div style={{ background:"#fff3cd", color:"#856404", padding:"6px 10px", borderRadius:8, marginBottom:10, fontSize:11, textAlign:"center" as any }}>⚡ GUARDADA OFFLINE — se sincronizará al recuperar conexión</div>}
             <div style={{ textAlign:"center", marginBottom:16 }}>
               <div style={{ fontWeight:800, fontSize:16 }}>CUBAGEST</div>
-              <div style={{ fontWeight:700, fontSize:14, color:"#8B1A1A" }}>FACTURA COMERCIAL</div>
+              <div style={{ fontWeight:700, fontSize:14, color:"#3B82F6" }}>FACTURA COMERCIAL</div>
               <div>No. <strong>{lastReceipt.id || lastReceipt.localId}</strong> · Fecha: {lastReceipt.date?.split("T")[0]||lastReceipt.syncedAt||new Date().toISOString().split("T")[0]}</div>
             </div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
@@ -796,10 +795,10 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 const PlanModal = ({ onClose }: { onClose: () => void }) => (
   <Modal title="Mi Plan — CubaGest" onClose={onClose} width={560}>
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ background:"#faf8f6", borderRadius:8, padding:16, border:"1px solid #e8e0d8" }}>
-        <div style={{ fontSize:12, color:"#8a7060", marginBottom:4 }}>PLAN ACTUAL</div>
-        <div style={{ fontWeight:800, fontSize:18, color:"#1a1410" }}>Profesional</div>
-        <div style={{ fontWeight:700, fontSize:15, color:"#1A5C8B", marginTop:2 }}>$15/mes CUP</div>
+      <div style={{ background:"#F1F5F9", borderRadius:12, padding:16, border:"1px solid #e8e0d8" }}>
+        <div style={{ fontSize:12, color:"#64748B", marginBottom:4 }}>PLAN ACTUAL</div>
+        <div style={{ fontWeight:800, fontSize:18, color:"#1E293B" }}>Profesional</div>
+        <div style={{ fontWeight:700, fontSize:15, color:"#3B82F6", marginTop:2 }}>$15/mes CUP</div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12 }}>
         {[
@@ -807,23 +806,23 @@ const PlanModal = ({ onClose }: { onClose: () => void }) => (
           { plan:"Profesional", price:"$15/mes CUP", features:["5 usuarios","Todas las funciones","Soporte prioritario"], current:true },
           { plan:"Empresarial", price:"$35/mes CUP", features:["Ilimitado","Multi-sucursal","API"], current:false },
         ].map(p=>(
-          <div key={p.plan} style={{ border:`2px solid ${p.current?"#8B1A1A":"#e8e0d8"}`, borderRadius:10, padding:14, position:"relative" as any }}>
-            {p.current && <span style={{ position:"absolute" as any, top:-10, left:12, background:"#8B1A1A", color:"#fff", fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:20 }}>ACTUAL</span>}
-            <div style={{ fontWeight:800, fontSize:14, color:"#1a1410", marginBottom:2 }}>{p.plan}</div>
-            <div style={{ fontWeight:700, fontSize:13, color:"#1A5C8B", marginBottom:10 }}>{p.price}</div>
+          <div key={p.plan} style={{ border:`2px solid ${p.current?"#3B82F6":"#E2E8F0"}`, borderRadius:12, padding:14, position:"relative" as any }}>
+            {p.current && <span style={{ position:"absolute" as any, top:-10, left:12, background:"#3B82F6", color:"#ffffff", fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:20 }}>ACTUAL</span>}
+            <div style={{ fontWeight:800, fontSize:14, color:"#1E293B", marginBottom:2 }}>{p.plan}</div>
+            <div style={{ fontWeight:700, fontSize:13, color:"#3B82F6", marginBottom:10 }}>{p.price}</div>
             {p.features.map((f:string)=>(
-              <div key={f} style={{ display:"flex", gap:6, fontSize:12, color:"#5a4a3a", marginBottom:4 }}>
-                <Icon name="check" size={12} color="#1A7A3C"/>{f}
+              <div key={f} style={{ display:"flex", gap:6, fontSize:12, color:"#475569", marginBottom:4 }}>
+                <Icon name="check" size={12} color="#10B981"/>{f}
               </div>
             ))}
-            {!p.current && <button style={{ background:"#f0ebe4", border:"none", borderRadius:6, padding:"6px 12px", fontSize:12, fontWeight:600, cursor:"pointer", marginTop:10, width:"100%" }}>Cambiar</button>}
+            {!p.current && <button style={{ background:"#E2E8F0", border:"none", borderRadius:8, padding:"6px 12px", fontSize:12, fontWeight:600, cursor:"pointer", marginTop:10, width:"100%" }}>Cambiar</button>}
           </div>
         ))}
       </div>
-      <div style={{ fontSize:12, color:"#8a7060", textAlign:"center" as any, padding:"8px 0" }}>
+      <div style={{ fontSize:12, color:"#64748B", textAlign:"center" as any, padding:"8px 0" }}>
         Para cambiar el plan contacte: <strong>soporte@cubagest.cu</strong>
       </div>
-      <button style={{ background:"#8B1A1A", color:"#fff", border:"none", borderRadius:8, padding:"10px", fontWeight:700, cursor:"pointer", fontSize:14 }} onClick={onClose}>Cerrar</button>
+      <button style={{ background:"#3B82F6", color:"#ffffff", border:"none", borderRadius:12, padding:"10px", fontWeight:700, cursor:"pointer", fontSize:14 }} onClick={onClose}>Cerrar</button>
     </div>
   </Modal>
 )
@@ -899,11 +898,11 @@ const Facturacion = ({ user, showToast, onSyncRefresh }: { user: any; showToast:
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
         <div>
-          <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1a1410" }}>Facturas</h2>
-          <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>
+          <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1E293B" }}>Facturas</h2>
+          <p style={{ margin:0, fontSize:14, color:"#64748B" }}>
             {sales.filter(s=>s.status==="emitida").length} emitidas · ${fmt(sales.filter(s=>s.status==="emitida").reduce((a,s)=>a+Number(s.total),0))} CUP
-            {offlineSales.filter(s=>s.status==="pending").length > 0 && <span style={{ marginLeft:8, background:"#c17a00", color:"#fff", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700 }}>{offlineSales.filter(s=>s.status==="pending").length} offline</span>}
-            {offlineSales.filter(s=>s.status==="conflict").length > 0 && <span style={{ marginLeft:4, background:"#8B1A1A", color:"#fff", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700 }}>{offlineSales.filter(s=>s.status==="conflict").length} conflicto</span>}
+            {offlineSales.filter(s=>s.status==="pending").length > 0 && <span style={{ marginLeft:8, background:"#F97316", color:"#ffffff", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700 }}>{offlineSales.filter(s=>s.status==="pending").length} offline</span>}
+            {offlineSales.filter(s=>s.status==="conflict").length > 0 && <span style={{ marginLeft:4, background:"#3B82F6", color:"#ffffff", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700 }}>{offlineSales.filter(s=>s.status==="conflict").length} conflicto</span>}
           </p>
         </div>
         <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
@@ -911,27 +910,27 @@ const Facturacion = ({ user, showToast, onSyncRefresh }: { user: any; showToast:
 
       {/* Ventas offline pendientes */}
       {offlineSales.filter(s=>s.status==="pending"||s.status==="conflict").length > 0 && (
-        <div style={{ background:"#fffbf0", border:"1px solid #f0d070", borderRadius:12, padding:16 }}>
+        <div style={{ background:"#FFF7ED", border:"1px solid #f0d070", borderRadius:16, padding:16 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-            <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:"#7a4a00" }}>⚡ Ventas offline</h3>
+            <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:"#9A3412" }}>⚡ Ventas offline</h3>
             <button style={{ ...btn("ghost"), fontSize:12, padding:"4px 10px" }} onClick={()=>setShowOffline(v=>!v)}>{showOffline?"Ocultar":"Mostrar"}</button>
           </div>
           {showOffline && (
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
               {offlineSales.filter(s=>s.status==="pending"||s.status==="conflict").map(s=>(
-                <div key={s.localId} style={{ background:"#fff", borderRadius:8, padding:"12px 14px", border:`1px solid ${s.status==="conflict"?"#f0c0c0":"#f0d070"}` }}>
+                <div key={s.localId} style={{ background:"#ffffff", borderRadius:12, padding:"12px 14px", border:`1px solid ${s.status==="conflict"?"#f0c0c0":"#FED7AA"}` }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
                     <div>
-                      <span style={{ fontWeight:700, fontSize:13, fontFamily:"monospace", color:"#8B1A1A" }}>{s.localId}</span>
-                      <span style={{ fontSize:11, color:"#8a7060", marginLeft:8 }}>{new Date(s.timestamp).toLocaleString("es-CU")}</span>
+                      <span style={{ fontWeight:700, fontSize:13, fontFamily:"monospace", color:"#3B82F6" }}>{s.localId}</span>
+                      <span style={{ fontSize:11, color:"#64748B", marginLeft:8 }}>{new Date(s.timestamp).toLocaleString("es-CU")}</span>
                     </div>
-                    <Badge label={s.status==="conflict"?"Conflicto":"Pendiente"} color={s.status==="conflict"?"#8B1A1A":"#c17a00"}/>
+                    <Badge label={s.status==="conflict"?"Conflicto":"Pendiente"} color={s.status==="conflict"?"#3B82F6":"#F97316"}/>
                   </div>
-                  <div style={{ fontSize:12, color:"#5a4a3a", marginBottom:4 }}>
+                  <div style={{ fontSize:12, color:"#475569", marginBottom:4 }}>
                     {s.client} · <strong>${fmt(s.total)}</strong> · {s.items.map((i:any)=>`${i.qty}x ${i.name}`).join(", ")}
                   </div>
                   {s.status==="conflict" && (
-                    <div style={{ fontSize:11, color:"#8B1A1A", marginBottom:8 }}>⚠ {s.conflictReason}</div>
+                    <div style={{ fontSize:11, color:"#3B82F6", marginBottom:8 }}>⚠ {s.conflictReason}</div>
                   )}
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap" as any, marginTop:6 }}>
                     {s.status==="conflict" && (
@@ -975,27 +974,27 @@ const Facturacion = ({ user, showToast, onSyncRefresh }: { user: any; showToast:
       )}
 
       <div style={{ position:"relative" as any }}>
-        <span style={{ position:"absolute" as any, left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" as any }}><Icon name="search" size={15} color="#8a7060"/></span>
+        <span style={{ position:"absolute" as any, left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" as any }}><Icon name="search" size={15} color="#64748B"/></span>
         <input style={{ ...inp, paddingLeft:34 }} placeholder="Buscar por No. factura o cliente..." value={search} onChange={e=>setSearch(e.target.value)}/>
       </div>
 
       {loading ? <Spinner/> : (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+        <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
           <table style={{ width:"100%", minWidth:700, borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:"#faf8f6" }}>
+            <thead><tr style={{ background:"#F1F5F9" }}>
               {["No. Factura","Fecha","Cliente","Total","Método","Estado",""].map(h=>(
-                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase" as any, whiteSpace:"nowrap" as any }}>{h}</th>
+                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase" as any, whiteSpace:"nowrap" as any }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {filtered.map(s=>(
                 <tr key={s.id} style={{ borderTop:"1px solid #f0ebe4", opacity:s.status==="anulada"?0.5:1 }}>
-                  <td style={{ padding:"11px 14px", fontSize:12, fontWeight:700, color:"#8B1A1A", fontFamily:"monospace" }}>{s.invoiceNumber||s.id}</td>
-                  <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, fontWeight:700, color:"#3B82F6", fontFamily:"monospace" }}>{s.invoiceNumber||s.id}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, color:"#475569" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13 }}>{s.clientName||s.client}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={s.status==="emitida"?"Emitida":"Anulada"} color={s.status==="emitida"?"#1A7A3C":"#8B1A1A"}/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="#3B82F6"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={s.status==="emitida"?"Emitida":"Anulada"} color={s.status==="emitida"?"#10B981":"#3B82F6"}/></td>
                   <td style={{ padding:"11px 14px" }}>
                     <button style={{ ...btn("ghost"), padding:"5px 10px", fontSize:12 }} onClick={()=>setViewInv(s)}>
                       <Icon name="eye" size={14}/>
@@ -1005,17 +1004,17 @@ const Facturacion = ({ user, showToast, onSyncRefresh }: { user: any; showToast:
               ))}
             </tbody>
           </table>
-          {filtered.length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060" }}>No hay facturas</div>}
+          {filtered.length===0 && <div style={{ padding:40, textAlign:"center", color:"#64748B" }}>No hay facturas</div>}
         </div>
       )}
 
       {viewInv && (
         <Modal title={`Factura ${viewInv.invoiceNumber||viewInv.id}`} onClose={()=>setViewInv(null)} width={520}>
-          <div style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.9, background:"#faf8f6", padding:20, borderRadius:8, border:"1px solid #e8e0d8" }}>
+          <div style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.9, background:"#F1F5F9", padding:20, borderRadius:12, border:"1px solid #e8e0d8" }}>
             <div style={{ textAlign:"center", marginBottom:14 }}>
               <div style={{ fontWeight:800, fontSize:15 }}>CUBAGEST</div>
-              <div>FACTURA No. <strong style={{ color:"#8B1A1A" }}>{viewInv.invoiceNumber||viewInv.id}</strong></div>
-              {viewInv.status==="anulada" && <div style={{ color:"#8B1A1A", fontWeight:800 }}>⚠ ANULADA</div>}
+              <div>FACTURA No. <strong style={{ color:"#3B82F6" }}>{viewInv.invoiceNumber||viewInv.id}</strong></div>
+              {viewInv.status==="anulada" && <div style={{ color:"#3B82F6", fontWeight:800 }}>⚠ ANULADA</div>}
             </div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
             <div>Fecha: {(viewInv.date||viewInv.createdAt||"").split("T")[0]}</div>
@@ -1049,7 +1048,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh }: { user: any; showToast:
       {editModal && viewInv && (
         <Modal title="Editar datos de factura" onClose={()=>setEditModal(false)} width={440}>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-            <div style={{ background:"#fffbf0", border:"1px solid #f0d070", borderRadius:8, padding:12, fontSize:12, color:"#7a4a00" }}>
+            <div style={{ background:"#FFF7ED", border:"1px solid #f0d070", borderRadius:12, padding:12, fontSize:12, color:"#9A3412" }}>
               ⚠ Solo se pueden editar los datos del cliente y método de pago. Los productos y totales no cambian.
             </div>
             <Field label="Nombre del cliente"><input style={inp} value={editForm.clientName} onChange={e=>setEditForm((f:any)=>({...f,clientName:e.target.value}))}/></Field>
@@ -1163,8 +1162,8 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
         <div>
-          <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1a1410" }}>Contabilidad</h2>
-          <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>Registro contable</p>
+          <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1E293B" }}>Contabilidad</h2>
+          <p style={{ margin:0, fontSize:14, color:"#64748B" }}>Registro contable</p>
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
@@ -1173,7 +1172,7 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
         </div>
       </div>
 
-      <div style={{ display:"flex", gap:4, background:"#f0ebe4", borderRadius:10, padding:4, width:"fit-content" }}>
+      <div style={{ display:"flex", gap:4, background:"#E2E8F0", borderRadius:12, padding:4, width:"fit-content" }}>
         {[["ingresos","Ingresos"],["gastos","Egresos"],["facturas","Facturas"]].map(([v,l])=>(
           <button key={v} onClick={()=>setTab(v)} style={{ ...btn(tab===v?"primary":"ghost"), padding:"7px 16px", fontSize:13, borderRadius:7 }}>{l}</button>
         ))}
@@ -1182,23 +1181,23 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
 
 
       {tab==="ingresos" && (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+        <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
           <table style={{ width:"100%", minWidth:750, borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:"#faf8f6" }}>
+            <thead><tr style={{ background:"#F1F5F9" }}>
               {["No. Factura","Fecha","Cliente","NIT","Teléfono","Total","Método"].map(h=>(
-                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase" }}>{h}</th>
+                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase" }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {sales.filter(s=>s.status==="emitida").map(s=>(
                 <tr key={s.id} onClick={()=>setViewInv(s)} style={{ borderTop:"1px solid #f0ebe4", cursor:"pointer" }}>
-                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#8B1A1A", fontFamily:"monospace" }}>{s.id}</td>
-                  <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#3B82F6", fontFamily:"monospace" }}>{s.id}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, color:"#475569" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13 }}>{s.client}</td>
-                  <td style={{ padding:"11px 14px", fontSize:12, color:"#8a7060", fontFamily:"monospace" }}>{s.clientNit || "—"}</td>
-                  <td style={{ padding:"11px 14px", fontSize:12, color:"#8a7060" }}>{s.clientPhone || "—"}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:"#64748B", fontFamily:"monospace" }}>{s.clientNit || "—"}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:"#64748B" }}>{s.clientPhone || "—"}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="#3B82F6"/></td>
                 </tr>
               ))}
             </tbody>
@@ -1207,63 +1206,63 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
       )}
 
       {tab==="gastos" && (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+        <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
           <table style={{ width:"100%", minWidth:500, borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:"#faf8f6" }}>
+            <thead><tr style={{ background:"#F1F5F9" }}>
               {["Fecha","Concepto","Categoría","Método","Monto"].map(h=>(
-                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase" }}>{h}</th>
+                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase" }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {expenses.map(e=>(
                 <tr key={e.id} style={{ borderTop:"1px solid #f0ebe4" }}>
-                  <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(e.date||e.createdAt||"").split("T")[0]}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, color:"#475569" }}>{(e.date||e.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600 }}>{e.concept}</td>
                   <td style={{ padding:"11px 14px" }}><Badge label={e.category} color="#5a3a1a"/></td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===e.method)?.label||e.method} color="#1A5C8B"/></td>
-                  <td style={{ padding:"11px 14px", fontSize:14, fontWeight:700, color:"#8B1A1A" }}>${fmt(e.amount)}</td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===e.method)?.label||e.method} color="#3B82F6"/></td>
+                  <td style={{ padding:"11px 14px", fontSize:14, fontWeight:700, color:"#3B82F6" }}>${fmt(e.amount)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {expenses.length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060" }}>No hay egresos registrados</div>}
+          {expenses.length===0 && <div style={{ padding:40, textAlign:"center", color:"#64748B" }}>No hay egresos registrados</div>}
         </div>
       )}
 
       {tab==="facturas" && (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+        <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
           <table style={{ width:"100%", minWidth:800, borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:"#faf8f6" }}>
+            <thead><tr style={{ background:"#F1F5F9" }}>
               {["No. Factura","Fecha","Cliente","NIT","Teléfono","Total","Método","Estado"].map(h=>(
-                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase" as any, whiteSpace:"nowrap" as any }}>{h}</th>
+                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase" as any, whiteSpace:"nowrap" as any }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {sales.filter((s:any)=>s.status==="emitida").map((s:any)=>(
                 <tr key={s.id} onClick={()=>setViewInv(s)} style={{ borderTop:"1px solid #f0ebe4", cursor:"pointer" }}>
-                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#8B1A1A", fontFamily:"monospace" }}>{s.id}</td>
-                  <td style={{ padding:"11px 14px", fontSize:13, color:"#5a4a3a" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#3B82F6", fontFamily:"monospace" }}>{s.id}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, color:"#475569" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13 }}>{s.client}</td>
-                  <td style={{ padding:"11px 14px", fontSize:12, color:"#8a7060", fontFamily:"monospace" }}>{s.clientNit || "—"}</td>
-                  <td style={{ padding:"11px 14px", fontSize:12, color:"#8a7060" }}>{s.clientPhone || "—"}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:"#64748B", fontFamily:"monospace" }}>{s.clientNit || "—"}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, color:"#64748B" }}>{s.clientPhone || "—"}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find((p:any)=>p.id===s.payMethod)?.label||s.payMethod} color="#1A5C8B"/></td>
-                  <td style={{ padding:"11px 14px" }}><Badge label="Emitida" color="#1A7A3C"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find((p:any)=>p.id===s.payMethod)?.label||s.payMethod} color="#3B82F6"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label="Emitida" color="#10B981"/></td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {sales.filter((s:any)=>s.status==="emitida").length===0 && <div style={{ padding:40, textAlign:"center", color:"#8a7060" }}>No hay facturas emitidas</div>}
+          {sales.filter((s:any)=>s.status==="emitida").length===0 && <div style={{ padding:40, textAlign:"center", color:"#64748B" }}>No hay facturas emitidas</div>}
         </div>
       )}
 
       {viewInv && (
         <Modal title={`Factura ${viewInv.id}`} onClose={()=>setViewInv(null)} width={520}>
-          <div style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.9, background:"#faf8f6", padding:20, borderRadius:8, border:"1px solid #e8e0d8" }}>
+          <div style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.9, background:"#F1F5F9", padding:20, borderRadius:12, border:"1px solid #e8e0d8" }}>
             <div style={{ textAlign:"center", marginBottom:14 }}>
               <div style={{ fontWeight:800, fontSize:15 }}>CUBAGEST</div>
-              <div>FACTURA COMERCIAL No. <strong style={{ color:"#8B1A1A", fontSize:15 }}>{viewInv.id}</strong></div>
-              {viewInv.status==="anulada" && <div style={{ color:"#8B1A1A", fontWeight:800 }}>⚠ ANULADA</div>}
+              <div>FACTURA COMERCIAL No. <strong style={{ color:"#3B82F6", fontSize:15 }}>{viewInv.id}</strong></div>
+              {viewInv.status==="anulada" && <div style={{ color:"#3B82F6", fontWeight:800 }}>⚠ ANULADA</div>}
             </div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
             <div>Fecha: {(viewInv.date||viewInv.createdAt||"").split("T")[0]}</div>
@@ -1369,18 +1368,18 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
-          <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1a1410" }}>Usuarios y Roles</h2>
-          <p style={{ margin:0, fontSize:14, color:"#8a7060" }}>{users.length} usuarios registrados</p>
+          <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1E293B" }}>Usuarios y Roles</h2>
+          <p style={{ margin:0, fontSize:14, color:"#64748B" }}>{users.length} usuarios registrados</p>
         </div>
         <button style={btn("primary")} onClick={openAdd}><Icon name="plus" size={16}/>Nuevo Usuario</button>
       </div>
 
       {loading ? <Spinner/> : (
-        <div style={{ background:"#fff", borderRadius:12, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
+        <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
           <table style={{ width:"100%", minWidth:700, borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:"#faf8f6" }}>
+            <thead><tr style={{ background:"#F1F5F9" }}>
               {["Nombre","Correo","Rol","Permisos","Acciones"].map(h=>(
-                <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, fontWeight:700, color:"#8a7060", textTransform:"uppercase", letterSpacing:"0.5px" }}>{h}</th>
+                <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.5px" }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -1388,18 +1387,18 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
                 <tr key={u.id} style={{ borderTop:"1px solid #f0ebe4" }}>
                   <td style={{ padding:"14px 16px" }}>
                     <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                      <div style={{ width:36, height:36, borderRadius:50, background:ROLES[u.role]?.color||"#888", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700 }}>{u.name?.charAt(0)}</div>
+                      <div style={{ width:36, height:36, borderRadius:50, background:ROLES[u.role]?.color||"#888", color:"#ffffff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700 }}>{u.name?.charAt(0)}</div>
                       <div>
-                        <p style={{ margin:0, fontSize:14, fontWeight:700, color:"#1a1410" }}>{u.name}</p>
-                        {u.id===currentUser.id && <span style={{ fontSize:11, color:"#8B1A1A", fontWeight:600 }}>← Sesión actual</span>}
+                        <p style={{ margin:0, fontSize:14, fontWeight:700, color:"#1E293B" }}>{u.name}</p>
+                        {u.id===currentUser.id && <span style={{ fontSize:11, color:"#3B82F6", fontWeight:600 }}>← Sesión actual</span>}
                       </div>
                     </div>
                   </td>
-                  <td style={{ padding:"14px 16px", fontSize:13, color:"#5a4a3a" }}>{u.email}</td>
+                  <td style={{ padding:"14px 16px", fontSize:13, color:"#475569" }}>{u.email}</td>
                   <td style={{ padding:"14px 16px" }}><Badge label={ROLES[u.role]?.label||u.role} color={ROLES[u.role]?.color||"#888"}/></td>
                   <td style={{ padding:"14px 16px" }}>
                     <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                      {(ROLES[u.role]?.perms||[]).map((p:string)=><Badge key={p} label={p} color="#5a4a3a"/>)}
+                      {(ROLES[u.role]?.perms||[]).map((p:string)=><Badge key={p} label={p} color="#475569"/>)}
                     </div>
                   </td>
                   <td style={{ padding:"14px 16px" }}>
@@ -1415,11 +1414,11 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
         </div>
       )}
 
-      <div style={{ background:"#faf8f6", borderRadius:12, border:"1px solid #e8e0d8", padding:20 }}>
-        <h3 style={{ margin:"0 0 14px", fontSize:14, fontWeight:700, color:"#1a1410" }}>Política de seguridad (Ley 149/2022)</h3>
+      <div style={{ background:"#F1F5F9", borderRadius:16, border:"1px solid #e8e0d8", padding:20 }}>
+        <h3 style={{ margin:"0 0 14px", fontSize:14, fontWeight:700, color:"#1E293B" }}>Política de seguridad (Ley 149/2022)</h3>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:12 }}>
           {[["🔐","Contraseñas mínimo 8 caracteres"],["📋","Registro de auditoría por usuario"],["⏱","Sesión con token JWT expirable"],["🔒","Acceso restringido por rol"],["📊","Log disponible para auditoría ONAT"],["🛡","Comunicación cifrada HTTPS"]].map(([icon,text])=>(
-            <div key={text as string} style={{ display:"flex", gap:10, alignItems:"flex-start", fontSize:13, color:"#5a4a3a" }}>
+            <div key={text as string} style={{ display:"flex", gap:10, alignItems:"flex-start", fontSize:13, color:"#475569" }}>
               <span style={{ fontSize:16 }}>{icon}</span>{text as string}
             </div>
           ))}
@@ -1439,7 +1438,7 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
                 {Object.entries(ROLES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
               </select>
             </Field>
-            <div style={{ background:"#faf8f6", borderRadius:8, padding:12, fontSize:12, color:"#5a4a3a" }}>
+            <div style={{ background:"#F1F5F9", borderRadius:12, padding:12, fontSize:12, color:"#475569" }}>
               <strong>Permisos del rol {ROLES[form.role]?.label}:</strong> {ROLES[form.role]?.perms.join(", ")}
             </div>
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
@@ -1457,6 +1456,12 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
 export default function App() {
   const [user, setUser]             = useState<any>(null);
   const [checkingAuth, setChecking] = useState(true);
+
+  // Safety net: si checkingAuth no se resuelve en 3s, forzar false
+  useEffect(()=>{
+    const t = setTimeout(()=>setChecking(false), 3000);
+    return ()=>clearTimeout(t);
+  },[]);
   const [activeModule, setActiveModule] = useState("dashboard");
   const [toast, setToast]           = useState<any>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -1596,7 +1601,7 @@ export default function App() {
   const handleLogout = () => { saveToken(null); localStorage.removeItem("cubagest_user"); localStorage.removeItem("cubagest_dashboard"); setUser(null); setActiveModule("dashboard"); };
 
   if (checkingAuth) return (
-    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#f5f0ea" }}>
+    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#F8FAFC" }}>
       <Spinner/>
     </div>
   );
@@ -1614,41 +1619,41 @@ export default function App() {
 
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", height:"100vh", background:"#f5f0ea", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
+    <div style={{ display:"flex", flexDirection:"column", height:"100vh", background:"#F8FAFC", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
 
       {/* Top header */}
-      <div style={{ background:"#1a0a05", padding:"0 16px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, zIndex:10 }}>
+      <div style={{ background:"#1E293B", padding:"0 16px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, zIndex:10, boxShadow:"0 1px 8px rgba(0,0,0,0.12)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <div style={{ width:32, height:32, background:"linear-gradient(135deg,#8B1A1A,#c94040)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <div style={{ width:32, height:32, background:"linear-gradient(135deg,#3B82F6,#60A5FA)", borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center" }}>
             <svg width="18" height="18" viewBox="0 0 32 32" fill="none"><path d="M8 24L16 8L24 24" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M10.5 19h11" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
           </div>
-          <div style={{ color:"#fff", fontWeight:800, fontSize:15 }}>CubaGest</div>
+          <div style={{ color:"#ffffff", fontWeight:800, fontSize:15 }}>CubaGest</div>
         </div>
         {/* Profile button */}
         <div style={{ position:"relative" as any }}>
-          <button onClick={()=>setProfileOpen(v=>!v)} style={{ width:36, height:36, borderRadius:"50%", background:ROLES[user.role]?.color||"#888", color:"#fff", border:"none", cursor:"pointer", fontSize:14, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <button onClick={()=>setProfileOpen(v=>!v)} style={{ width:36, height:36, borderRadius:"50%", background:ROLES[user.role]?.color||"#888", color:"#ffffff", border:"none", cursor:"pointer", fontSize:14, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>
             {user.name?.charAt(0)}
           </button>
           {profileOpen && (
             <div style={{ position:"fixed" as any, inset:0, zIndex:400 }} onClick={()=>setProfileOpen(false)}>
-              <div style={{ position:"absolute" as any, right:12, top:56, background:"#fff", borderRadius:10, boxShadow:"0 8px 32px rgba(0,0,0,0.25)", border:"1px solid #e8e0d8", minWidth:220, zIndex:401 }} onClick={e=>e.stopPropagation()}>
+              <div style={{ position:"absolute" as any, right:12, top:56, background:"#ffffff", borderRadius:12, boxShadow:"0 8px 32px rgba(0,0,0,0.25)", border:"1px solid #e8e0d8", minWidth:220, zIndex:401 }} onClick={e=>e.stopPropagation()}>
                 <div style={{ padding:"14px 16px", borderBottom:"1px solid #f0ebe4" }}>
-                  <div style={{ fontWeight:700, fontSize:14, color:"#1a1410" }}>{user.name}</div>
-                  <div style={{ fontSize:12, color:"#8a7060" }}>{user.email}</div>
+                  <div style={{ fontWeight:700, fontSize:14, color:"#1E293B" }}>{user.name}</div>
+                  <div style={{ fontSize:12, color:"#64748B" }}>{user.email}</div>
                   <div style={{ marginTop:4 }}><Badge label={ROLES[user.role]?.label||user.role} color={ROLES[user.role]?.color||"#888"}/></div>
                 </div>
                 <div style={{ padding:8 }}>
-                  <button onClick={()=>{setPlanOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:8, border:"none", cursor:"pointer", background:"none", color:"#5a4a3a", fontSize:14, fontWeight:600 }}>
-                    <Icon name="facturacion" size={16} color="#5a4a3a"/>Mi Plan
+                  <button onClick={()=>{setPlanOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#475569", fontSize:14, fontWeight:600 }}>
+                    <Icon name="facturacion" size={16} color="#475569"/>Mi Plan
                   </button>
                   {["admin"].includes(user.role) && (
-                    <button onClick={()=>{setActiveModule("usuarios");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:8, border:"none", cursor:"pointer", background:"none", color:"#5a4a3a", fontSize:14, fontWeight:600 }}>
-                      <Icon name="usuarios" size={16} color="#5a4a3a"/>Usuarios
+                    <button onClick={()=>{setActiveModule("usuarios");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#475569", fontSize:14, fontWeight:600 }}>
+                      <Icon name="usuarios" size={16} color="#475569"/>Usuarios
                     </button>
                   )}
-                  <div style={{ height:1, background:"#f0ebe4", margin:"4px 0" }}/>
-                  <button onClick={()=>{handleLogout();setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:8, border:"none", cursor:"pointer", background:"none", color:"#8B1A1A", fontSize:14, fontWeight:600 }}>
-                    <Icon name="logout" size={16} color="#8B1A1A"/>Cerrar sesión
+                  <div style={{ height:1, background:"#E2E8F0", margin:"4px 0" }}/>
+                  <button onClick={()=>{handleLogout();setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#3B82F6", fontSize:14, fontWeight:600 }}>
+                    <Icon name="logout" size={16} color="#3B82F6"/>Cerrar sesión
                   </button>
                 </div>
               </div>
@@ -1671,12 +1676,12 @@ export default function App() {
       </div>
 
       {/* Bottom navigation */}
-      <div style={{ position:"fixed" as any, bottom:0, left:0, right:0, background:"#fff", borderTop:"1px solid #e8e0d8", display:"flex", zIndex:100, paddingBottom:"env(safe-area-inset-bottom)" }}>
+      <div style={{ position:"fixed" as any, bottom:0, left:0, right:0, background:"#ffffff", borderTop:"1px solid #e8e0d8", display:"flex", zIndex:100, paddingBottom:"env(safe-area-inset-bottom)" }}>
         {navItems.map(item=>(
-          <button key={item.id} onClick={()=>{ setActiveModule(item.id); setProfileOpen(false); }} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"10px 4px 8px", border:"none", cursor:"pointer", background:"none", color:activeModule===item.id?"#8B1A1A":"#8a7060", gap:4, minWidth:0 }}>
-            <Icon name={item.icon} size={22} color={activeModule===item.id?"#8B1A1A":"#8a7060"}/>
+          <button key={item.id} onClick={()=>{ setActiveModule(item.id); setProfileOpen(false); }} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"10px 4px 8px", border:"none", cursor:"pointer", background:"none", color:activeModule===item.id?"#3B82F6":"#94A3B8", gap:4, minWidth:0 }}>
+            <Icon name={item.icon} size={22} color={activeModule===item.id?"#3B82F6":"#64748B"}/>
             <span style={{ fontSize:10, fontWeight:activeModule===item.id?700:400, whiteSpace:"nowrap" as any, overflow:"hidden", textOverflow:"ellipsis", maxWidth:"100%" }}>{item.label}</span>
-            {activeModule===item.id && <div style={{ width:4, height:4, borderRadius:"50%", background:"#8B1A1A" }}/>}
+            {activeModule===item.id && <div style={{ width:4, height:4, borderRadius:"50%", background:"#3B82F6", marginTop:2 }}/>}
           </button>
         ))}
       </div>
