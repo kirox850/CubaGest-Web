@@ -243,7 +243,6 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
         <button style={{ ...btn("ghost"), width:"100%", justifyContent:"center", marginTop:8, fontSize:13 }} onClick={()=>alert("Para registrar su negocio en CubaGest contacte a: soporte@cubagest.cu")}>
             Crear mi negocio (primera vez)
           </button>
-        <p style={{ textAlign:"center", marginTop:16, fontSize:11, color:"#b0a090" }}>Conforme a Resolución 286/2019 MINFIN · Ley 149/2022</p>
       </div>
     </div>
   );
