@@ -243,6 +243,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
         <button style={{ ...btn("ghost"), width:"100%", justifyContent:"center", marginTop:8, fontSize:13 }} onClick={()=>alert("Para registrar su negocio en CubaGest contacte a: soporte@cubagest.cu")}>
             Crear mi negocio (primera vez)
           </button>
+        <p style={{ textAlign:"center", marginTop:16, fontSize:11, color:"#b0a090" }}>Sistema de gestión empresarial · CubaGest</p>
       </div>
     </div>
   );
@@ -779,7 +780,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
             <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14, marginTop:4 }}><span>TOTAL:</span><span>${fmt(lastReceipt.total)} CUP</span></div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
-            <div style={{ textAlign:"center", fontSize:10, color:"#888" }}>Conforme Resolución 286/2019 MINFIN<br/>Gracias por su preferencia</div>
+            <div style={{ textAlign:"center", fontSize:10, color:"#888" }}>Gracias por su preferencia</div>
           </div>
           <div style={{ display:"flex", gap:10, marginTop:16, justifyContent:"flex-end" }}>
             <button style={btn("secondary")} onClick={()=>setLastReceipt(null)}><Icon name="check" size={15}/>Listo</button>
@@ -792,40 +793,115 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 };
 
 // ─── PLAN Y SUSCRIPCIÓN (modal desde el perfil) ────────────────────────────────
-const PlanModal = ({ onClose }: { onClose: () => void }) => (
-  <Modal title="Mi Plan — CubaGest" onClose={onClose} width={560}>
-    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ background:"#F1F5F9", borderRadius:12, padding:16, border:"1px solid #e8e0d8" }}>
-        <div style={{ fontSize:12, color:"#64748B", marginBottom:4 }}>PLAN ACTUAL</div>
-        <div style={{ fontWeight:800, fontSize:18, color:"#1E293B" }}>Profesional</div>
-        <div style={{ fontWeight:700, fontSize:15, color:"#3B82F6", marginTop:2 }}>$15/mes CUP</div>
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12 }}>
-        {[
-          { plan:"Básico", price:"Gratis", features:["1 usuario","Inventario","POS básico"], current:false },
-          { plan:"Profesional", price:"$15/mes CUP", features:["5 usuarios","Todas las funciones","Soporte prioritario"], current:true },
-          { plan:"Empresarial", price:"$35/mes CUP", features:["Ilimitado","Multi-sucursal","API"], current:false },
-        ].map(p=>(
-          <div key={p.plan} style={{ border:`2px solid ${p.current?"#3B82F6":"#E2E8F0"}`, borderRadius:12, padding:14, position:"relative" as any }}>
-            {p.current && <span style={{ position:"absolute" as any, top:-10, left:12, background:"#3B82F6", color:"#ffffff", fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:20 }}>ACTUAL</span>}
-            <div style={{ fontWeight:800, fontSize:14, color:"#1E293B", marginBottom:2 }}>{p.plan}</div>
-            <div style={{ fontWeight:700, fontSize:13, color:"#3B82F6", marginBottom:10 }}>{p.price}</div>
-            {p.features.map((f:string)=>(
-              <div key={f} style={{ display:"flex", gap:6, fontSize:12, color:"#475569", marginBottom:4 }}>
-                <Icon name="check" size={12} color="#10B981"/>{f}
-              </div>
-            ))}
-            {!p.current && <button style={{ background:"#E2E8F0", border:"none", borderRadius:8, padding:"6px 12px", fontSize:12, fontWeight:600, cursor:"pointer", marginTop:10, width:"100%" }}>Cambiar</button>}
+const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
+  const [planInfo, setPlanInfo] = useState<any>(null);
+  useEffect(() => {
+    apiFetch("/plan").then(setPlanInfo).catch(()=>{});
+  }, []);
+
+  const plans = [
+    {
+      key: "basico", label: "Básico", priceUSD: 2,
+      features: ["1 usuario","Hasta 10 productos","100 ventas al mes","Historial de 30 días","Reportes básicos","Soporte por email (48-72 h)"],
+    },
+    {
+      key: "pro", label: "Pro", priceUSD: 5,
+      features: ["3 usuarios","Hasta 50 productos","1.000 ventas al mes","Historial de 12 meses","Reportes avanzados + PDF","Cierre de caja e inventario","Notificaciones y alertas","Soporte prioritario (24-48 h)","48 h de onboarding incluidas"],
+    },
+    {
+      key: "empresarial", label: "Empresarial", priceUSD: 10,
+      features: ["Usuarios ilimitados","Productos ilimitados","Ventas ilimitadas","Historial ilimitado","Roles y permisos avanzados","Backup automático y exportación","Soporte prioritario (< 12 h)","Onboarding personalizado"],
+    },
+  ];
+
+  const effectivePlan = planInfo?.plan || user?.company?.plan || "basico";
+  const isTrial       = user?.company?.trialActive;
+  const planExpiry    = user?.company?.planExpiry;
+  const daysLeft      = planExpiry ? Math.max(0, Math.ceil((new Date(planExpiry).getTime() - Date.now()) / 86400000)) : null;
+
+  return (
+    <Modal title="Planes — CubaGest" onClose={onClose} width={620}>
+      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+
+        {/* Banner trial */}
+        {isTrial && daysLeft !== null && (
+          <div style={{ background: daysLeft <= 7 ? "#FFF7ED" : "#EFF6FF", border:`1px solid ${daysLeft <= 7 ? "#FED7AA" : "#BFDBFE"}`, borderRadius:12, padding:14 }}>
+            <div style={{ fontWeight:700, fontSize:14, color: daysLeft <= 7 ? "#C2410C" : "#1E40AF" }}>
+              {daysLeft <= 7 ? "⚠ " : "🎁 "}
+              Período de prueba — {daysLeft} día{daysLeft !== 1 ? "s" : ""} restante{daysLeft !== 1 ? "s" : ""}
+            </div>
+            <div style={{ fontSize:12, color:"#64748B", marginTop:4 }}>
+              Estás usando el plan Empresarial gratis. Al vencer pasarás automáticamente al plan Básico.
+            </div>
           </div>
-        ))}
+        )}
+
+        {/* Uso actual */}
+        {planInfo && (
+          <div style={{ background:"#F8FAFC", borderRadius:12, padding:14, border:"1px solid #E2E8F0" }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#94A3B8", marginBottom:10, textTransform:"uppercase" as const }}>Uso este mes</div>
+            <div style={{ display:"flex", gap:20, flexWrap:"wrap" as const }}>
+              {[
+                { l:"Usuarios", v:planInfo.usage.users, max:planInfo.limits.maxUsers },
+                { l:"Productos", v:planInfo.usage.products, max:planInfo.limits.maxProducts },
+                { l:"Ventas este mes", v:planInfo.usage.salesThisMonth, max:planInfo.limits.maxSalesMonth },
+              ].map(u => {
+                const pct = u.max ? Math.min(100, Math.round(u.v / u.max * 100)) : 0;
+                const warn = u.max && pct >= 80;
+                return (
+                  <div key={u.l} style={{ flex:1, minWidth:120 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:4 }}>
+                      <span style={{ color:"#475569", fontWeight:600 }}>{u.l}</span>
+                      <span style={{ color: warn ? "#F97316" : "#1E293B", fontWeight:700 }}>
+                        {u.v}{u.max ? ` / ${u.max}` : ""}
+                      </span>
+                    </div>
+                    {u.max && (
+                      <div style={{ height:6, background:"#E2E8F0", borderRadius:99 }}>
+                        <div style={{ height:6, width:`${pct}%`, background: pct >= 100 ? "#EF4444" : pct >= 80 ? "#F97316" : "#3B82F6", borderRadius:99, transition:"width .3s" }}/>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Planes */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12 }}>
+          {plans.map(p => {
+            const isCurrent = p.key === effectivePlan;
+            return (
+              <div key={p.key} style={{ border:`2px solid ${isCurrent ? "#3B82F6" : "#E2E8F0"}`, borderRadius:14, padding:16, position:"relative" as const, background: isCurrent ? "#EFF6FF" : "#fff" }}>
+                {isCurrent && (
+                  <span style={{ position:"absolute" as const, top:-11, left:12, background:"#3B82F6", color:"#fff", fontSize:10, fontWeight:800, padding:"3px 10px", borderRadius:20 }}>
+                    {isTrial ? "PRUEBA GRATIS" : "ACTUAL"}
+                  </span>
+                )}
+                <div style={{ fontWeight:800, fontSize:15, color:"#1E293B" }}>{p.label}</div>
+                <div style={{ fontWeight:700, fontSize:18, color:"#3B82F6", margin:"6px 0 12px" }}>${p.priceUSD} USD<span style={{ fontSize:12, fontWeight:400, color:"#94A3B8" }}>/mes</span></div>
+                {p.features.map((f:string) => (
+                  <div key={f} style={{ display:"flex", gap:6, fontSize:12, color:"#475569", marginBottom:5, alignItems:"flex-start" }}>
+                    <Icon name="check" size={12} color="#10B981"/><span>{f}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ background:"#F8FAFC", borderRadius:12, padding:14, textAlign:"center" as const, fontSize:13, color:"#475569" }}>
+          Para cambiar tu plan escríbenos a{" "}
+          <a href="mailto:soporte@cubagest.cu" style={{ color:"#3B82F6", fontWeight:700 }}>soporte@cubagest.cu</a>
+          {" "}o por WhatsApp. Activamos el cambio en menos de 24 horas.
+        </div>
+
+        <button style={{ ...btn("primary"), fontSize:14 }} onClick={onClose}>Cerrar</button>
       </div>
-      <div style={{ fontSize:12, color:"#64748B", textAlign:"center" as any, padding:"8px 0" }}>
-        Para cambiar el plan contacte: <strong>soporte@cubagest.cu</strong>
-      </div>
-      <button style={{ background:"#3B82F6", color:"#ffffff", border:"none", borderRadius:12, padding:"10px", fontWeight:700, cursor:"pointer", fontSize:14 }} onClick={onClose}>Cerrar</button>
-    </div>
-  </Modal>
-)
+    </Modal>
+  );
+};
 
 // ─── CONTABILIDAD ─────────────────────────────────────────────────────────────
 // ─── FACTURACIÓN (cajero + admin) ────────────────────────────────────────────
@@ -1124,7 +1200,6 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
         <table>
           <tr><th>Concepto</th><th style="text-align:right">Monto (CUP)</th></tr>
           <tr><td>Ingresos brutos por ventas</td><td style="text-align:right">${fmt(totalIncome)}</td></tr>
-          <tr><td class="red">Impuesto estimado ONAT (10%)</td><td class="red" style="text-align:right">${fmt(totalTax)}</td></tr>
           <tr><td class="red">Total egresos registrados</td><td class="red" style="text-align:right">${fmt(totalExp)}</td></tr>
           <tr class="total"><td class="${net>=0?"green":"red"}">Utilidad neta</td><td class="${net>=0?"green":"red"}" style="text-align:right">${fmt(net)}</td></tr>
         </table>
@@ -1135,8 +1210,7 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
         ${expenses.map((e:any)=>"<tr><td>"+(e.date||e.createdAt||"").split("T")[0]+"</td><td>"+e.concept+"</td><td>"+e.category+"</td><td style=\"text-align:right\">"+fmt(Number(e.amount))+"</td></tr>").join("")}
       </table>
       <p class="note">Este informe es generado automáticamente por CubaGest para uso interno.<br/>
-      El cálculo del impuesto es estimado. Consulte con su contador para la declaración oficial ante la ONAT.<br/>
-      Conforme a Decreto-Ley 44/2021 y Resolución 286/2019 MINFIN.</p>
+      Los datos son orientativos. Consulte con su contador para la declaración oficial.</p>
       <br/><button onclick="window.print()" style="background:#8B1A1A;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:14px">🖨 Imprimir / Guardar PDF</button>
     </body></html>`);
     win.document.close();
@@ -1280,7 +1354,7 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
             <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14, marginTop:4 }}><span>TOTAL:</span><span>${fmt(viewInv.total)} CUP</span></div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
-            <div style={{ textAlign:"center", fontSize:10, color:"#888" }}>Conforme Resolución 286/2019 MINFIN · Ley 149/2022</div>
+            <div style={{ textAlign:"center", fontSize:10, color:"#888" }}>Gracias por su preferencia</div>
           </div>
           <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:16 }}>
             <button style={btn("secondary")} onClick={()=>setViewInv(null)}>Cerrar</button>
@@ -1790,9 +1864,9 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
       )}
 
       <div style={{ background:"#F1F5F9", borderRadius:16, border:"1px solid #e8e0d8", padding:20 }}>
-        <h3 style={{ margin:"0 0 14px", fontSize:14, fontWeight:700, color:"#1E293B" }}>Política de seguridad (Ley 149/2022)</h3>
+        <h3 style={{ margin:"0 0 14px", fontSize:14, fontWeight:700, color:"#1E293B" }}>Política de seguridad</h3>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:12 }}>
-          {[["🔐","Contraseñas mínimo 8 caracteres"],["📋","Registro de auditoría por usuario"],["⏱","Sesión con token JWT expirable"],["🔒","Acceso restringido por rol"],["📊","Log disponible para auditoría ONAT"],["🛡","Comunicación cifrada HTTPS"]].map(([icon,text])=>(
+          {[["🔐","Contraseñas mínimo 8 caracteres"],["📋","Registro de auditoría por usuario"],["⏱","Sesión con token JWT expirable"],["🔒","Acceso restringido por rol"],["📊","Registro de auditoría por acceso"],["🛡","Comunicación cifrada HTTPS"]].map(([icon,text])=>(
             <div key={text as string} style={{ display:"flex", gap:10, alignItems:"flex-start", fontSize:13, color:"#475569" }}>
               <span style={{ fontSize:16 }}>{icon}</span>{text as string}
             </div>
@@ -2038,6 +2112,23 @@ export default function App() {
         </div>
       </div>
 
+      {/* Banner trial */}
+      {user?.company?.trialActive && (() => {
+        const daysLeft = user.company.planExpiry
+          ? Math.max(0, Math.ceil((new Date(user.company.planExpiry).getTime() - Date.now()) / 86400000))
+          : null;
+        if (daysLeft === null) return null;
+        const urgent = daysLeft <= 7;
+        return (
+          <div style={{ background: urgent ? "#C2410C" : "#1D4ED8", color:"#fff", padding:"7px 16px", fontSize:12, fontWeight:600, textAlign:"center" as const, flexShrink:0, cursor:"pointer" }}
+            onClick={() => setPlanOpen(true)}>
+            {urgent ? "⚠ " : "🎁 "}
+            Período de prueba gratis — {daysLeft} día{daysLeft !== 1 ? "s" : ""} restante{daysLeft !== 1 ? "s" : ""}
+            {urgent ? " · Toca aquí para ver planes" : " · Plan Empresarial completo"}
+          </div>
+        );
+      })()}
+
       {/* Offline banner */}
       <OfflineBanner online={online} syncing={syncing} pending={pendingCount} conflicts={conflictCount}/>
 
@@ -2063,7 +2154,7 @@ export default function App() {
         ))}
       </div>
 
-      {planOpen && <PlanModal onClose={()=>setPlanOpen(false)}/>}
+      {planOpen && <PlanModal onClose={()=>setPlanOpen(false)} user={user}/>}
       {toast && <Toast key={toast.key} msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
     </div>
   );
