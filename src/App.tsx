@@ -66,28 +66,12 @@ async function apiFetch(path: string, opts: { method?: string; body?: object; au
 
     // Token expirado o inválido — limpiar sesión y redirigir a login
     if (res.status === 401) {
-      setToken(null);
+      saveToken(null);
       localStorage.removeItem("cubagest_user");
       window.location.reload();
       throw new Error("Sesión expirada");
     }
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
-    return data;
-  } catch(e: any) {
-    clearTimeout(timeout);
-    if (e.name === 'AbortError') throw new Error('Sin conexión');
-    throw e;
-  }
-}
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (res.status === 204) return null;
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
     return data;
@@ -2072,7 +2056,7 @@ export default function App() {
   },[]);
 
   // Escuchar sync requests del Service Worker
-  useEffect(()=>{\
+  useEffect(()=>{
     const handler = () => {
       if (online && user) syncRef.current = false; // permitir re-sync
     };
@@ -2086,7 +2070,7 @@ export default function App() {
     apiFetch("/auth/refresh", { method: "POST" })
       .then((data: any) => {
         if (data?.token) {
-          setToken(data.token);
+          saveToken(data.token);
           localStorage.setItem("cubagest_user", JSON.stringify(data.user));
           setUser(data.user);
         }
