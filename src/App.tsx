@@ -72,28 +72,13 @@ async function apiFetch(path: string, opts: { method?: string; body?: object; au
       throw new Error("Sesión expirada");
     }
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
-    return data;
-  } catch(e: any) {
-    clearTimeout(timeout);
-    if (e.name === 'AbortError') throw new Error('Sin conexión');
-    throw e;
-  }
-}
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
     if (res.status === 204) return null;
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
     return data;
-  } catch(e: any) {
+  } catch (e: any) {
     clearTimeout(timeout);
-    if (e.name === 'AbortError') throw new Error('Sin conexión');
+    if (e.name === "AbortError") throw new Error("Sin conexión");
     throw e;
   }
 }
@@ -2060,25 +2045,25 @@ export default function App() {
 
     // Con conexión: verificar token con el servidor
     apiFetch("/auth/me")
-      .then(u=>{
+      .then((u) => {
         localStorage.setItem("cubagest_user", JSON.stringify(u));
         setUser(u);
         setChecking(false);
       })
-      .catch(()=>{
+      .catch(() => {
         // Falló (timeout, error red, etc.) — usar caché
         restoreFromCache();
       });
-  },[]);
+  }, []);
 
   // Escuchar sync requests del Service Worker
-  useEffect(()=>{\
+  useEffect(() => {
     const handler = () => {
       if (online && user) syncRef.current = false; // permitir re-sync
     };
-    window.addEventListener('sw-sync-requested', handler);
-    return () => window.removeEventListener('sw-sync-requested', handler);
-  },[online, user]);
+    window.addEventListener("sw-sync-requested", handler);
+    return () => window.removeEventListener("sw-sync-requested", handler);
+  }, [online, user]);
 
   // Renovar token automáticamente al recuperar conexión
   useEffect(()=>{
