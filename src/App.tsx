@@ -63,6 +63,31 @@ async function apiFetch(path: string, opts: { method?: string; body?: object; au
     });
     clearTimeout(timeout);
     if (res.status === 204) return null;
+
+    // Token expirado o inválido — limpiar sesión y redirigir a login
+    if (res.status === 401) {
+      setToken(null);
+      localStorage.removeItem("cubagest_user");
+      window.location.reload();
+      throw new Error("Sesión expirada");
+    }
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+    return data;
+  } catch(e: any) {
+    clearTimeout(timeout);
+    if (e.name === 'AbortError') throw new Error('Sin conexión');
+    throw e;
+  }
+}
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (res.status === 204) return null;
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
     return data;
@@ -794,44 +819,92 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
 // ─── PLAN Y SUSCRIPCIÓN (modal desde el perfil) ────────────────────────────────
 const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
-  const [planInfo, setPlanInfo] = useState<any>(null);
+  const [planInfo, setPlanInfo]   = useState<any>(null);
+  const [loading, setLoading]     = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<string|null>(null);
+
   useEffect(() => {
     apiFetch("/plan").then(setPlanInfo).catch(()=>{});
+    // Detectar si volvió del callback de QvaPay
+    const params = new URLSearchParams(window.location.search);
+    const planResult = params.get("plan");
+    if (planResult === "activated") {
+      window.history.replaceState({}, "", window.location.pathname);
+      apiFetch("/plan").then(setPlanInfo).catch(()=>{});
+    }
   }, []);
 
   const plans = [
     {
-      key: "basico", label: "Básico", priceUSD: 2,
+      key: "free", label: "Free", priceUSD: 0,
       features: ["1 usuario","Hasta 10 productos","100 ventas al mes","Historial de 30 días","Reportes básicos","Soporte por email (48-72 h)"],
+      payable: false,
     },
     {
       key: "pro", label: "Pro", priceUSD: 5,
       features: ["3 usuarios","Hasta 50 productos","1.000 ventas al mes","Historial de 12 meses","Reportes avanzados + PDF","Cierre de caja e inventario","Notificaciones y alertas","Soporte prioritario (24-48 h)","48 h de onboarding incluidas"],
+      payable: true,
     },
     {
       key: "empresarial", label: "Empresarial", priceUSD: 10,
       features: ["Usuarios ilimitados","Productos ilimitados","Ventas ilimitadas","Historial ilimitado","Roles y permisos avanzados","Backup automático y exportación","Soporte prioritario (< 12 h)","Onboarding personalizado"],
+      payable: true,
     },
   ];
 
-  const effectivePlan = planInfo?.plan || user?.company?.plan || "basico";
-  const isTrial       = user?.company?.trialActive;
+  const effectivePlan = planInfo?.plan || user?.company?.plan || "free";
+  const subStatus     = planInfo?.subscriptionStatus || user?.company?.subscriptionStatus;
+  const isTrial       = subStatus === "trial";
+  const isFailed      = subStatus === "failed";
   const planExpiry    = user?.company?.planExpiry;
   const daysLeft      = planExpiry ? Math.max(0, Math.ceil((new Date(planExpiry).getTime() - Date.now()) / 86400000)) : null;
 
+  const handleQvaPay = async (planKey: string) => {
+    try {
+      setLoading(true);
+      setSelectedPlan(planKey);
+      const data = await apiFetch("/subscription/authorize", { method:"POST", body:{ plan: planKey } });
+      if (data?.url) window.location.href = data.url;
+    } catch(e: any) { alert("Error al conectar con QvaPay: " + e.message); }
+    finally { setLoading(false); setSelectedPlan(null); }
+  };
+
+  const handleWhatsApp = (planKey: string, priceUSD: number) => {
+    const p   = plans.find(x => x.key === planKey);
+    const company = user?.company?.name || "mi empresa";
+    const email   = user?.email || "";
+    const msg = encodeURIComponent(
+      `Hola, quiero activar el plan *${p?.label}* de CubaGest.\n\n` +
+      `🏢 Empresa: ${company}\n` +
+      `📧 Correo: ${email}\n` +
+      `💳 Plan: ${p?.label} — $${priceUSD} USD/mes\n\n` +
+      `Por favor indícame cómo proceder con el pago.`
+    );
+    window.open(`https://wa.me/5354801057?text=${msg}`, "_blank");
+  };
+
   return (
-    <Modal title="Planes — CubaGest" onClose={onClose} width={620}>
+    <Modal title="Planes — CubaGest" onClose={onClose} width={660}>
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
         {/* Banner trial */}
         {isTrial && daysLeft !== null && (
           <div style={{ background: daysLeft <= 7 ? "#FFF7ED" : "#EFF6FF", border:`1px solid ${daysLeft <= 7 ? "#FED7AA" : "#BFDBFE"}`, borderRadius:12, padding:14 }}>
             <div style={{ fontWeight:700, fontSize:14, color: daysLeft <= 7 ? "#C2410C" : "#1E40AF" }}>
-              {daysLeft <= 7 ? "⚠ " : "🎁 "}
-              Período de prueba — {daysLeft} día{daysLeft !== 1 ? "s" : ""} restante{daysLeft !== 1 ? "s" : ""}
+              {daysLeft <= 7 ? "⚠ " : "🎁 "}Período de prueba — {daysLeft} día{daysLeft !== 1 ? "s" : ""} restante{daysLeft !== 1 ? "s" : ""}
             </div>
             <div style={{ fontSize:12, color:"#64748B", marginTop:4 }}>
-              Estás usando el plan Empresarial gratis. Al vencer pasarás automáticamente al plan Básico.
+              Estás usando el plan Empresarial gratis. Al vencer pasarás automáticamente al plan Free.
+            </div>
+          </div>
+        )}
+
+        {/* Banner pago fallido */}
+        {isFailed && (
+          <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:12, padding:14 }}>
+            <div style={{ fontWeight:700, fontSize:14, color:"#DC2626" }}>⚠ Pago fallido</div>
+            <div style={{ fontSize:12, color:"#64748B", marginTop:4 }}>
+              No pudimos cobrar tu suscripción. Asegúrate de tener saldo en QvaPay o contacta por WhatsApp para pagar manualmente.
             </div>
           </div>
         )}
@@ -842,23 +915,23 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
             <div style={{ fontSize:11, fontWeight:700, color:"#94A3B8", marginBottom:10, textTransform:"uppercase" as const }}>Uso este mes</div>
             <div style={{ display:"flex", gap:20, flexWrap:"wrap" as const }}>
               {[
-                { l:"Usuarios", v:planInfo.usage.users, max:planInfo.limits.maxUsers },
-                { l:"Productos", v:planInfo.usage.products, max:planInfo.limits.maxProducts },
-                { l:"Ventas este mes", v:planInfo.usage.salesThisMonth, max:planInfo.limits.maxSalesMonth },
+                { l:"Usuarios",       v:planInfo.usage.users,          max:planInfo.limits.maxUsers },
+                { l:"Productos",      v:planInfo.usage.products,        max:planInfo.limits.maxProducts },
+                { l:"Ventas",         v:planInfo.usage.salesThisMonth,  max:planInfo.limits.maxSalesMonth },
               ].map(u => {
-                const pct = u.max ? Math.min(100, Math.round(u.v / u.max * 100)) : 0;
+                const pct  = u.max ? Math.min(100, Math.round(u.v / u.max * 100)) : 0;
                 const warn = u.max && pct >= 80;
                 return (
-                  <div key={u.l} style={{ flex:1, minWidth:120 }}>
+                  <div key={u.l} style={{ flex:1, minWidth:110 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:4 }}>
                       <span style={{ color:"#475569", fontWeight:600 }}>{u.l}</span>
-                      <span style={{ color: warn ? "#F97316" : "#1E293B", fontWeight:700 }}>
+                      <span style={{ color: warn?"#F97316":"#1E293B", fontWeight:700 }}>
                         {u.v}{u.max ? ` / ${u.max}` : ""}
                       </span>
                     </div>
                     {u.max && (
                       <div style={{ height:6, background:"#E2E8F0", borderRadius:99 }}>
-                        <div style={{ height:6, width:`${pct}%`, background: pct >= 100 ? "#EF4444" : pct >= 80 ? "#F97316" : "#3B82F6", borderRadius:99, transition:"width .3s" }}/>
+                        <div style={{ height:6, width:`${pct}%`, background: pct>=100?"#EF4444":pct>=80?"#F97316":"#3B82F6", borderRadius:99 }}/>
                       </div>
                     )}
                   </div>
@@ -868,36 +941,57 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
           </div>
         )}
 
-        {/* Planes */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12 }}>
+        {/* Tarjetas de planes */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12 }}>
           {plans.map(p => {
             const isCurrent = p.key === effectivePlan;
+            const isLoading = loading && selectedPlan === p.key;
             return (
-              <div key={p.key} style={{ border:`2px solid ${isCurrent ? "#3B82F6" : "#E2E8F0"}`, borderRadius:14, padding:16, position:"relative" as const, background: isCurrent ? "#EFF6FF" : "#fff" }}>
+              <div key={p.key} style={{ border:`2px solid ${isCurrent?"#3B82F6":"#E2E8F0"}`, borderRadius:14, padding:16, position:"relative" as const, background:isCurrent?"#EFF6FF":"#fff", display:"flex", flexDirection:"column", gap:8 }}>
                 {isCurrent && (
                   <span style={{ position:"absolute" as const, top:-11, left:12, background:"#3B82F6", color:"#fff", fontSize:10, fontWeight:800, padding:"3px 10px", borderRadius:20 }}>
-                    {isTrial ? "PRUEBA GRATIS" : "ACTUAL"}
+                    {isTrial && p.key === "empresarial" ? "PRUEBA GRATIS" : "PLAN ACTUAL"}
                   </span>
                 )}
                 <div style={{ fontWeight:800, fontSize:15, color:"#1E293B" }}>{p.label}</div>
-                <div style={{ fontWeight:700, fontSize:18, color:"#3B82F6", margin:"6px 0 12px" }}>${p.priceUSD} USD<span style={{ fontSize:12, fontWeight:400, color:"#94A3B8" }}>/mes</span></div>
-                {p.features.map((f:string) => (
-                  <div key={f} style={{ display:"flex", gap:6, fontSize:12, color:"#475569", marginBottom:5, alignItems:"flex-start" }}>
-                    <Icon name="check" size={12} color="#10B981"/><span>{f}</span>
+                <div style={{ fontWeight:700, fontSize:18, color: p.priceUSD===0?"#10B981":"#3B82F6", marginBottom:4 }}>
+                  {p.priceUSD===0 ? "Gratis" : `$${p.priceUSD} USD`}
+                  {p.priceUSD>0 && <span style={{ fontSize:12, fontWeight:400, color:"#94A3B8" }}>/mes</span>}
+                </div>
+                <div style={{ flex:1 }}>
+                  {p.features.map((f:string) => (
+                    <div key={f} style={{ display:"flex", gap:6, fontSize:12, color:"#475569", marginBottom:5, alignItems:"flex-start" }}>
+                      <Icon name="check" size={12} color="#10B981"/><span>{f}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Botones de pago solo en planes pagos y si no es el plan actual activo */}
+                {p.payable && (!isCurrent || isTrial || isFailed) && user?.role === "admin" && (
+                  <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:8 }}>
+                    <button
+                      style={{ background:"#1E293B", color:"#fff", border:"none", borderRadius:10, padding:"8px 10px", fontSize:12, fontWeight:700, cursor:loading?"not-allowed":"pointer", opacity:loading?0.6:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+                      onClick={() => handleQvaPay(p.key)}
+                      disabled={loading}>
+                      {isLoading ? "Conectando..." : "💳 Pagar con QvaPay"}
+                    </button>
+                    <button
+                      style={{ background:"#25D366", color:"#fff", border:"none", borderRadius:10, padding:"8px 10px", fontSize:12, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+                      onClick={() => handleWhatsApp(p.key, p.priceUSD)}>
+                      💬 Pagar por WhatsApp
+                    </button>
                   </div>
-                ))}
+                )}
               </div>
             );
           })}
         </div>
 
-        <div style={{ background:"#F8FAFC", borderRadius:12, padding:14, textAlign:"center" as const, fontSize:13, color:"#475569" }}>
-          Para cambiar tu plan escríbenos a{" "}
-          <a href="mailto:soporte@cubagest.cu" style={{ color:"#3B82F6", fontWeight:700 }}>soporte@cubagest.cu</a>
-          {" "}o por WhatsApp. Activamos el cambio en menos de 24 horas.
+        <div style={{ fontSize:12, color:"#94A3B8", textAlign:"center" as const }}>
+          Los pagos por QvaPay se renuevan automáticamente cada 30 días. Puedes cancelar en cualquier momento.
         </div>
 
-        <button style={{ ...btn("primary"), fontSize:14 }} onClick={onClose}>Cerrar</button>
+        <button style={{ ...btn("secondary"), fontSize:14 }} onClick={onClose}>Cerrar</button>
       </div>
     </Modal>
   );
@@ -1919,6 +2013,24 @@ export default function App() {
   const [pendingCount, setPendingCount] = useState(0);
   const [conflictCount, setConflictCount] = useState(0);
   const online = useOnlineStatus();
+
+  // Detectar retorno desde QvaPay y mostrar resultado
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const planResult = params.get("plan");
+    if (planResult) {
+      window.history.replaceState({}, "", window.location.pathname);
+      if (planResult === "activated") {
+        showToast("¡Plan activado correctamente! Bienvenido.", "success");
+        setPlanOpen(true);
+      } else if (planResult === "payment_failed") {
+        showToast("Autorización guardada pero el pago falló. Verifica tu saldo en QvaPay.", "error");
+        setPlanOpen(true);
+      } else if (planResult === "cancelled") {
+        showToast("Autorización cancelada.", "warning");
+      }
+    }
+  }, []);
   const syncRef = useRef(false);
   // Restaurar sesión al recargar
   useEffect(()=>{
@@ -1960,13 +2072,27 @@ export default function App() {
   },[]);
 
   // Escuchar sync requests del Service Worker
-  useEffect(()=>{
+  useEffect(()=>{\
     const handler = () => {
       if (online && user) syncRef.current = false; // permitir re-sync
     };
     window.addEventListener('sw-sync-requested', handler);
     return () => window.removeEventListener('sw-sync-requested', handler);
   },[online, user]);
+
+  // Renovar token automáticamente al recuperar conexión
+  useEffect(()=>{
+    if (!online || !user) return;
+    apiFetch("/auth/refresh", { method: "POST" })
+      .then((data: any) => {
+        if (data?.token) {
+          setToken(data.token);
+          localStorage.setItem("cubagest_user", JSON.stringify(data.user));
+          setUser(data.user);
+        }
+      })
+      .catch(()=>{}); // si falla (401) apiFetch ya limpia la sesión
+  },[online]);
 
   // Registrar background sync cuando hay ventas pendientes
   useEffect(()=>{
