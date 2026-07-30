@@ -66,7 +66,7 @@ async function apiFetch(path: string, opts: { method?: string; body?: object; au
 
     // Token expirado o inválido — limpiar sesión y redirigir a login
     if (res.status === 401) {
-      getToken(null);
+      setToken(null);
       localStorage.removeItem("cubagest_user");
       window.location.reload();
       throw new Error("Sesión expirada");
@@ -2071,7 +2071,7 @@ export default function App() {
     apiFetch("/auth/refresh", { method: "POST" })
       .then((data: any) => {
         if (data?.token) {
-          getToken(data.token);
+          setToken(data.token);
           localStorage.setItem("cubagest_user", JSON.stringify(data.user));
           setUser(data.user);
         }
