@@ -206,6 +206,63 @@ const btn = (variant = "primary") => ({
       variant==="danger"    ? { background:"#fdf0f0", color:"#3B82F6", border:"1px solid #f0c0c0" } : {}),
 });
 
+// ─── DIÁLOGOS GLOBALES (reemplaza alert()/confirm() nativos del navegador) ────
+type DialogState =
+  | { kind: "alert"; message: string }
+  | { kind: "confirm"; message: string; resolve: (ok: boolean) => void }
+  | null;
+
+let _setDialog: React.Dispatch<React.SetStateAction<DialogState>> | null = null;
+
+// Sustituto de window.alert(): no bloquea, se cierra con "Aceptar".
+function showAlert(message: string) {
+  _setDialog?.({ kind: "alert", message });
+}
+
+// Sustituto de window.confirm(): usar con `await`. Resuelve true/false
+// según el botón que pulse el usuario, igual que el confirm() nativo.
+function showConfirm(message: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    _setDialog?.({ kind: "confirm", message, resolve });
+  });
+}
+
+// Se monta una única vez en el componente raíz (<App/>).
+const DialogHost = () => {
+  const [dialog, setDialog] = useState<DialogState>(null);
+  useEffect(() => {
+    _setDialog = setDialog;
+    return () => { _setDialog = null; };
+  }, []);
+
+  if (!dialog) return null;
+
+  const finish = (ok: boolean) => {
+    if (dialog.kind === "confirm") dialog.resolve(ok);
+    setDialog(null);
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:9999, padding:16 }}
+      onClick={() => finish(false)}>
+      <div style={{ background:"#fff", borderRadius:16, padding:22, maxWidth:380, width:"100%", boxShadow:"0 10px 40px rgba(0,0,0,0.25)" }}
+        onClick={(e) => e.stopPropagation()}>
+        <div style={{ whiteSpace:"pre-wrap", fontSize:15, color:"#1E293B", lineHeight:1.5, marginBottom:20 }}>
+          {dialog.message}
+        </div>
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
+          {dialog.kind === "confirm" && (
+            <button style={btn("secondary")} onClick={() => finish(false)}>Cancelar</button>
+          )}
+          <button style={btn("primary")} onClick={() => finish(true)} autoFocus>
+            {dialog.kind === "confirm" ? "Confirmar" : "Aceptar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
   const [email, setEmail]       = useState("");
@@ -249,7 +306,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
             {loading ? "Verificando..." : "Iniciar sesión"}
           </button>
         </div>
-        <button style={{ ...btn("ghost"), width:"100%", justifyContent:"center", marginTop:8, fontSize:13 }} onClick={()=>alert("Para registrar su negocio en CubaGest contacte a: soporte@cubagest.cu")}>
+        <button style={{ ...btn("ghost"), width:"100%", justifyContent:"center", marginTop:8, fontSize:13 }} onClick={()=>showAlert("Para registrar su negocio en CubaGest contacte a: soporte@cubagest.cu")}>
             Crear mi negocio (primera vez)
           </button>
         <p style={{ textAlign:"center", marginTop:16, fontSize:11, color:"#b0a090" }}>Sistema de gestión empresarial · CubaGest</p>
@@ -446,7 +503,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
   };
 
   const deleteProduct = async (id: string) => {
-    if (!confirm("¿Desactivar este producto? No se eliminará, solo se ocultará.")) return;
+    if (!(await showConfirm("¿Desactivar este producto? No se eliminará, solo se ocultará."))) return;
     try {
       await apiFetch(`/products/${id}`, { method:"DELETE" });
       showToast("Producto desactivado","info");
@@ -849,7 +906,7 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
       setSelectedPlan(planKey);
       const data = await apiFetch("/subscription/authorize", { method:"POST", body:{ plan: planKey } });
       if (data?.url) window.location.href = data.url;
-    } catch(e: any) { alert("Error al conectar con QvaPay: " + e.message); }
+    } catch(e: any) { showAlert("Error al conectar con QvaPay: " + e.message); }
     finally { setLoading(false); setSelectedPlan(null); }
   };
 
@@ -864,7 +921,7 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
       `💳 Plan: ${p?.label} — $${priceUSD} USD/mes\n\n` +
       `Por favor indícame cómo proceder con el pago.`
     );
-    window.open(`https://wa.me/13059700369?text=${msg}`, "_blank");
+    window.open(`https://wa.me/5354801057?text=${msg}`, "_blank");
   };
 
   return (
@@ -1039,7 +1096,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh }: { user: any; showToast:
   };
 
   const voidSale = async (id:string) => {
-    if (!confirm("¿Anular esta factura? El stock se repondrá automáticamente.")) return;
+    if (!(await showConfirm("¿Anular esta factura? El stock se repondrá automáticamente."))) return;
     try {
       await apiFetch(`/sales/${id}/void`, { method:"POST" });
       showToast("Factura anulada. Stock repuesto.","warning");
@@ -1101,7 +1158,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh }: { user: any; showToast:
                     )}
                     <button style={{ ...btn("danger"), fontSize:11, padding:"5px 10px" }}
                       onClick={async()=>{
-                        if(!confirm(`¿Descartar la venta ${s.localId}? El stock local ya fue restaurado.`)) return;
+                        if(!(await showConfirm(`¿Descartar la venta ${s.localId}? El stock local ya fue restaurado.`))) return;
                         const { updateSaleStatus: upd, restoreLocalStock: rls } = await import("./offlineDB");
                         if(s.status==="pending") await rls(s.items);
                         await upd(s.localId, "synced"); // marcar como procesada para ocultarla
@@ -1115,7 +1172,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh }: { user: any; showToast:
                         const lines = ["Venta: " + s.localId, "Cliente: " + s.client, "Total: $" + fmt(s.total), "Productos:"];
                         s.items.forEach((i:any) => lines.push("  - " + i.qty + "x " + i.name + " @ $" + fmt(i.price)));
                         if (s.conflictReason) lines.push("", "Error: " + s.conflictReason);
-                        alert(lines.join("\n"));
+                        showAlert(lines.join("\n"));
                       }}>
                       👁 Ver detalle
                     </button>
@@ -1886,7 +1943,7 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
   };
 
   const deleteUser = async(id:string)=>{
-    if (!confirm("¿Eliminar este usuario?")) return;
+    if (!(await showConfirm("¿Eliminar este usuario?"))) return;
     try { await apiFetch(`/users/${id}`, { method:"DELETE" }); showToast("Usuario eliminado","info"); load(); }
     catch(e:any) { showToast(e.message,"error"); }
   };
@@ -2266,6 +2323,7 @@ export default function App() {
 
       {planOpen && <PlanModal onClose={()=>setPlanOpen(false)} user={user}/>}
       {toast && <Toast key={toast.key} msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
+      <DialogHost/>
     </div>
   );
 }
