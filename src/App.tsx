@@ -5,6 +5,7 @@ import {
   getAllOfflineSales, updateSaleStatus, getPendingCount, saveSyncLog,
   getLastSync, restoreLocalStock, resetStuckSyncingSales, type OfflineSale, type OfflineProduct,
 } from "./offlineDB";
+import { PRIVACY_POLICY_MD, TERMS_MD } from "./legalContent";
 
 // ─── API CLIENT ───────────────────────────────────────────────────────────────
 const API_URL = "https://cubagest-backend-production.up.railway.app/api";
@@ -134,6 +135,7 @@ const Icon = ({ name, size = 18, color = "currentColor" }: { name: string; size?
     x:            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
     refresh:      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>,
     cierre:       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 8h4m-4 4h2"/><circle cx="17" cy="10" r="2"/><path d="M17 8v-1m0 5v1m-2-3H14m6 0h-1"/></svg>,
+    doc:          <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/></svg>,
   };
   return icons[name] || null;
 };
@@ -268,6 +270,65 @@ const DialogHost = () => {
     </div>
   );
 };
+
+// ─── MODAL DE DOCUMENTOS LEGALES (Política de Privacidad / Términos) ─────────
+// Parser de markdown minimalista: solo soporta lo que usan estos documentos
+// (encabezados #/##/###, listas "- ", negrita **texto** y párrafos). No se
+// instaló ninguna librería externa para esto.
+function renderLegalMarkdown(md: string): JSX.Element[] {
+  const renderInline = (text: string) => {
+    const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    return parts.map((part, i) =>
+      part.startsWith("**") && part.endsWith("**")
+        ? <strong key={i}>{part.slice(2, -2)}</strong>
+        : <span key={i}>{part}</span>
+    );
+  };
+
+  const lines = md.split("\n");
+  const blocks: JSX.Element[] = [];
+  let listBuffer: string[] = [];
+
+  const flushList = () => {
+    if (listBuffer.length === 0) return;
+    blocks.push(
+      <ul key={`ul-${blocks.length}`} style={{ margin:"4px 0 12px", paddingLeft:20, display:"flex", flexDirection:"column", gap:4 }}>
+        {listBuffer.map((item, i) => <li key={i} style={{ fontSize:14, color:"#334155", lineHeight:1.5 }}>{renderInline(item)}</li>)}
+      </ul>
+    );
+    listBuffer = [];
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line.startsWith("- ")) { listBuffer.push(line.slice(2)); continue; }
+    flushList();
+    if (!line) continue;
+    if (line.startsWith("### ")) blocks.push(<h4 key={blocks.length} style={{ fontSize:14, fontWeight:700, color:"#1E293B", margin:"14px 0 4px" }}>{renderInline(line.slice(4))}</h4>);
+    else if (line.startsWith("## ")) blocks.push(<h3 key={blocks.length} style={{ fontSize:16, fontWeight:800, color:"#1E293B", margin:"18px 0 6px" }}>{renderInline(line.slice(3))}</h3>);
+    else if (line.startsWith("# ")) blocks.push(<h2 key={blocks.length} style={{ fontSize:19, fontWeight:800, color:"#1E293B", margin:"0 0 8px" }}>{renderInline(line.slice(2))}</h2>);
+    else blocks.push(<p key={blocks.length} style={{ fontSize:14, color:"#334155", lineHeight:1.6, margin:"4px 0" }}>{renderInline(line)}</p>);
+  }
+  flushList();
+  return blocks;
+}
+
+const LegalModal = ({ title, content, onClose }: { title: string; content: string; onClose: () => void }) => (
+  <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:16 }} onClick={onClose}>
+    <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:560, maxHeight:"85vh", display:"flex", flexDirection:"column", boxShadow:"0 10px 40px rgba(0,0,0,0.25)" }} onClick={e=>e.stopPropagation()}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 20px", borderBottom:"1px solid #E2E8F0" }}>
+        <h2 style={{ margin:0, fontSize:16, fontWeight:800, color:"#1E293B" }}>{title}</h2>
+        <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", padding:4 }}><Icon name="close" size={20} color="#64748B"/></button>
+      </div>
+      <div style={{ padding:"16px 20px", overflowY:"auto" as any }}>
+        {renderLegalMarkdown(content)}
+      </div>
+      <div style={{ padding:"12px 20px", borderTop:"1px solid #E2E8F0" }}>
+        <button onClick={onClose} style={{ ...btn("primary"), width:"100%" }}>Cerrar</button>
+      </div>
+    </div>
+  </div>
+);
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
@@ -2061,6 +2122,7 @@ export default function App() {
   const [toast, setToast]           = useState<any>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const [legalDoc, setLegalDoc] = useState<null | "privacy" | "terms">(null);
   const [syncing, setSyncing]       = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [conflictCount, setConflictCount] = useState(0);
@@ -2317,6 +2379,13 @@ export default function App() {
                     </button>
                   )}
                   <div style={{ height:1, background:"#E2E8F0", margin:"4px 0" }}/>
+                  <button onClick={()=>{setLegalDoc("privacy");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#475569", fontSize:14, fontWeight:600 }}>
+                    <Icon name="doc" size={16} color="#475569"/>Política de Privacidad
+                  </button>
+                  <button onClick={()=>{setLegalDoc("terms");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#475569", fontSize:14, fontWeight:600 }}>
+                    <Icon name="doc" size={16} color="#475569"/>Términos y Condiciones
+                  </button>
+                  <div style={{ height:1, background:"#E2E8F0", margin:"4px 0" }}/>
                   <button onClick={()=>{handleLogout();setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#3B82F6", fontSize:14, fontWeight:600 }}>
                     <Icon name="logout" size={16} color="#3B82F6"/>Cerrar sesión
                   </button>
@@ -2370,6 +2439,8 @@ export default function App() {
       </div>
 
       {planOpen && <PlanModal onClose={()=>setPlanOpen(false)} user={user}/>}
+      {legalDoc==="privacy" && <LegalModal title="Política de Privacidad" content={PRIVACY_POLICY_MD} onClose={()=>setLegalDoc(null)}/>}
+      {legalDoc==="terms" && <LegalModal title="Términos y Condiciones" content={TERMS_MD} onClose={()=>setLegalDoc(null)}/>}
       {toast && <Toast key={toast.key} msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
       <DialogHost/>
     </div>
