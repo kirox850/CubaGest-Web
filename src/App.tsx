@@ -864,7 +864,7 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
       `💳 Plan: ${p?.label} — $${priceUSD} USD/mes\n\n` +
       `Por favor indícame cómo proceder con el pago.`
     );
-    window.open(`https://wa.me/5354801057?text=${msg}`, "_blank");
+    window.open(`https://wa.me/13059700369?text=${msg}`, "_blank");
   };
 
   return (
