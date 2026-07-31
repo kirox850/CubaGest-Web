@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   cacheProducts, getOfflineProducts, saveSaleOffline, getPendingSales,
   getAllOfflineSales, updateSaleStatus, getPendingCount, saveSyncLog,
-  getLastSync, restoreLocalStock, type OfflineSale, type OfflineProduct,
+  getLastSync, restoreLocalStock, resetStuckSyncingSales, type OfflineSale, type OfflineProduct,
 } from "./offlineDB";
 
 // ─── API CLIENT ───────────────────────────────────────────────────────────────
@@ -64,11 +64,17 @@ async function apiFetch(path: string, opts: { method?: string; body?: object; au
     clearTimeout(timeout);
     if (res.status === 204) return null;
 
-    // Token expirado o inválido — limpiar sesión y redirigir a login
+    // Token expirado o inválido — limpiar sesión y avisar a la app.
+    // OJO: antes aquí se hacía window.location.reload(), pero eso podía
+    // dispararse a mitad de una sincronización de ventas offline y
+    // destruir el proceso antes de que pudiera revertir el estado de las
+    // ventas a "pending" — arriesgando perderlas o dejarlas "colgadas".
+    // En vez de recargar la página, avisamos con un evento y dejamos que
+    // el componente raíz muestre el login sin interrumpir nada en curso.
     if (res.status === 401) {
       saveToken(null);
       localStorage.removeItem("cubagest_user");
-      window.location.reload();
+      window.dispatchEvent(new Event("cubagest-session-expired"));
       throw new Error("Sesión expirada");
     }
 
@@ -1040,7 +1046,7 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
 
 // ─── CONTABILIDAD ─────────────────────────────────────────────────────────────
 // ─── FACTURACIÓN (cajero + admin) ────────────────────────────────────────────
-const Facturacion = ({ user, showToast, onSyncRefresh }: { user: any; showToast: (m:string,t:string)=>void; onSyncRefresh?: ()=>void }) => {
+const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: { user: any; showToast: (m:string,t:string)=>void; onSyncRefresh?: ()=>void; onManualSync?: ()=>void; syncing?: boolean }) => {
   const [sales, setSales]     = useState<any[]>([]);
   const [offlineSales, setOfflineSales] = useState<OfflineSale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1124,7 +1130,12 @@ const Facturacion = ({ user, showToast, onSyncRefresh }: { user: any; showToast:
         <div style={{ background:"#FFF7ED", border:"1px solid #f0d070", borderRadius:16, padding:16 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
             <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:"#9A3412" }}>⚡ Ventas offline</h3>
-            <button style={{ ...btn("ghost"), fontSize:12, padding:"4px 10px" }} onClick={()=>setShowOffline(v=>!v)}>{showOffline?"Ocultar":"Mostrar"}</button>
+            <div style={{ display:"flex", gap:8 }}>
+              <button style={{ ...btn("secondary"), fontSize:12, padding:"4px 10px", opacity: syncing?0.7:1 }} disabled={syncing} onClick={onManualSync}>
+                {syncing ? "Sincronizando..." : "🔄 Sincronizar ahora"}
+              </button>
+              <button style={{ ...btn("ghost"), fontSize:12, padding:"4px 10px" }} onClick={()=>setShowOffline(v=>!v)}>{showOffline?"Ocultar":"Mostrar"}</button>
+            </div>
           </div>
           {showOffline && (
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
@@ -2072,6 +2083,24 @@ export default function App() {
       }
     }
   }, []);
+  // Si el token se invalida en cualquier momento (401 de apiFetch), volvemos
+  // a la pantalla de login SIN recargar la página — así no se interrumpe
+  // ninguna sincronización de ventas offline que pudiera estar en curso.
+  useEffect(() => {
+    const handler = () => setUser(null);
+    window.addEventListener("cubagest-session-expired", handler);
+    return () => window.removeEventListener("cubagest-session-expired", handler);
+  }, []);
+
+  // Al abrir la app, recuperamos cualquier venta offline que haya quedado
+  // "colgada" en estado 'syncing' por un cierre/recarga anterior en medio
+  // de una sincronización, para que vuelva a intentarse.
+  useEffect(() => {
+    resetStuckSyncingSales().then(recovered => {
+      if (recovered > 0) refreshPending();
+    });
+  }, []);
+
   const syncRef = useRef(false);
   // Restaurar sesión al recargar
   useEffect(()=>{
@@ -2112,11 +2141,9 @@ export default function App() {
       });
   },[]);
 
-  // Escuchar sync requests del Service Worker
+  // Escuchar sync requests del Service Worker (Background Sync API)
   useEffect(()=>{
-    const handler = () => {
-      if (online && user) syncRef.current = false; // permitir re-sync
-    };
+    const handler = () => { if (online && user) runSync(); };
     window.addEventListener('sw-sync-requested', handler);
     return () => window.removeEventListener('sw-sync-requested', handler);
   },[online, user]);
@@ -2132,7 +2159,7 @@ export default function App() {
           setUser(data.user);
         }
       })
-      .catch(()=>{}); // si falla (401) apiFetch ya limpia la sesión
+      .catch(()=>{}); // si falla (401) apiFetch ya avisa vía cubagest-session-expired
   },[online]);
 
   // Registrar background sync cuando hay ventas pendientes
@@ -2155,61 +2182,82 @@ export default function App() {
 
   useEffect(() => { refreshPending(); }, []);
 
-  // Sincronizar cuando vuelve la conexión
-  useEffect(() => {
-    if (!online || !user || syncRef.current) return;
-    const syncPending = async () => {
-      const pending = await getPendingSales();
-      if (pending.length === 0) return;
-      syncRef.current = true;
-      setSyncing(true);
-      let synced = 0; let conflicts = 0;
+  // ── Sincronización de ventas offline ──────────────────────────────────────
+  // Función reutilizable: la dispara automáticamente el efecto de abajo al
+  // volver la conexión, y también el botón manual "Sincronizar ahora" desde
+  // Facturas. manual=true muestra mensajes también cuando no hay nada que
+  // sincronizar o ya hay una sincronización en curso, para dar feedback claro
+  // al usuario que pulsó el botón.
+  const runSync = async (manual = false) => {
+    if (syncRef.current) {
+      if (manual) showToast("Ya hay una sincronización en curso","info");
+      return;
+    }
+    const pending = await getPendingSales();
+    if (pending.length === 0) {
+      if (manual) showToast("No hay ventas pendientes por sincronizar","info");
+      return;
+    }
 
-      try {
-        for (const sale of pending) await updateSaleStatus(sale.localId, 'syncing');
+    syncRef.current = true;
+    setSyncing(true);
+    let synced = 0; let conflicts = 0;
 
-        const { results } = await apiFetch("/sales/sync", {
-          method: "POST",
-          body: {
-            sales: pending.map(s => ({
-              localId: s.localId,
-              client: s.client,
-              clientNit: s.clientNit,
-              clientPhone: s.clientPhone,
-              items: s.items.map(i=>({ productId:i.productId, name:i.name, qty:i.qty, price:i.price })),
-              payMethod: s.payMethod,
-              currency: "CUP",
-              offlineTimestamp: s.timestamp,
-            }))
-          }
-        });
+    try {
+      for (const sale of pending) await updateSaleStatus(sale.localId, 'syncing');
 
-        for (const result of results) {
-          if (result.status === 'synced') {
-            await updateSaleStatus(result.localId, 'synced', result.serverId);
-            synced++;
-          } else {
-            await updateSaleStatus(result.localId, 'conflict', undefined, result.reason);
-            const sale = pending.find(s=>s.localId===result.localId);
-            if (sale) await restoreLocalStock(sale.items);
-            conflicts++;
-          }
+      const { results } = await apiFetch("/sales/sync", {
+        method: "POST",
+        body: {
+          sales: pending.map(s => ({
+            localId: s.localId,
+            client: s.client,
+            clientNit: s.clientNit,
+            clientPhone: s.clientPhone,
+            items: s.items.map(i=>({ productId:i.productId, name:i.name, qty:i.qty, price:i.price })),
+            payMethod: s.payMethod,
+            currency: "CUP",
+            offlineTimestamp: s.timestamp,
+          }))
         }
-      } catch(e:any) {
-        for (const sale of pending) await updateSaleStatus(sale.localId, 'pending');
-        showToast("Error al sincronizar — se reintentará al reconectar","error");
+      });
+
+      for (const result of results) {
+        if (result.status === 'synced') {
+          await updateSaleStatus(result.localId, 'synced', result.serverId);
+          synced++;
+        } else {
+          await updateSaleStatus(result.localId, 'conflict', undefined, result.reason);
+          const sale = pending.find(s=>s.localId===result.localId);
+          if (sale) await restoreLocalStock(sale.items);
+          conflicts++;
+        }
       }
 
       await saveSyncLog({ timestamp: Date.now(), salesSynced: synced, salesConflict: conflicts });
+    } catch(e:any) {
+      // Cualquier fallo (red, timeout, sesión expirada, etc.) revierte TODAS
+      // las ventas de este intento a 'pending' — nunca quedan "colgadas" en
+      // 'syncing', así que siempre se vuelven a reintentar más adelante.
+      for (const sale of pending) await updateSaleStatus(sale.localId, 'pending');
+      showToast("No se pudo sincronizar — se reintentará automáticamente","error");
+    } finally {
       await refreshPending();
       setSyncing(false);
       syncRef.current = false;
-      if (synced > 0) showToast(`${synced} venta(s) sincronizada(s)`,"success");
-      if (conflicts > 0) showToast(`${conflicts} conflicto(s) de stock — revisa Facturas`,"warning");
+    }
 
+    if (synced > 0) showToast(`${synced} venta(s) sincronizada(s)`,"success");
+    if (conflicts > 0) showToast(`${conflicts} conflicto(s) de stock — revisa Facturas`,"warning");
+    if (synced > 0) {
       try { const updated = await apiFetch("/products"); await cacheProducts(updated); } catch {}
-    };
-    syncPending();
+    }
+  };
+
+  // Sincronizar automáticamente cuando vuelve la conexión
+  useEffect(() => {
+    if (!online || !user) return;
+    runSync();
   }, [online, user]);
 
   const showToast = (msg: string, type = "info") => setToast({ msg, type, key: Date.now() });
@@ -2304,7 +2352,7 @@ export default function App() {
         {activeModule==="dashboard"    && <Dashboard user={user}/>}
         {activeModule==="inventario"   && <Inventario user={user} showToast={showToast}/>}
         {activeModule==="pos"          && <POS user={user} showToast={showToast}/>}
-        {activeModule==="facturacion"  && <Facturacion user={user} showToast={showToast} onSyncRefresh={refreshPending}/>}
+        {activeModule==="facturacion"  && <Facturacion user={user} showToast={showToast} onSyncRefresh={refreshPending} onManualSync={()=>runSync(true)} syncing={syncing}/>}
         {activeModule==="contabilidad" && <Contabilidad showToast={showToast}/>}
         {activeModule==="cierre"       && <CierreCaja user={user} showToast={showToast}/>}
         {activeModule==="usuarios"     && <Usuarios currentUser={user} showToast={showToast}/>}

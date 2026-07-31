@@ -268,6 +268,31 @@ export async function getPendingCount(): Promise<number> {
   return pending.length;
 }
 
+// Si la app se cerró de golpe (o se recargó) justo en medio de una
+// sincronización, alguna venta puede quedar marcada como 'syncing' sin que
+// nadie la termine de procesar. Como getPendingSales() solo devuelve las
+// que están en 'pending', esas ventas se volverían invisibles para siempre
+// y nunca se reintentarían. Esta función se llama una vez al abrir la app
+// y las devuelve a 'pending' para que vuelvan a intentarse.
+export async function resetStuckSyncingSales(): Promise<number> {
+  const db = await openDB();
+  const t = tx(db, ['sales_queue'], 'readwrite');
+  const store = t.objectStore('sales_queue');
+  const all = await reqToPromise(store.getAll()) as OfflineSale[];
+
+  let recovered = 0;
+  for (const sale of all) {
+    if (sale.status === 'syncing') {
+      sale.status = 'pending';
+      store.put(sale);
+      recovered++;
+    }
+  }
+
+  await txDone(t);
+  return recovered;
+}
+
 // ── Sync log ──────────────────────────────────────────────────────────────────
 export async function saveSyncLog(log: Omit<SyncLog, 'id'>): Promise<void> {
   const db = await openDB();
