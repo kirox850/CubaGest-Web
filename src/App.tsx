@@ -8,7 +8,7 @@ import {
 import { PRIVACY_POLICY_MD, TERMS_MD } from "./legalContent";
 
 // ─── API CLIENT ───────────────────────────────────────────────────────────────
-const API_URL = "https://cubagest-backend-production.up.railway.app/api";
+const API_URL = "cubagest-backend.kirox850.workers.dev";
 
 let _token: string | null = null;
 
