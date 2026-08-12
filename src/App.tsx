@@ -81,6 +81,13 @@ async function apiFetch(path: string, opts: { method?: string; body?: object; au
 
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+    // El backend envuelve casi todas las respuestas como { ok:true, data:... }
+    // (excepto /auth/*, que devuelve accessToken/refreshToken/user "planos").
+    // Desenvolvemos aquí, en un único lugar, para que el resto del código
+    // siga usando el payload directamente (products, sales, planInfo, etc.)
+    if (data && typeof data === "object" && data.ok === true && "data" in data) {
+      return data.data;
+    }
     return data;
   } catch(e: any) {
     clearTimeout(timeout);
@@ -1023,13 +1030,13 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
   const [selectedPlan, setSelectedPlan] = useState<string|null>(null);
 
   useEffect(() => {
-    apiFetch("/plan").then(setPlanInfo).catch(()=>{});
+    apiFetch("/subscription").then(setPlanInfo).catch(()=>{});
     // Detectar si volvió del callback de QvaPay
     const params = new URLSearchParams(window.location.search);
     const planResult = params.get("plan");
     if (planResult === "activated") {
       window.history.replaceState({}, "", window.location.pathname);
-      apiFetch("/plan").then(setPlanInfo).catch(()=>{});
+      apiFetch("/subscription").then(setPlanInfo).catch(()=>{});
     }
   }, []);
 
@@ -1457,7 +1464,7 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
   const load = useCallback(async()=>{
     try {
       setLoading(true);
-      const [s,e] = await Promise.all([apiFetch("/sales"), apiFetch("/expenses")]);
+      const [s,e] = await Promise.all([apiFetch("/sales"), apiFetch("/accounting/expenses")]);
       setSales(s); setExpenses(e);
     } catch(err:any) { showToast(err.message,"error"); }
     finally { setLoading(false); }
@@ -1518,7 +1525,7 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
     if (!form.concept||!form.amount) return showToast("Complete los campos requeridos","error");
     setSaving(true);
     try {
-      await apiFetch("/expenses", { method:"POST", body:{ ...form, amount:Number(form.amount) }});
+      await apiFetch("/accounting/expenses", { method:"POST", body:{ ...form, amount:Number(form.amount) }});
       showToast("Gasto registrado","success");
       setModal(false);
       setForm({ date:today(), concept:"", amount:"", category:"Compras", method:"efectivo" });
@@ -2283,7 +2290,10 @@ export default function App() {
 
     // Con conexión: verificar token con el servidor
     apiFetch("/auth/me")
-      .then(u=>{
+      .then(res=>{
+        // El backend devuelve { ok:true, user:{...} }, no el usuario "plano"
+        const u = res?.user;
+        if (!u) throw new Error("Respuesta de /auth/me sin usuario");
         localStorage.setItem("cubagest_user", JSON.stringify(u));
         setUser(u);
         setChecking(false);
@@ -2304,12 +2314,14 @@ export default function App() {
   // Renovar token automáticamente al recuperar conexión
   useEffect(()=>{
     if (!online || !user) return;
-    apiFetch("/auth/refresh", { method: "POST" })
+    const storedRefreshToken = localStorage.getItem("cubagest_refresh_token");
+    if (!storedRefreshToken) return;
+    apiFetch("/auth/refresh", { method: "POST", body: { refreshToken: storedRefreshToken }, auth: false })
       .then((data: any) => {
-        if (data?.token) {
-          saveToken(data.token);
-          localStorage.setItem("cubagest_user", JSON.stringify(data.user));
-          setUser(data.user);
+        // El backend solo devuelve { ok:true, accessToken } — no reenvía
+        // el usuario, así que no lo tocamos aquí (ya está cacheado).
+        if (data?.accessToken) {
+          saveToken(data.accessToken);
         }
       })
       .catch(()=>{}); // si falla (401) apiFetch ya avisa vía cubagest-session-expired
@@ -2359,7 +2371,7 @@ export default function App() {
     try {
       for (const sale of pending) await updateSaleStatus(sale.localId, 'syncing');
 
-      const { results } = await apiFetch("/sales/sync", {
+      const results = await apiFetch("/sales/sync", {
         method: "POST",
         body: {
           sales: pending.map(s => ({
