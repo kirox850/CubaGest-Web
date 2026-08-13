@@ -821,8 +821,12 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
           setProducts(list.filter((p:any)=>p.active && p.stock>0));
           setLoading(false);
         })
-        .catch(async e => {
-          showToast("Sin conexión — cargando productos offline","warning");
+        .catch(async (e: any) => {
+          // Antes esto siempre decía "Sin conexión", aunque la causa real
+          // fuera otra (ej. permisos) — ahora distinguimos.
+          if (e?.message === "Sesión expirada") return; // ya se maneja aparte
+          const msg = online ? (e?.message || "Error al cargar productos") : "Sin conexión — cargando productos offline";
+          showToast(msg, "warning");
           const cached = await getOfflineProducts();
           setProducts(cached.filter(p=>p.localStock>0));
           setLoading(false);
