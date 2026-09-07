@@ -98,10 +98,10 @@ async function apiFetch(path: string, opts: { method?: string; body?: object; au
 
 // ─── ROLES (igual que backend) ────────────────────────────────────────────────
 const ROLES: Record<string, { label: string; color: string; perms: string[] }> = {
-  admin:       { label: "Administrador", color: "#3B82F6", perms: ["dashboard","inventario","pos","facturacion","contabilidad","cierre","usuarios","config"] },
-  cajero:      { label: "Cajero",        color: "#3B82F6", perms: ["dashboard","pos","facturacion","cierre"] },
+  admin:       { label: "Administrador", color: "#3B82F6", perms: ["dashboard","inventario","pos","facturacion","contabilidad","cierre","usuarios","config","transferencias","auditoria"] },
+  cajero:      { label: "Cajero",        color: "#3B82F6", perms: ["dashboard","pos","facturacion","cierre","transferencias"] },
   contador:    { label: "Contador",      color: "#10B981", perms: ["dashboard","contabilidad","cierre"] },
-  almacenista: { label: "Almacenista",   color: "#7A5C1A", perms: ["dashboard","inventario","cierre"] },
+  almacenista: { label: "Almacenista",   color: "#7A5C1A", perms: ["dashboard","inventario","cierre","transferencias"] },
 };
 
 const PAY_METHODS = [
@@ -143,6 +143,9 @@ const Icon = ({ name, size = 18, color = "currentColor" }: { name: string; size?
     refresh:      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>,
     cierre:       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 8h4m-4 4h2"/><circle cx="17" cy="10" r="2"/><path d="M17 8v-1m0 5v1m-2-3H14m6 0h-1"/></svg>,
     doc:          <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/></svg>,
+    transferencias: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 21l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>,
+    auditoria:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>,
+    warehouse:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21V10l9-6 9 6v11"/><path d="M3 10h18"/><path d="M9 21v-6h6v6"/></svg>,
   };
   return icons[name] || null;
 };
@@ -578,6 +581,9 @@ const Dashboard = ({ user }: { user: any }) => {
 
 // ─── INVENTARIO ───────────────────────────────────────────────────────────────
 const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: string) => void }) => {
+  const [locations, setLocations] = useState<any[]>([]);
+  const [locationId, setLocationId] = useState<string>("");
+  const [locationInfo, setLocationInfo] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState("");
@@ -590,16 +596,38 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
   const [saving, setSaving]     = useState(false);
 
   const canManage = ["admin","almacenista"].includes(user.role);
+  const isAlmacen = locationInfo?.type === "almacen";
 
   const invOnline = useOnlineStatus();
 
+  const loadLocations = useCallback(async () => {
+    try {
+      const list = await apiFetch("/locations");
+      // /locations devuelve TODAS las ubicaciones de la empresa (hace falta
+      // para elegir destino en Envíos) — acá solo nos interesan las que
+      // este rol puede realmente ver el stock.
+      const accessible = user.role === "admin" ? list
+        : user.role === "almacenista" ? list.filter((l:any)=>l.type==="almacen")
+        : list.filter((l:any)=>l.ownerUserId===user.id);
+      setLocations(accessible);
+      // Por defecto mostramos el Almacén Central si está disponible (es donde
+      // se crean los productos nuevos); si no, la primera ubicación visible.
+      const almacen = accessible.find((l: any) => l.type === "almacen");
+      setLocationId(prev => prev || almacen?.id || accessible[0]?.id || "");
+    } catch (e: any) { showToast(e.message, "error"); }
+  }, [user.role, user.id]);
+
+  useEffect(() => { loadLocations(); }, [loadLocations]);
+
   const load = useCallback(async () => {
+    if (!locationId) return;
     try {
       setLoading(true);
       if (invOnline) {
-        const list = await apiFetch("/products");
-        await cacheProducts(list);
-        setProducts(list);
+        const { location, items } = await apiFetch(`/locations/${locationId}/stock`);
+        setLocationInfo(location);
+        await cacheProducts(items);
+        setProducts(items);
       } else {
         const cached = await getOfflineProducts();
         setProducts(cached as any[]);
@@ -614,7 +642,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         showToast(e.message,"error");
       }
     } finally { setLoading(false); }
-  }, [invOnline]);
+  }, [invOnline, locationId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -635,7 +663,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
       const payload = { code:form.code, name:form.name, category:form.category, unit:form.unit, price:Number(form.price), cost:Number(form.cost)||0, stock:Number(form.stock)||0, minStock:Number(form.minStock)||0 };
       if (modal==="add") {
         await apiFetch("/products", { method:"POST", body:payload });
-        showToast("Producto creado correctamente","success");
+        showToast("Producto creado en Almacén Central","success");
       } else {
         await apiFetch(`/products/${selected.id}`, { method:"PUT", body:payload });
         showToast("Producto actualizado","success");
@@ -651,7 +679,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
     if (!qty||qty<=0) return showToast("Ingrese una cantidad válida","error");
     setSaving(true);
     try {
-      await apiFetch(`/products/${selected.id}/adjust-stock`, { method:"POST", body:{ type:adjustType, qty, reason:"Ajuste manual desde web" }});
+      await apiFetch(`/locations/${locationId}/adjust`, { method:"POST", body:{ productId:selected.id, type:adjustType, qty, reason:"Ajuste manual desde web" }});
       showToast(`Ajuste de stock registrado (${adjustType})`, "success");
       setModal(null);
       load();
@@ -688,10 +716,26 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
-          {canManage && invOnline && <button style={btn("primary")} onClick={openAdd}><Icon name="plus" size={16}/>Nuevo Producto</button>}
+          {canManage && isAlmacen && invOnline && <button style={btn("primary")} onClick={openAdd}><Icon name="plus" size={16}/>Nuevo Producto</button>}
           {canManage && !invOnline && <span style={{ fontSize:12, color:"#F97316", padding:"8px 0" }}>Edición requiere conexión</span>}
         </div>
       </div>
+
+      {locations.length > 1 && (
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          {locations.map((l:any) => (
+            <button key={l.id} onClick={()=>setLocationId(l.id)}
+              style={{ ...btn(locationId===l.id?"primary":"secondary"), fontSize:13, padding:"7px 14px" }}>
+              <Icon name={l.type==="almacen"?"warehouse":"pos"} size={14}/>{l.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {locationInfo && locationInfo.type === "caja" && (
+        <div style={{ background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:12, padding:"10px 14px", fontSize:13, color:"#1E40AF" }}>
+          Este es el inventario propio de <strong>{locationInfo.name}</strong> — independiente del Almacén Central y de las demás cajas. Para agregar productos nuevos aquí, pide un envío desde "Envíos".
+        </div>
+      )}
 
       <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
         <div style={{ position:"relative", flex:1, minWidth:200 }}>
@@ -707,7 +751,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
           <table style={{ width:"100%", minWidth:700, borderCollapse:"collapse" }}>
             <thead><tr style={{ background:"#F1F5F9" }}>
-              {["Código","Producto","Categoría","Precio","Costo","Stock","Estado","Acciones"].map(h=>(
+              {["Código","Producto","Categoría","Precio","Costo","Stock aquí","Estado","Acciones"].map(h=>(
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.5px", whiteSpace:"nowrap" }}>{h}</th>
               ))}
             </tr></thead>
@@ -726,10 +770,10 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
                   <td style={{ padding:"11px 14px" }}><Badge label={p.active?"Activo":"Inactivo"} color={p.active?"#10B981":"#888"}/></td>
                   <td style={{ padding:"11px 14px" }}>
                     <div style={{ display:"flex", gap:4 }}>
-                      {canManage && <button style={{ ...btn("ghost"), padding:"5px 9px", fontSize:12 }} onClick={()=>openAdjust(p)} title="Ajustar stock">±</button>}
-                      {canManage && <button style={{ ...btn("ghost"), padding:"5px 9px" }} onClick={()=>openEdit(p)}><Icon name="edit" size={14}/></button>}
-                      {canManage && p.active && <button style={{ ...btn("danger"), padding:"5px 9px" }} onClick={()=>deleteProduct(p.id)}><Icon name="trash" size={14}/></button>}
-                      {canManage && !p.active && <button style={{ ...btn("secondary"), padding:"5px 9px", fontSize:11 }} onClick={()=>reactivateProduct(p.id)}>Activar</button>}
+                      {canManage && <button style={{ ...btn("ghost"), padding:"5px 9px", fontSize:12 }} onClick={()=>openAdjust(p)} title="Ajustar stock en esta ubicación">±</button>}
+                      {canManage && isAlmacen && <button style={{ ...btn("ghost"), padding:"5px 9px" }} onClick={()=>openEdit(p)}><Icon name="edit" size={14}/></button>}
+                      {canManage && isAlmacen && p.active && <button style={{ ...btn("danger"), padding:"5px 9px" }} onClick={()=>deleteProduct(p.id)}><Icon name="trash" size={14}/></button>}
+                      {canManage && isAlmacen && !p.active && <button style={{ ...btn("secondary"), padding:"5px 9px", fontSize:11 }} onClick={()=>reactivateProduct(p.id)}>Activar</button>}
                     </div>
                   </td>
                 </tr>
@@ -757,7 +801,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
             </Field>
             <Field label="Precio Venta (CUP)" required><input style={inp} type="number" value={form.price||""} onChange={e=>setForm((f:any)=>({...f,price:e.target.value}))}/></Field>
             <Field label="Costo (CUP)"><input style={inp} type="number" value={form.cost||""} onChange={e=>setForm((f:any)=>({...f,cost:e.target.value}))}/></Field>
-            {modal==="add" && <Field label="Stock Inicial"><input style={inp} type="number" value={form.stock||""} onChange={e=>setForm((f:any)=>({...f,stock:e.target.value}))}/></Field>}
+            {modal==="add" && <Field label="Stock Inicial (entra al Almacén Central)"><input style={inp} type="number" value={form.stock||""} onChange={e=>setForm((f:any)=>({...f,stock:e.target.value}))}/></Field>}
             <Field label="Stock Mínimo"><input style={inp} type="number" value={form.minStock||""} onChange={e=>setForm((f:any)=>({...f,minStock:e.target.value}))}/></Field>
           </div>
           <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:24 }}>
@@ -771,7 +815,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         <Modal title={`Ajuste de Stock — ${selected.name}`} onClose={()=>setModal(null)} width={420}>
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
             <div style={{ background:"#F1F5F9", borderRadius:12, padding:"12px 16px" }}>
-              <p style={{ margin:0, fontSize:13, color:"#475569" }}>Stock actual: <strong>{selected.stock} {selected.unit}</strong></p>
+              <p style={{ margin:0, fontSize:13, color:"#475569" }}>Stock actual en {locationInfo?.name}: <strong>{selected.stock} {selected.unit}</strong></p>
             </div>
             <Field label="Tipo de Movimiento">
               <div style={{ display:"flex", gap:10 }}>
@@ -813,12 +857,21 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
   const online = useOnlineStatus();
 
+  const [myLocationId, setMyLocationId] = useState<string>("");
+  const [myLocationName, setMyLocationName] = useState<string>("");
+
   useEffect(()=>{
     if (online) {
-      apiFetch("/products")
-        .then(async list => {
-          await cacheProducts(list);
-          setProducts(list.filter((p:any)=>p.active && p.stock>0));
+      apiFetch("/locations")
+        .then(async (locs: any[]) => {
+          const own = user.role === "almacenista" ? locs.find((l:any)=>l.type==="almacen")
+            : locs.find((l:any)=>l.ownerUserId===user.id);
+          if (!own) { setProducts([]); setLoading(false); return; }
+          setMyLocationId(own.id);
+          setMyLocationName(own.name);
+          const { items } = await apiFetch(`/locations/${own.id}/stock`);
+          await cacheProducts(items);
+          setProducts(items.filter((p:any)=>p.active && p.stock>0));
           setLoading(false);
         })
         .catch(async (e: any) => {
@@ -887,10 +940,12 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
       } else {
         // Online normal
         const invoice = await apiFetch("/sales", { method:"POST", body: saleData });
-        // Actualizar cache de productos
-        const updated = await apiFetch("/products");
-        await cacheProducts(updated);
-        setProducts(updated.filter((p:any)=>p.active&&p.stock>0));
+        // Actualizar cache de productos con el stock de MI ubicación
+        if (myLocationId) {
+          const { items } = await apiFetch(`/locations/${myLocationId}/stock`);
+          await cacheProducts(items);
+          setProducts(items.filter((p:any)=>p.active&&p.stock>0));
+        }
         setLastReceipt(invoice);
         setCart([]);
         setSearch(""); setCashGiven("");
@@ -906,7 +961,8 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 120px)", gap:0 }}>
-      <h2 style={{ margin:"0 0 12px", fontSize:20, fontWeight:800, color:"#1E293B", flexShrink:0 }}>Punto de Venta</h2>
+      <h2 style={{ margin:"0 0 4px", fontSize:20, fontWeight:800, color:"#1E293B", flexShrink:0 }}>Punto de Venta</h2>
+      {myLocationName && <p style={{ margin:"0 0 12px", fontSize:12, color:"#64748B", flexShrink:0 }}>Vendiendo desde: <strong>{myLocationName}</strong></p>}
 
       {/* Buscador fijo */}
       <div style={{ position:"relative", flexShrink:0, marginBottom:10 }}>
@@ -1708,6 +1764,8 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
   const [view, setView]               = useState<"list"|"selectReading"|"validate"|"detail">("list");
   const [closings, setClosings]       = useState<any[]>([]);
   const [readings, setReadings]       = useState<any[]>([]);
+  const [locations, setLocations]     = useState<any[]>([]);
+  const [readingLocationId, setReadingLocationId] = useState("");
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
   const [selectedReading, setSelectedReading] = useState<any>(null);
@@ -1718,6 +1776,14 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
   const [notes, setNotes]             = useState("");
 
   const isAdmin = user.role === "admin";
+  const locationName = (id: string) => locations.find((l:any)=>l.id===id)?.name || "—";
+
+  useEffect(() => {
+    apiFetch("/locations").then((locs:any[]) => {
+      setLocations(locs);
+      setReadingLocationId(prev => prev || locs.find((l:any)=>l.type==="almacen")?.id || locs[0]?.id || "");
+    }).catch(()=>{});
+  }, []);
 
   const loadClosings = useCallback(async () => {
     try {
@@ -1768,9 +1834,10 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
   };
 
   const takeReading = async () => {
+    if (!readingLocationId) return showToast("Selecciona la ubicación", "error");
     try {
       setSaving(true);
-      await apiFetch("/closing/readings", { method: "POST", body: { notes: "Lectura de apertura manual" } });
+      await apiFetch("/closing/readings", { method: "POST", body: { locationId: readingLocationId, notes: "Lectura de apertura manual" } });
       showToast("Lectura de inventario tomada", "success");
       setConfirmReading(false);
     } catch (e: any) { showToast(e.message, "error"); }
@@ -1821,6 +1888,7 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
                     <div style={{ fontSize:12, color:"#64748B", marginTop:3 }}>
                       Por {c.closedBy?.name || "—"} · {fmtDate(c.periodStart)} → {fmtDate(c.periodEnd)}
                     </div>
+                    {locations.length > 1 && <div style={{ fontSize:12, color:"#3B82F6", marginTop:2, fontWeight:600 }}>{locationName(c.locationId)}</div>}
                   </div>
                   <div style={{ display:"flex", gap:8, alignItems:"center" }}>
                     {hasShortage && <Badge label="⚠ Faltantes" color="#F97316"/>}
@@ -1846,12 +1914,19 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
       {confirmReading && (
         <Modal title="Tomar lectura de inventario" onClose={() => setConfirmReading(false)} width={440}>
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+            {locations.length > 1 && (
+              <Field label="Ubicación" required>
+                <select style={sel} value={readingLocationId} onChange={e=>setReadingLocationId(e.target.value)}>
+                  {locations.map((l:any)=><option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </Field>
+            )}
             <div style={{ background:"#FFF7ED", border:"1px solid #FED7AA", borderRadius:12, padding:14 }}>
               <div style={{ fontWeight:700, color:"#C2410C", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
                 <Icon name="alert" size={16} color="#C2410C"/>Antes de continuar
               </div>
               <ul style={{ margin:0, paddingLeft:18, fontSize:13, color:"#7C2D12", lineHeight:1.7 }}>
-                <li>Registrará el stock actual como punto de partida del próximo cierre.</li>
+                <li>Registrará el stock actual de esa ubicación como punto de partida del próximo cierre.</li>
                 <li>Si hay ventas sin cerrar desde la última lectura, <strong>quedarán fuera del período</strong>.</li>
                 <li>Hazlo solo al abrir el negocio o al cambiar de turno.</li>
                 <li>No se puede deshacer.</li>
@@ -1897,6 +1972,7 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
                   <div>
                     <div style={{ fontWeight:700, fontSize:14, color:"#1E293B" }}>{typeLabel}</div>
                     <div style={{ fontSize:12, color:"#64748B", marginTop:3 }}>{fmtDate(r.createdAt)}</div>
+                    {locations.length > 1 && <div style={{ fontSize:12, color:"#3B82F6", marginTop:2, fontWeight:600 }}>{locationName(r.locationId)}</div>}
                     {r.takenBy && <div style={{ fontSize:12, color:"#94A3B8", marginTop:2 }}>Por {r.takenBy.name}</div>}
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -2210,6 +2286,326 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
   );
 };
 
+// ─── TRANSFERENCIAS ───────────────────────────────────────────────────────────
+const Transferencias = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>void }) => {
+  const [allLocations, setAllLocations] = useState<any[]>([]);
+  const [myLocation, setMyLocation] = useState<any>(null);
+  const [myProducts, setMyProducts] = useState<any[]>([]);
+  const [transfers, setTransfers] = useState<any[]>([]);
+  const [tab, setTab] = useState<"pendientes"|"todos">("pendientes");
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState<null|"new"|"reject">(null);
+  const [rejectTarget, setRejectTarget] = useState<any>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [form, setForm] = useState<{ fromLocationId: string; toLocationId: string; items: {productId:string;qty:number}[]; notes: string }>({ fromLocationId:"", toLocationId:"", items:[], notes:"" });
+  const [saving, setSaving] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+
+  const isAdmin = user.role === "admin";
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [locs, trs] = await Promise.all([apiFetch("/locations"), apiFetch("/transfers")]);
+      setAllLocations(locs);
+      const own = isAdmin ? null
+        : user.role === "almacenista" ? locs.find((l:any)=>l.type==="almacen")
+        : locs.find((l:any)=>l.ownerUserId===user.id);
+      setMyLocation(own || null);
+      setTransfers(trs);
+    } catch (e:any) { showToast(e.message, "error"); }
+    finally { setLoading(false); }
+  }, [isAdmin, user.role, user.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const pending = transfers.filter(t => t.status === "pendiente");
+  const visible = tab === "pendientes" ? pending : transfers;
+  const locationName = (id:string) => allLocations.find((l:any)=>l.id===id)?.name || "—";
+  const canResolve = (t:any) => isAdmin || t.toLocationId === myLocation?.id;
+  const canCancel = (t:any) => t.status === "pendiente" && (isAdmin || t.requestedById === user.id) && !canResolve(t);
+
+  const loadProductsFor = async (locationId: string) => {
+    if (!locationId) { setMyProducts([]); return; }
+    const { items } = await apiFetch(`/locations/${locationId}/stock`);
+    setMyProducts(items.filter((p:any)=>p.active));
+  };
+
+  const openNew = async () => {
+    setProductSearch("");
+    if (isAdmin) {
+      setMyProducts([]);
+      setForm({ fromLocationId:"", toLocationId:"", items:[], notes:"" });
+      setModal("new");
+      return;
+    }
+    if (!myLocation) { showToast("No tienes una ubicación propia asignada", "warning"); return; }
+    try {
+      await loadProductsFor(myLocation.id);
+      setForm({ fromLocationId: myLocation.id, toLocationId:"", items:[], notes:"" });
+      setModal("new");
+    } catch (e:any) { showToast(e.message, "error"); }
+  };
+
+  const setItemQty = (productId: string, qty: number, max: number) => {
+    const clamped = Math.max(0, Math.min(qty, max));
+    setForm(f => {
+      const exists = f.items.find(i=>i.productId===productId);
+      if (clamped <= 0) return { ...f, items: f.items.filter(i=>i.productId!==productId) };
+      if (exists) return { ...f, items: f.items.map(i=>i.productId===productId?{...i,qty:clamped}:i) };
+      return { ...f, items: [...f.items, { productId, qty: clamped }] };
+    });
+  };
+
+  const submitTransfer = async () => {
+    if (isAdmin && !form.fromLocationId) return showToast("Selecciona el origen", "error");
+    if (!form.toLocationId) return showToast("Selecciona el destino", "error");
+    if (form.items.length === 0) return showToast("Agrega al menos un producto", "error");
+    setSaving(true);
+    try {
+      await apiFetch("/transfers", { method:"POST", body: {
+        fromLocationId: isAdmin ? form.fromLocationId : undefined,
+        toLocationId: form.toLocationId, items: form.items, notes: form.notes || undefined,
+      }});
+      showToast("Envío creado — queda pendiente de aprobación del destino", "success");
+      setModal(null);
+      load();
+    } catch (e:any) { showToast(e.message, "error"); }
+    finally { setSaving(false); }
+  };
+
+  const approve = async (id: string) => {
+    try {
+      await apiFetch(`/transfers/${id}/approve`, { method:"POST" });
+      showToast("Envío aprobado — stock actualizado", "success");
+      load();
+    } catch (e:any) { showToast(e.message, "error"); }
+  };
+
+  const openReject = (t:any) => { setRejectTarget(t); setRejectReason(""); setModal("reject"); };
+  const confirmReject = async () => {
+    try {
+      await apiFetch(`/transfers/${rejectTarget.id}/reject`, { method:"POST", body:{ reason: rejectReason || undefined } });
+      showToast("Envío rechazado", "info");
+      setModal(null);
+      load();
+    } catch (e:any) { showToast(e.message, "error"); }
+  };
+
+  const cancelTransfer = async (id: string) => {
+    if (!(await showConfirm("¿Cancelar este envío pendiente?"))) return;
+    try {
+      await apiFetch(`/transfers/${id}/cancel`, { method:"POST" });
+      showToast("Envío cancelado", "info");
+      load();
+    } catch (e:any) { showToast(e.message, "error"); }
+  };
+
+  const filteredMyProducts = myProducts.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()));
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
+        <div>
+          <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1E293B" }}>Envíos entre ubicaciones</h2>
+          <p style={{ margin:0, fontSize:14, color:"#64748B" }}>
+            {myLocation ? `Tu ubicación: ${myLocation.name}` : isAdmin ? "Vista de administrador — todas las ubicaciones" : ""}
+          </p>
+        </div>
+        <button style={btn("primary")} onClick={openNew}><Icon name="plus" size={16}/>Nuevo envío</button>
+      </div>
+
+      <div style={{ display:"flex", gap:8 }}>
+        {([["pendientes",`Pendientes (${pending.length})`],["todos","Historial"]] as const).map(([v,l])=>(
+          <button key={v} onClick={()=>setTab(v)} style={{ ...btn(tab===v?"primary":"secondary"), fontSize:13 }}>{l}</button>
+        ))}
+      </div>
+
+      {loading ? <Spinner/> : visible.length === 0 ? (
+        <div style={{ textAlign:"center", padding:40, color:"#64748B", fontSize:14, background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8" }}>
+          {tab === "pendientes" ? "No hay envíos pendientes" : "No hay envíos registrados todavía"}
+        </div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {visible.map((t:any) => {
+            const statusColor = t.status==="pendiente" ? "#F97316" : t.status==="aprobado" ? "#10B981" : t.status==="rechazado" ? "#EF4444" : "#94A3B8";
+            return (
+              <div key={t.id} style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", padding:16 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:8 }}>
+                  <div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" as any }}>
+                      <span style={{ fontWeight:700, fontSize:14, color:"#1E293B" }}>{locationName(t.fromLocationId)}</span>
+                      <Icon name="transferencias" size={14} color="#94A3B8"/>
+                      <span style={{ fontWeight:700, fontSize:14, color:"#1E293B" }}>{locationName(t.toLocationId)}</span>
+                    </div>
+                    <p style={{ margin:0, fontSize:12, color:"#64748B" }}>{new Date(t.createdAt).toLocaleString("es-CU")}</p>
+                    {t.notes && <p style={{ margin:"4px 0 0", fontSize:12, color:"#475569", fontStyle:"italic" as any }}>"{t.notes}"</p>}
+                  </div>
+                  <Badge label={t.status} color={statusColor}/>
+                </div>
+                <div style={{ marginTop:10, display:"flex", flexDirection:"column", gap:2 }}>
+                  {t.items.map((i:any)=>(
+                    <div key={i.id} style={{ fontSize:12, color:"#475569" }}>{i.qty} {i.unit} · {i.productName}</div>
+                  ))}
+                </div>
+                {t.status === "rechazado" && t.rejectReason && (
+                  <p style={{ margin:"8px 0 0", fontSize:12, color:"#EF4444" }}>Motivo: {t.rejectReason}</p>
+                )}
+                {t.status === "pendiente" && (
+                  <div style={{ display:"flex", gap:8, marginTop:12, flexWrap:"wrap" as any }}>
+                    {canResolve(t) && <button style={{ ...btn("primary"), fontSize:12, padding:"6px 12px", background:"#10B981" }} onClick={()=>approve(t.id)}><Icon name="check" size={13}/>Aprobar</button>}
+                    {canResolve(t) && <button style={{ ...btn("danger"), fontSize:12, padding:"6px 12px" }} onClick={()=>openReject(t)}>Rechazar</button>}
+                    {canCancel(t) && <button style={{ ...btn("secondary"), fontSize:12, padding:"6px 12px" }} onClick={()=>cancelTransfer(t.id)}>Cancelar</button>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {modal === "new" && (
+        <Modal title="Nuevo envío" onClose={()=>setModal(null)} width={520}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            {isAdmin && (
+              <Field label="Desde" required>
+                <select style={sel} value={form.fromLocationId} onChange={async e=>{
+                  const from = e.target.value;
+                  setForm(f=>({ ...f, fromLocationId: from, items: [] }));
+                  await loadProductsFor(from);
+                }}>
+                  <option value="">Selecciona...</option>
+                  {allLocations.map((l:any)=><option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </Field>
+            )}
+            <Field label="Hacia" required>
+              <select style={sel} value={form.toLocationId} onChange={e=>setForm(f=>({...f,toLocationId:e.target.value}))}>
+                <option value="">Selecciona...</option>
+                {allLocations.filter((l:any)=>l.id!==form.fromLocationId).map((l:any)=><option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Productos a enviar" required>
+              <input style={{...inp, marginBottom:8}} placeholder="Buscar producto..." value={productSearch} onChange={e=>setProductSearch(e.target.value)}/>
+              <div style={{ maxHeight:220, overflowY:"auto", border:"1px solid #E2E8F0", borderRadius:12 }}>
+                {filteredMyProducts.map((p:any)=>{
+                  const item = form.items.find(i=>i.productId===p.id);
+                  return (
+                    <div key={p.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", borderBottom:"1px solid #F1F5F9" }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, fontWeight:600, color:"#1E293B" }}>{p.name}</div>
+                        <div style={{ fontSize:11, color:"#94A3B8" }}>Disponible: {p.stock} {p.unit}</div>
+                      </div>
+                      <input type="number" min={0} max={p.stock} style={{ ...inp, width:70, padding:"5px 8px", fontSize:12 }}
+                        value={item?.qty ?? ""} onChange={e=>setItemQty(p.id, Number(e.target.value)||0, p.stock)}/>
+                    </div>
+                  );
+                })}
+                {filteredMyProducts.length===0 && <div style={{ padding:20, textAlign:"center", fontSize:12, color:"#94A3B8" }}>{form.fromLocationId || !isAdmin ? "No hay productos disponibles en el origen" : "Selecciona primero el origen"}</div>}
+              </div>
+            </Field>
+            <Field label="Nota (opcional)"><input style={inp} value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/></Field>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+              <button style={btn("secondary")} onClick={()=>setModal(null)}>Cancelar</button>
+              <button style={{ ...btn("primary"), opacity:saving?0.6:1 }} onClick={submitTransfer} disabled={saving}>{saving?"Enviando...":"Crear envío"}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {modal === "reject" && rejectTarget && (
+        <Modal title="Rechazar envío" onClose={()=>setModal(null)} width={420}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <p style={{ margin:0, fontSize:13, color:"#64748B" }}>El stock nunca salió del origen — no hace falta revertir nada, solo se marcará como rechazado.</p>
+            <Field label="Motivo (opcional)"><input style={inp} value={rejectReason} onChange={e=>setRejectReason(e.target.value)} placeholder="Ej: cantidad incorrecta"/></Field>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+              <button style={btn("secondary")} onClick={()=>setModal(null)}>Cancelar</button>
+              <button style={btn("danger")} onClick={confirmReject}>Rechazar envío</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+// ─── AUDITORÍA ────────────────────────────────────────────────────────────────
+const AUDIT_ACTION_LABELS: Record<string,string> = {
+  "product.create":"Producto creado", "product.update":"Producto editado",
+  "product.deactivate":"Producto desactivado", "product.reactivate":"Producto reactivado",
+  "location.adjust_stock":"Ajuste de stock", "location.auto_return_stock":"Devolución automática de stock",
+  "transfer.create":"Envío creado", "transfer.approve":"Envío aprobado",
+  "transfer.reject":"Envío rechazado", "transfer.cancel":"Envío cancelado",
+  "user.create":"Usuario creado", "user.update":"Usuario editado", "user.deactivate":"Usuario desactivado",
+  "sale.void":"Venta anulada",
+  "expense.create":"Gasto creado", "expense.update":"Gasto editado", "expense.delete":"Gasto eliminado",
+  "closing.take_reading":"Lectura de inventario tomada", "closing.confirm":"Cierre de caja confirmado",
+};
+
+const Auditoria = ({ showToast }: { showToast: (m:string,t:string)=>void }) => {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterEntity, setFilterEntity] = useState("");
+  const [filterAction, setFilterAction] = useState("");
+
+  const ENTITIES = ["product", "location_stock", "stock_transfer", "inventory_location", "user", "sale", "expense", "cash_closing", "inventory_reading"];
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const qs = new URLSearchParams();
+      if (filterEntity) qs.set("entity", filterEntity);
+      if (filterAction) qs.set("action", filterAction);
+      const rows = await apiFetch(`/audit?${qs.toString()}`);
+      setLogs(rows);
+    } catch (e:any) { showToast(e.message, "error"); }
+    finally { setLoading(false); }
+  }, [filterEntity, filterAction]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+      <div>
+        <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1E293B" }}>Auditoría</h2>
+        <p style={{ margin:0, fontSize:14, color:"#64748B" }}>Registro completo de acciones del sistema — solo visible para administradores</p>
+      </div>
+
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+        <select style={{...sel, width:"auto"}} value={filterEntity} onChange={e=>setFilterEntity(e.target.value)}>
+          <option value="">Todas las entidades</option>
+          {ENTITIES.map(e=><option key={e} value={e}>{e}</option>)}
+        </select>
+        <input style={{...inp, width:"auto"}} placeholder="Buscar por tipo de acción..." value={filterAction} onChange={e=>setFilterAction(e.target.value)}/>
+        <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
+      </div>
+
+      {loading ? <Spinner/> : logs.length === 0 ? (
+        <div style={{ textAlign:"center", padding:40, color:"#64748B", fontSize:14, background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8" }}>No hay registros con estos filtros</div>
+      ) : (
+        <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", overflow:"hidden" }}>
+          {logs.map((log:any, idx:number) => (
+            <div key={log.id} style={{ padding:"12px 16px", borderTop: idx===0?"none":"1px solid #f0ebe4" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10, flexWrap:"wrap" as any }}>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#1E293B" }}>{AUDIT_ACTION_LABELS[log.action] || log.action}</div>
+                  <div style={{ fontSize:12, color:"#64748B" }}>{log.userName} · {new Date(log.createdAt).toLocaleString("es-CU")}</div>
+                </div>
+                <Badge label={log.entity} color="#5a3a1a"/>
+              </div>
+              {log.detail && (
+                <pre style={{ margin:"8px 0 0", fontSize:11, color:"#475569", background:"#F8FAFC", padding:"8px 10px", borderRadius:8, overflowX:"auto", whiteSpace:"pre-wrap" as any }}>
+                  {typeof log.detail === "string" ? log.detail : JSON.stringify(log.detail, null, 2)}
+                </pre>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── APP SHELL ────────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser]             = useState<any>(null);
@@ -2449,6 +2845,7 @@ export default function App() {
     { id:"facturacion",  label:"Facturas",        icon:"facturacion" },
     { id:"contabilidad", label:"Contabilidad",   icon:"contabilidad" },
     { id:"cierre",       label:"Cierre de Caja", icon:"cierre" },
+    { id:"transferencias", label:"Envíos",       icon:"transferencias" },
   ].filter(n=>perms.includes(n.id));
 
 
@@ -2483,6 +2880,11 @@ export default function App() {
                   {["admin"].includes(user.role) && (
                     <button onClick={()=>{setActiveModule("usuarios");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#475569", fontSize:14, fontWeight:600 }}>
                       <Icon name="usuarios" size={16} color="#475569"/>Usuarios
+                    </button>
+                  )}
+                  {["admin"].includes(user.role) && (
+                    <button onClick={()=>{setActiveModule("auditoria");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#475569", fontSize:14, fontWeight:600 }}>
+                      <Icon name="auditoria" size={16} color="#475569"/>Auditoría
                     </button>
                   )}
                   <div style={{ height:1, background:"#E2E8F0", margin:"4px 0" }}/>
@@ -2531,7 +2933,9 @@ export default function App() {
         {activeModule==="facturacion"  && <Facturacion user={user} showToast={showToast} onSyncRefresh={refreshPending} onManualSync={()=>runSync(true)} syncing={syncing}/>}
         {activeModule==="contabilidad" && <Contabilidad showToast={showToast}/>}
         {activeModule==="cierre"       && <CierreCaja user={user} showToast={showToast}/>}
+        {activeModule==="transferencias" && <Transferencias user={user} showToast={showToast}/>}
         {activeModule==="usuarios"     && <Usuarios currentUser={user} showToast={showToast}/>}
+        {activeModule==="auditoria"    && <Auditoria showToast={showToast}/>}
       </div>
 
       {/* Bottom navigation */}
