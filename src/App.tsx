@@ -98,10 +98,10 @@ async function apiFetch(path: string, opts: { method?: string; body?: object; au
 
 // ─── ROLES (igual que backend) ────────────────────────────────────────────────
 const ROLES: Record<string, { label: string; color: string; perms: string[] }> = {
-  admin:       { label: "Administrador", color: "#3B82F6", perms: ["dashboard","inventario","pos","facturacion","contabilidad","cierre","usuarios","config","transferencias","auditoria"] },
-  cajero:      { label: "Cajero",        color: "#3B82F6", perms: ["dashboard","pos","facturacion","cierre","transferencias"] },
-  contador:    { label: "Contador",      color: "#10B981", perms: ["dashboard","contabilidad","cierre"] },
-  almacenista: { label: "Almacenista",   color: "#7A5C1A", perms: ["dashboard","inventario","cierre","transferencias"] },
+  admin:       { label: "Administrador", color: "#3B82F6", perms: ["dashboard","inventario","facturacion","contabilidad","cierre","usuarios","config","transferencias","auditoria"] },
+  cajero:      { label: "Cajero",        color: "#3B82F6", perms: ["dashboard","pos","facturacion","cierre","transferencias","auditoria"] },
+  contador:    { label: "Contador",      color: "#10B981", perms: ["dashboard","contabilidad","cierre","auditoria"] },
+  almacenista: { label: "Almacenista",   color: "#7A5C1A", perms: ["dashboard","inventario","cierre","transferencias","auditoria"] },
 };
 
 const PAY_METHODS = [
@@ -2322,7 +2322,7 @@ const Transferencias = ({ user, showToast }: { user: any; showToast: (m:string,t
   const pending = transfers.filter(t => t.status === "pendiente");
   const visible = tab === "pendientes" ? pending : transfers;
   const locationName = (id:string) => allLocations.find((l:any)=>l.id===id)?.name || "—";
-  const canResolve = (t:any) => isAdmin || t.toLocationId === myLocation?.id;
+  const canResolve = (t:any) => t.toLocationId === myLocation?.id;
   const canCancel = (t:any) => t.status === "pendiente" && (isAdmin || t.requestedById === user.id) && !canResolve(t);
 
   const loadProductsFor = async (locationId: string) => {
@@ -2530,37 +2530,82 @@ const Transferencias = ({ user, showToast }: { user: any; showToast: (m:string,t
 };
 
 // ─── AUDITORÍA ────────────────────────────────────────────────────────────────
-const AUDIT_ACTION_LABELS: Record<string,string> = {
-  "product.create":"Producto creado", "product.update":"Producto editado",
-  "product.deactivate":"Producto desactivado", "product.reactivate":"Producto reactivado",
-  "location.adjust_stock":"Ajuste de stock", "location.auto_return_stock":"Devolución automática de stock",
-  "transfer.create":"Envío creado", "transfer.approve":"Envío aprobado",
-  "transfer.reject":"Envío rechazado", "transfer.cancel":"Envío cancelado",
-  "user.create":"Usuario creado", "user.update":"Usuario editado", "user.deactivate":"Usuario desactivado",
-  "sale.void":"Venta anulada",
-  "expense.create":"Gasto creado", "expense.update":"Gasto editado", "expense.delete":"Gasto eliminado",
-  "closing.take_reading":"Lectura de inventario tomada", "closing.confirm":"Cierre de caja confirmado",
+// Convierte cada entrada de auditoría en UNA frase simple, para gente sin
+// background técnico — nada de códigos ("product.create") ni JSON crudo.
+function describeAuditLog(log: any): string {
+  const d = log.detail || {};
+  const who = log.userName || "Alguien";
+  switch (log.action) {
+    case "product.create":
+      return `${who} creó el producto "${d.name}"${d.initialStock ? ` con ${d.initialStock} unidades iniciales en el Almacén Central` : ""}`;
+    case "product.update":
+      return `${who} editó el producto "${d.before?.name || "—"}"`;
+    case "product.deactivate":
+      return `${who} desactivó el producto "${d.name}"`;
+    case "product.reactivate":
+      return `${who} reactivó el producto "${d.name}"`;
+    case "location.adjust_stock":
+      return `${who} registró ${d.type === "entrada" ? "una entrada" : "una salida"} de ${d.qty} de "${d.productName}" en ${d.locationName}${d.reason ? ` — ${d.reason}` : ""}`;
+    case "location.auto_return_stock":
+      return `Se devolvieron automáticamente ${d.itemsReturned} producto(s) al Almacén Central al ${d.reason === "user_deactivated" ? "dar de baja" : "cambiar el rol"} a ${d.user}`;
+    case "transfer.create":
+      return `${who} creó un envío de ${d.from} hacia ${d.to} (${(d.items || []).length} producto(s))`;
+    case "transfer.approve":
+      return `${who} aprobó un envío (${(d.items || []).length} producto(s)) — el stock ya se movió`;
+    case "transfer.reject":
+      return `${who} rechazó un envío${d.reason ? `: ${d.reason}` : ""}`;
+    case "transfer.cancel":
+      return `${who} canceló un envío pendiente`;
+    case "user.create":
+      return `${who} creó al usuario "${d.name}" con rol ${d.role}`;
+    case "user.update":
+      return `${who} editó al usuario "${d.before?.name || "—"}"`;
+    case "user.deactivate":
+      return `${who} dio de baja a "${d.name}"`;
+    case "sale.void":
+      return `${who} anuló la factura ${d.invoiceNumber} (por $${fmt(d.total)})`;
+    case "expense.create":
+      return `${who} registró un gasto: "${d.concept}" por $${fmt(d.amount)}`;
+    case "expense.update":
+      return `${who} editó el gasto "${d.before?.concept || "—"}"`;
+    case "expense.delete":
+      return `${who} eliminó el gasto "${d.concept}" ($${fmt(d.amount)})`;
+    case "closing.take_reading":
+      return `${who} tomó una lectura de inventario en ${d.locationName}`;
+    case "closing.confirm":
+      return `${who} confirmó un cierre de caja — ingreso total $${fmt(d.totalIncome)}${d.hasShortage ? " (con faltantes)" : ""}`;
+    default:
+      return `${who} realizó una acción (${log.action})`;
+  }
+}
+
+const AUDIT_ENTITY_ICON: Record<string,string> = {
+  product: "inventario", location_stock: "warehouse", stock_transfer: "transferencias",
+  inventory_location: "warehouse", user: "usuarios", sale: "facturacion",
+  expense: "contabilidad", cash_closing: "cierre", inventory_reading: "cierre",
 };
 
 const Auditoria = ({ showToast }: { showToast: (m:string,t:string)=>void }) => {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterEntity, setFilterEntity] = useState("");
-  const [filterAction, setFilterAction] = useState("");
 
-  const ENTITIES = ["product", "location_stock", "stock_transfer", "inventory_location", "user", "sale", "expense", "cash_closing", "inventory_reading"];
+  const ENTITY_LABELS: Record<string,string> = {
+    product: "Productos", location_stock: "Ajustes de stock", stock_transfer: "Envíos",
+    inventory_location: "Ubicaciones", user: "Usuarios", sale: "Ventas",
+    expense: "Gastos", cash_closing: "Cierres de caja", inventory_reading: "Lecturas de inventario",
+  };
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       const qs = new URLSearchParams();
       if (filterEntity) qs.set("entity", filterEntity);
-      if (filterAction) qs.set("action", filterAction);
       const rows = await apiFetch(`/audit?${qs.toString()}`);
       setLogs(rows);
     } catch (e:any) { showToast(e.message, "error"); }
     finally { setLoading(false); }
-  }, [filterEntity, filterAction]);
+  }, [filterEntity]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -2568,15 +2613,14 @@ const Auditoria = ({ showToast }: { showToast: (m:string,t:string)=>void }) => {
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
       <div>
         <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"#1E293B" }}>Auditoría</h2>
-        <p style={{ margin:0, fontSize:14, color:"#64748B" }}>Registro completo de acciones del sistema — solo visible para administradores</p>
+        <p style={{ margin:0, fontSize:14, color:"#64748B" }}>Registro de todo lo que ha pasado en el sistema — visible para todo el equipo</p>
       </div>
 
       <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
         <select style={{...sel, width:"auto"}} value={filterEntity} onChange={e=>setFilterEntity(e.target.value)}>
-          <option value="">Todas las entidades</option>
-          {ENTITIES.map(e=><option key={e} value={e}>{e}</option>)}
+          <option value="">Todo</option>
+          {Object.entries(ENTITY_LABELS).map(([id,label])=><option key={id} value={id}>{label}</option>)}
         </select>
-        <input style={{...inp, width:"auto"}} placeholder="Buscar por tipo de acción..." value={filterAction} onChange={e=>setFilterAction(e.target.value)}/>
         <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
       </div>
 
@@ -2585,19 +2629,14 @@ const Auditoria = ({ showToast }: { showToast: (m:string,t:string)=>void }) => {
       ) : (
         <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", overflow:"hidden" }}>
           {logs.map((log:any, idx:number) => (
-            <div key={log.id} style={{ padding:"12px 16px", borderTop: idx===0?"none":"1px solid #f0ebe4" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10, flexWrap:"wrap" as any }}>
-                <div>
-                  <div style={{ fontSize:13, fontWeight:700, color:"#1E293B" }}>{AUDIT_ACTION_LABELS[log.action] || log.action}</div>
-                  <div style={{ fontSize:12, color:"#64748B" }}>{log.userName} · {new Date(log.createdAt).toLocaleString("es-CU")}</div>
-                </div>
-                <Badge label={log.entity} color="#5a3a1a"/>
+            <div key={log.id} style={{ display:"flex", gap:12, alignItems:"flex-start", padding:"14px 16px", borderTop: idx===0?"none":"1px solid #f0ebe4" }}>
+              <div style={{ width:34, height:34, borderRadius:10, background:"#F1F5F9", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <Icon name={AUDIT_ENTITY_ICON[log.entity] || "doc"} size={16} color="#5a3a1a"/>
               </div>
-              {log.detail && (
-                <pre style={{ margin:"8px 0 0", fontSize:11, color:"#475569", background:"#F8FAFC", padding:"8px 10px", borderRadius:8, overflowX:"auto", whiteSpace:"pre-wrap" as any }}>
-                  {typeof log.detail === "string" ? log.detail : JSON.stringify(log.detail, null, 2)}
-                </pre>
-              )}
+              <div style={{ flex:1, minWidth:0 }}>
+                <p style={{ margin:0, fontSize:13.5, color:"#1E293B", lineHeight:1.5 }}>{describeAuditLog(log)}</p>
+                <p style={{ margin:"4px 0 0", fontSize:12, color:"#94A3B8" }}>{new Date(log.createdAt).toLocaleString("es-CU")}</p>
+              </div>
             </div>
           ))}
         </div>
@@ -2882,7 +2921,7 @@ export default function App() {
                       <Icon name="usuarios" size={16} color="#475569"/>Usuarios
                     </button>
                   )}
-                  {["admin"].includes(user.role) && (
+                  {perms.includes("auditoria") && (
                     <button onClick={()=>{setActiveModule("auditoria");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#475569", fontSize:14, fontWeight:600 }}>
                       <Icon name="auditoria" size={16} color="#475569"/>Auditoría
                     </button>
