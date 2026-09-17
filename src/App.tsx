@@ -101,7 +101,7 @@ const ROLES: Record<string, { label: string; color: string; perms: string[] }> =
   admin:       { label: "Administrador", color: "#3B82F6", perms: ["dashboard","inventario","facturacion","contabilidad","cierre","usuarios","config","transferencias","auditoria"] },
   cajero:      { label: "Cajero",        color: "#3B82F6", perms: ["dashboard","pos","facturacion","cierre","transferencias","auditoria"] },
   contador:    { label: "Contador",      color: "#10B981", perms: ["dashboard","contabilidad","cierre","auditoria"] },
-  almacenista: { label: "Almacenista",   color: "#7A5C1A", perms: ["dashboard","inventario","cierre","transferencias","auditoria"] },
+  almacenista: { label: "Almacenista",   color: "#7A5C1A", perms: ["dashboard","inventario","pos","cierre","transferencias","auditoria"] },
 };
 
 const PAY_METHODS = [
@@ -341,15 +341,85 @@ const LegalModal = ({ title, content, onClose }: { title: string; content: strin
 );
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
+const SetPasswordScreen = ({ token, onDone }: { token: string; onDone: () => void }) => {
+  const [password, setPassword]   = useState("");
+  const [password2, setPassword2] = useState("");
+  const [error, setError]         = useState("");
+  const [loading, setLoading]     = useState(false);
+  const [done, setDone]           = useState(false);
+
+  const submit = async () => {
+    setError("");
+    if (password.length < 8) return setError("La contraseña debe tener al menos 8 caracteres.");
+    if (password !== password2) return setError("Las contraseñas no coinciden.");
+    setLoading(true);
+    try {
+      await apiFetch("/auth/set-password", { method:"POST", body:{ token, password }, auth:false });
+      setDone(true);
+    } catch (e:any) {
+      setError(e.message || "No se pudo establecer la contraseña.");
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#0F172A 0%,#1E3A5F 50%,#1E293B 100%)", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+      <div style={{ background:"#ffffff", borderRadius:16, padding:"40px 36px", width:"100%", maxWidth:400, boxShadow:"0 30px 80px rgba(0,0,0,0.4)" }}>
+        {done ? (
+          <div style={{ textAlign:"center" }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>✓</div>
+            <h2 style={{ margin:"0 0 8px", fontSize:20, fontWeight:800, color:"#1E293B" }}>¡Listo!</h2>
+            <p style={{ margin:"0 0 24px", fontSize:14, color:"#64748B" }}>Tu contraseña quedó establecida. Ya puedes iniciar sesión con ella.</p>
+            <button style={{ ...btn("primary"), width:"100%", justifyContent:"center" }} onClick={onDone}>Ir a iniciar sesión</button>
+          </div>
+        ) : (
+          <>
+            <h2 style={{ margin:"0 0 6px", fontSize:20, fontWeight:800, color:"#1E293B" }}>Establece tu contraseña</h2>
+            <p style={{ margin:"0 0 24px", fontSize:13, color:"#64748B" }}>Elige una contraseña que solo tú vas a conocer — ni tu administrador la ve.</p>
+            <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+              <Field label="Nueva contraseña" required>
+                <input style={inp} type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password" placeholder="mínimo 8 caracteres"/>
+              </Field>
+              <Field label="Confirmar contraseña" required>
+                <input style={inp} type="password" value={password2} onChange={e=>setPassword2(e.target.value)} autoComplete="new-password" onKeyDown={e=>e.key==="Enter"&&submit()}/>
+              </Field>
+              {error && <div style={{ background:"#FEF2F2", color:"#EF4444", padding:"10px 14px", borderRadius:12, fontSize:13, display:"flex", gap:8, alignItems:"center" }}><Icon name="alert" size={15} color="#EF4444"/>{error}</div>}
+              <button style={{ ...btn("primary"), justifyContent:"center", padding:"12px", fontSize:15, opacity:loading?0.7:1 }} onClick={submit} disabled={loading}>
+                {loading ? "Guardando..." : "Establecer contraseña"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [error, setError]       = useState("");
   const [loading, setLoading]   = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
   const [regForm, setRegForm]   = useState({ companyName:"", companyNit:"", name:"", email:"", password:"", password2:"" });
   const [regError, setRegError] = useState("");
   const [regLoading, setRegLoading] = useState(false);
+
+  const handleForgot = async () => {
+    if (!forgotEmail) return;
+    setForgotLoading(true);
+    try {
+      await apiFetch("/auth/forgot-password", { method:"POST", body:{ email: forgotEmail }, auth:false });
+      setForgotSent(true);
+    } catch {
+      // El backend siempre responde igual, pero por si falla la red mostramos lo mismo —
+      // no queremos revelar si el correo existe o no.
+      setForgotSent(true);
+    } finally { setForgotLoading(false); }
+  };
 
   const handleRegister = async () => {
     setRegError("");
@@ -420,12 +490,43 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
           <button style={{ ...btn("primary"), justifyContent:"center", padding:"12px", fontSize:15, marginTop:4, opacity:loading?0.7:1 }} onClick={handleSubmit} disabled={loading}>
             {loading ? "Verificando..." : "Iniciar sesión"}
           </button>
+          <button style={{ background:"none", border:"none", color:"#3B82F6", fontSize:13, cursor:"pointer", textAlign:"center" as any, padding:4 }} onClick={()=>{ setShowForgot(true); setForgotEmail(email); setForgotSent(false); }}>
+            ¿Olvidaste tu contraseña?
+          </button>
         </div>
         <button style={{ ...btn("ghost"), width:"100%", justifyContent:"center", marginTop:8, fontSize:13 }} onClick={()=>setShowRegister(true)}>
           Crear mi negocio (primera vez)
         </button>
         <p style={{ textAlign:"center", marginTop:16, fontSize:11, color:"#b0a090" }}>Sistema de gestión empresarial · CubaGest</p>
       </div>
+
+      {/* Modal de "olvidé mi contraseña" */}
+      {showForgot && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"#fff", borderRadius:16, padding:"32px 28px", width:"100%", maxWidth:400, boxShadow:"0 20px 60px rgba(0,0,0,0.4)" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+              <h2 style={{ margin:0, fontSize:18, fontWeight:800, color:"#1E293B" }}>Recuperar contraseña</h2>
+              <button onClick={()=>setShowForgot(false)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:20, color:"#64748B" }}>✕</button>
+            </div>
+            {forgotSent ? (
+              <div style={{ textAlign:"center", padding:"8px 0" }}>
+                <p style={{ fontSize:14, color:"#475569", lineHeight:1.6 }}>Si ese correo existe en nuestro sistema, te llegará un link para restablecer tu contraseña. Revisa también spam.</p>
+                <button style={{ ...btn("primary"), width:"100%", justifyContent:"center", marginTop:12 }} onClick={()=>setShowForgot(false)}>Entendido</button>
+              </div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                <p style={{ margin:0, fontSize:13, color:"#64748B" }}>Ingresa tu correo y te mandamos un link para elegir una nueva contraseña.</p>
+                <Field label="Correo electrónico" required>
+                  <input style={inp} type="email" value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleForgot()}/>
+                </Field>
+                <button style={{ ...btn("primary"), justifyContent:"center", opacity:forgotLoading?0.7:1 }} onClick={handleForgot} disabled={forgotLoading}>
+                  {forgotLoading ? "Enviando..." : "Enviar link"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modal de registro */}
       {showRegister && (
@@ -2160,8 +2261,10 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
   const [loading, setLoading] = useState(true);
   const [modal, setModal]   = useState(false);
   const [editUser, setEditUser] = useState<any>(null);
-  const [form, setForm]     = useState({ name:"", email:"", password:"", role:"cajero" });
+  const [form, setForm]     = useState({ name:"", email:"", role:"cajero" });
   const [saving, setSaving] = useState(false);
+  const [linkInfo, setLinkInfo] = useState<{ name:string; url:string; emailSent:boolean } | null>(null);
+  const [resendingId, setResendingId] = useState<string|null>(null);
 
   const load = useCallback(async()=>{
     try { setLoading(true); const list = await apiFetch("/users"); setUsers(list); }
@@ -2170,32 +2273,46 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
   },[]);
   useEffect(()=>{ load(); },[load]);
 
-  const openAdd  = () => { setEditUser(null); setForm({ name:"", email:"", password:"", role:"cajero" }); setModal(true); };
-  const openEdit = (u:any) => { setEditUser(u); setForm({ name:u.name, email:u.email, password:"", role:u.role }); setModal(true); };
+  const openAdd  = () => { setEditUser(null); setForm({ name:"", email:"", role:"cajero" }); setModal(true); };
+  const openEdit = (u:any) => { setEditUser(u); setForm({ name:u.name, email:u.email, role:u.role }); setModal(true); };
 
   const saveUser = async()=>{
-    if (!form.name||!form.email||((!editUser)&&!form.password)) return showToast("Complete todos los campos","error");
+    if (!form.name||!form.email) return showToast("Complete todos los campos","error");
     setSaving(true);
     try {
       if (editUser) {
-        const payload: any = { name:form.name, role:form.role };
-        if (form.password) payload.password = form.password;
-        await apiFetch(`/users/${editUser.id}`, { method:"PUT", body:payload });
+        await apiFetch(`/users/${editUser.id}`, { method:"PUT", body:{ name:form.name, role:form.role } });
         showToast("Usuario actualizado","success");
+        setModal(false);
       } else {
-        await apiFetch("/users", { method:"POST", body:form });
-        showToast("Usuario creado correctamente","success");
+        const created = await apiFetch("/users", { method:"POST", body:form });
+        setModal(false);
+        setLinkInfo({ name: form.name, url: created.setPasswordUrl, emailSent: created.emailSent });
       }
-      setModal(false);
       load();
     } catch(e:any) { showToast(e.message,"error"); }
     finally { setSaving(false); }
   };
 
+  const resendLink = async (u:any) => {
+    setResendingId(u.id);
+    try {
+      const res = await apiFetch(`/users/${u.id}/resend-set-password`, { method:"POST" });
+      setLinkInfo({ name: u.name, url: res.setPasswordUrl, emailSent: res.emailSent });
+      showToast(res.emailSent ? "Link reenviado por correo" : "Link generado — el correo no se pudo enviar, compártelo a mano", res.emailSent?"success":"warning");
+    } catch(e:any) { showToast(e.message,"error"); }
+    finally { setResendingId(null); }
+  };
+
   const deleteUser = async(id:string)=>{
-    if (!(await showConfirm("¿Eliminar este usuario?"))) return;
-    try { await apiFetch(`/users/${id}`, { method:"DELETE" }); showToast("Usuario eliminado","info"); load(); }
+    if (!(await showConfirm("¿Dar de baja a este usuario?"))) return;
+    try { await apiFetch(`/users/${id}`, { method:"DELETE" }); showToast("Usuario dado de baja","info"); load(); }
     catch(e:any) { showToast(e.message,"error"); }
+  };
+
+  const copyLink = async (url:string) => {
+    try { await navigator.clipboard.writeText(url); showToast("Link copiado","success"); }
+    catch { showToast("No se pudo copiar — selecciónalo manualmente","warning"); }
   };
 
   return (
@@ -2210,9 +2327,9 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
 
       {loading ? <Spinner/> : (
         <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", overflowX:"auto", WebkitOverflowScrolling:"touch" as any }}>
-          <table style={{ width:"100%", minWidth:700, borderCollapse:"collapse" }}>
+          <table style={{ width:"100%", minWidth:760, borderCollapse:"collapse" }}>
             <thead><tr style={{ background:"#F1F5F9" }}>
-              {["Nombre","Correo","Rol","Permisos","Acciones"].map(h=>(
+              {["Nombre","Correo","Rol","Estado","Acciones"].map(h=>(
                 <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.5px" }}>{h}</th>
               ))}
             </tr></thead>
@@ -2231,13 +2348,16 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
                   <td style={{ padding:"14px 16px", fontSize:13, color:"#475569" }}>{u.email}</td>
                   <td style={{ padding:"14px 16px" }}><Badge label={ROLES[u.role]?.label||u.role} color={ROLES[u.role]?.color||"#888"}/></td>
                   <td style={{ padding:"14px 16px" }}>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                      {(ROLES[u.role]?.perms||[]).map((p:string)=><Badge key={p} label={p} color="#475569"/>)}
-                    </div>
+                    {u.pending
+                      ? <Badge label="Pendiente de activar" color="#F97316"/>
+                      : <Badge label="Activo" color="#10B981"/>}
                   </td>
                   <td style={{ padding:"14px 16px" }}>
                     <div style={{ display:"flex", gap:6 }}>
                       <button style={{ ...btn("ghost"), padding:"5px 9px" }} onClick={()=>openEdit(u)}><Icon name="edit" size={14}/></button>
+                      <button style={{ ...btn("ghost"), padding:"5px 9px", fontSize:11 }} onClick={()=>resendLink(u)} disabled={resendingId===u.id} title={u.pending?"Reenviar link de activación":"Mandar link para restablecer contraseña"}>
+                        {resendingId===u.id ? "..." : "🔗"}
+                      </button>
                       {u.id!==currentUser.id && <button style={{ ...btn("danger"), padding:"5px 9px" }} onClick={()=>deleteUser(u.id)}><Icon name="trash" size={14}/></button>}
                     </div>
                   </td>
@@ -2251,7 +2371,7 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
       <div style={{ background:"#F1F5F9", borderRadius:16, border:"1px solid #e8e0d8", padding:20 }}>
         <h3 style={{ margin:"0 0 14px", fontSize:14, fontWeight:700, color:"#1E293B" }}>Política de seguridad</h3>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:12 }}>
-          {[["🔐","Contraseñas mínimo 8 caracteres"],["📋","Registro de auditoría por usuario"],["⏱","Sesión con token JWT expirable"],["🔒","Acceso restringido por rol"],["📊","Registro de auditoría por acceso"],["🛡","Comunicación cifrada HTTPS"]].map(([icon,text])=>(
+          {[["🔐","Cada quien elige su propia contraseña — admin nunca la ve"],["📋","Registro de auditoría por usuario"],["⏱","Sesión con token JWT expirable"],["🔒","Acceso restringido por rol"],["📊","Registro de auditoría por acceso"],["🛡","Comunicación cifrada HTTPS"]].map(([icon,text])=>(
             <div key={text as string} style={{ display:"flex", gap:10, alignItems:"flex-start", fontSize:13, color:"#475569" }}>
               <span style={{ fontSize:16 }}>{icon}</span>{text as string}
             </div>
@@ -2264,9 +2384,6 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
             <Field label="Nombre completo" required><input style={inp} value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/></Field>
             <Field label="Correo electrónico" required><input style={inp} type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} disabled={!!editUser}/></Field>
-            <Field label={editUser?"Nueva contraseña (dejar vacío para no cambiar)":"Contraseña"} required={!editUser}>
-              <input style={inp} type="password" value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={editUser?"••••••••":""} autoComplete="new-password"/>
-            </Field>
             <Field label="Rol del sistema" required>
               <select style={sel} value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
                 {Object.entries(ROLES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
@@ -2275,9 +2392,37 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
             <div style={{ background:"#F1F5F9", borderRadius:12, padding:12, fontSize:12, color:"#475569" }}>
               <strong>Permisos del rol {ROLES[form.role]?.label}:</strong> {ROLES[form.role]?.perms.join(", ")}
             </div>
+            {!editUser && (
+              <div style={{ background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:12, padding:12, fontSize:12.5, color:"#1E40AF" }}>
+                No se pide contraseña acá — apenas crees la cuenta, le va a llegar un correo (y también te muestro el link por si acaso) para que la elija él mismo.
+              </div>
+            )}
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
               <button style={btn("secondary")} onClick={()=>setModal(false)}>Cancelar</button>
               <button style={{ ...btn("primary"), opacity:saving?0.6:1 }} onClick={saveUser} disabled={saving}>{saving?"Guardando...":editUser?"Actualizar":"Crear Usuario"}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {linkInfo && (
+        <Modal title={`Link para ${linkInfo.name}`} onClose={()=>setLinkInfo(null)} width={460}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            {linkInfo.emailSent ? (
+              <div style={{ background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:12, padding:12, fontSize:13, color:"#166534" }}>
+                ✓ Le mandamos un correo con este link. Aquí lo tienes también por si acaso.
+              </div>
+            ) : (
+              <div style={{ background:"#FFF7ED", border:"1px solid #FED7AA", borderRadius:12, padding:12, fontSize:13, color:"#C2410C" }}>
+                ⚠ El correo no se pudo enviar (revisa que Resend esté configurado). Comparte este link a mano — por WhatsApp, por ejemplo.
+              </div>
+            )}
+            <div style={{ background:"#F1F5F9", borderRadius:10, padding:"10px 12px", fontSize:12, wordBreak:"break-all" as any, color:"#475569", fontFamily:"monospace" }}>
+              {linkInfo.url}
+            </div>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+              <button style={btn("secondary")} onClick={()=>setLinkInfo(null)}>Cerrar</button>
+              <button style={btn("primary")} onClick={()=>copyLink(linkInfo.url)}>Copiar link</button>
             </div>
           </div>
         </Modal>
@@ -2562,6 +2707,8 @@ function describeAuditLog(log: any): string {
       return `${who} editó al usuario "${d.before?.name || "—"}"`;
     case "user.deactivate":
       return `${who} dio de baja a "${d.name}"`;
+    case "user.resend_password_link":
+      return `${who} generó un nuevo link de contraseña para "${d.name}"`;
     case "sale.void":
       return `${who} anuló la factura ${d.invoiceNumber} (por $${fmt(d.total)})`;
     case "expense.create":
@@ -2649,6 +2796,15 @@ const Auditoria = ({ showToast }: { showToast: (m:string,t:string)=>void }) => {
 export default function App() {
   const [user, setUser]             = useState<any>(null);
   const [checkingAuth, setChecking] = useState(true);
+
+  // Link de "establecer contraseña" (?setpw=token) — es una pantalla
+  // pública, independiente de si hay sesión o no. Se revisa una sola vez al
+  // cargar la app, antes de cualquier otra lógica.
+  const [setPwToken] = useState<string | null>(() => new URLSearchParams(window.location.search).get("setpw"));
+  const clearSetPwToken = () => {
+    window.history.replaceState({}, "", window.location.pathname);
+    window.location.reload();
+  };
 
   // Safety net: si checkingAuth no se resuelve en 3s, forzar false
   useEffect(()=>{
@@ -2867,6 +3023,10 @@ export default function App() {
   const showToast = (msg: string, type = "info") => setToast({ msg, type, key: Date.now() });
 
   const handleLogout = () => { saveToken(null); localStorage.removeItem("cubagest_user"); localStorage.removeItem("cubagest_dashboard"); setUser(null); setActiveModule("dashboard"); };
+
+  // Pantalla pública de "establecer contraseña" — no importa si hay sesión
+  // activa o no, ni si todavía se está verificando.
+  if (setPwToken) return <SetPasswordScreen token={setPwToken} onDone={clearSetPwToken}/>;
 
   if (checkingAuth) return (
     <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#F8FAFC" }}>
