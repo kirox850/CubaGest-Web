@@ -1,39 +1,78 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Variables semánticas del tema ──────────────────────────────────────
+   ESTAS son las que consumen los estilos inline de toda la app
+   (var(--card), var(--ink), var(--line)...). Se redefinen bajo .dark
+   y todo — fondos, bordes, inputs, tablas, modales — cambia de tema. */
+:root {
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --ink: #1e293b;
+  --muted: #64748b;
+  --line: #e8e0d8;
+  --input-bg: #f1f5f9;
+  --input-border: #d8cfc4;
+}
+.dark {
+  --bg: #0b1220;
+  --card: #101a2c;
+  --ink: #e2e8f0;
+  --muted: #94a3b8;
+  --line: #26334a;
+  --input-bg: #1e293b;
+  --input-border: #334155;
+}
+
+/* ── Tokens de Tailwind v4 (shadcn/ui) ─────────────────────────────────
+   Con @theme inline, las utilidades (bg-card, text-ink, border-line...)
+   se compilan referenciando DIRECTAMENTE las variables semánticas de
+   arriba, así que los componentes de shadcn también siguen el tema. */
+@theme inline {
+  --color-brand: #3b82f6;
+  --color-brand-dark: #1e40af;
+  --color-surface: var(--bg);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-input-bg: var(--input-bg);
+  --color-input-border: var(--input-border);
+  --color-ok: #10b981;
+  --color-warn: #f97316;
+  --color-bad: #dc2626;
+  --radius-card: 16px;
+  --radius-ctl: 12px;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-  background: #F8FAFC;
-  color: #1E293B;
+  background: var(--bg);
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
 }
-/* ── Modo oscuro (base) ──────────────────────────────────────────────
-   La app usa colores inline; esta capa cubre lo global y permite que
-   los módulos vayan migrando con variables cuando se refactorice. */
 html.dark {
   color-scheme: dark;
   filter: none;
 }
-html.dark body {
-  background: #0B1220;
-  color: #E2E8F0;
-}
-html.dark ::-webkit-scrollbar-track { background: #0F172A; }
+html.dark ::-webkit-scrollbar-track { background: #0f172a; }
 html.dark ::-webkit-scrollbar-thumb { background: #334155; }
 html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
-html.dark input, html.dark select, html.dark textarea {
-  background: #1E293B;
-  color: #E2E8F0;
-  border-color: #334155;
-}
-html.dark ::placeholder { color: #64748B; }
+html.dark ::placeholder { color: #64748b; }
 input, select, button, textarea { font-family: inherit; }
+
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
 @media print {
   nav, aside, header { display: none !important; }
   .no-print { display: none !important; }
 }
+
 /* Scrollbar personalizado */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #F1F5F9; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }

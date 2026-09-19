@@ -12,7 +12,7 @@
 //  - Las peticiones a un origen distinto (la API del backend) nunca se
 //    interceptan ni cachean, sin depender de un nombre de dominio fijo.
 
-const CACHE = 'cubagest-v3';
+const CACHE = 'cubagest-v4'; // v4: invalida el CSS roto cacheado por v3 (variables de tema faltantes)
 const APP_SHELL = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', event => {
