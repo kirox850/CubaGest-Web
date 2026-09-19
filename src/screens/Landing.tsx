@@ -1,7 +1,11 @@
-import { btn } from "@/components/shared/primitives";
+import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/shared/Icon";
 
 // ─── LANDING PAGE (pública, antes del login) ────────────────────────────────
+// Diseño premium: revelado al hacer scroll (IntersectionObserver), contadores
+// animados, micro-interacciones y parallax. Cero dependencias — todo con
+// CSS transitions + un hook propio, así sigue funcionando sin VPN.
+
 const LANDING_PLANS = [
   { key:"free", label:"Free", priceUSD:0, tag:"Para empezar", features:["1 usuario","Hasta 10 productos","100 ventas al mes","Reportes básicos"] },
   { key:"pro", label:"Pro", priceUSD:5, tag:"El más elegido", features:["3 usuarios","Hasta 50 productos","1.000 ventas al mes","Cierre de caja e inventario","Soporte prioritario"] },
@@ -17,71 +21,232 @@ const LANDING_FEATURES = [
   { icon:"usuarios", title:"Roles y auditoría", text:"Cajero, almacenista y contador solo ven lo suyo. Cada acción queda registrada en el log de auditoría." },
 ];
 
-const Landing = ({ onEnter }: { onEnter: () => void }) => (
-  <div style={{ minHeight:"100vh", background:"#F8FAFC", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", color:"#1E293B" }}>
-    {/* Nav */}
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", maxWidth:960, margin:"0 auto" }}>
-      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-        <div style={{ width:34, height:34, background:"linear-gradient(135deg,#3B82F6,#60A5FA)", borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          <svg width="19" height="19" viewBox="0 0 32 32" fill="none"><path d="M8 24L16 8L24 24" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M10.5 19h11" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
+// ── LOGO: usa tu logo custom si existe ──────────────────────────────────────
+// Sube tu archivo como /public/brand/logo.png (ver public/brand/README.txt).
+// Mientras no exista, se muestra el monograma "C" por defecto.
+// Los <img> con src roto disparan onError y caen al fallback automáticamente.
+// Exportado también para el header de la app (App.tsx).
+export const LOGO_URL = "/brand/logo.png";
+export const BrandLogo = ({ size = 34 }: { size?: number }) => {
+  const [failed, setFailed] = useState(false);
+  if (failed) return (
+    <div style={{ width:size, height:size, background:"linear-gradient(135deg,#3B82F6,#60A5FA)", borderRadius:size*0.35, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+      <span style={{ color:"#fff", fontWeight:800, fontSize:size*0.5, lineHeight:1 }}>C</span>
+    </div>
+  );
+  return (
+    <img src={LOGO_URL} alt="CubaGest" width={size} height={size}
+      onError={() => setFailed(true)}
+      style={{ width:size, height:size, borderRadius:size*0.28, objectFit:"cover", flexShrink:0, display:"block" }}/>
+  );
+};
+
+// ── Hook: revelar elementos cuando entran en el viewport ───────────────────
+const useReveal = () => {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setVisible(true); io.disconnect(); } },
+      { threshold: 0.15, rootMargin: "0px 0px -40px 0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return { ref, visible };
+};
+
+// Contenedor con fade+slide al entrar en viewport (con delay escalonado)
+const Reveal = ({ children, delay = 0, y = 28 }: { children: any; delay?: number; y?: number }) => {
+  const { ref, visible } = useReveal();
+  return (
+    <div ref={ref} style={{
+      opacity: visible ? 1 : 0,
+      transform: visible ? "translateY(0)" : `translateY(${y}px)`,
+      transition: `opacity 0.7s cubic-bezier(0.22,1,0.36,1) ${delay}ms, transform 0.7s cubic-bezier(0.22,1,0.36,1) ${delay}ms`,
+      willChange: "opacity, transform",
+    }}>{children}</div>
+  );
+};
+
+// Contador que anima de 0 a target cuando se hace visible
+const CountUp = ({ to, suffix = "", duration = 1400 }: { to: number; suffix?: string; duration?: number }) => {
+  const { ref, visible } = useReveal();
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!visible) return;
+    const t0 = performance.now();
+    let raf = 0;
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / duration);
+      setN(Math.round(to * (1 - Math.pow(1 - p, 3)))); // easeOutCubic
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [visible, to, duration]);
+  return <span ref={ref as any}>{n.toLocaleString("es")}{suffix}</span>;
+};
+
+// Botón CTA con brillo deslizante (shine) al pasar el mouse
+const CtaButton = ({ onClick, children, big = false }: { onClick: () => void; children: any; big?: boolean }) => (
+  <button onClick={onClick} className="cta-shine" style={{
+    position:"relative", overflow:"hidden", border:"none", cursor:"pointer",
+    background:"linear-gradient(135deg,#3B82F6,#2563EB)", color:"#fff", fontWeight:700,
+    fontSize:big?16:15, padding:big?"15px 36px":"12px 26px", borderRadius:14,
+    boxShadow:"0 10px 30px rgba(59,130,246,0.45)",
+    transition:"transform 0.2s cubic-bezier(0.22,1,0.36,1), box-shadow 0.2s",
+  }}
+  onMouseEnter={e=>{ (e.currentTarget as HTMLElement).style.transform="translateY(-2px) scale(1.02)"; (e.currentTarget as HTMLElement).style.boxShadow="0 16px 40px rgba(59,130,246,0.55)"; }}
+  onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.transform="none"; (e.currentTarget as HTMLElement).style.boxShadow="0 10px 30px rgba(59,130,246,0.45)"; }}
+  >{children}</button>
+);
+
+// Mockup del teléfono con leve efecto parallax al mover el mouse
+const PhoneMockup = () => {
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  return (
+    <div
+      onMouseMove={e => {
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        setTilt({ x: ((e.clientX - r.left) / r.width - 0.5) * 10, y: ((e.clientY - r.top) / r.height - 0.5) * -10 });
+      }}
+      onMouseLeave={() => setTilt({ x: 0, y: 0 })}
+      style={{ perspective: 800, display:"inline-block" }}>
+      <div style={{
+        margin:"44px auto 0", width:230, background:"#0B1220", borderRadius:28, border:"6px solid #1E293B",
+        padding:"14px 12px", boxShadow:"0 30px 60px rgba(0,0,0,0.5)", textAlign:"left",
+        transform:`rotateY(${tilt.x}deg) rotateX(${tilt.y}deg)`,
+        transition:"transform 0.25s ease-out", willChange:"transform",
+      }}>
+        <div style={{ fontSize:10, color:"#94A3B8", marginBottom:8 }}>Hoy · Resumen</div>
+        <div style={{ fontSize:20, fontWeight:800, color:"#fff" }}>$ <CountUp to={12450}/></div>
+        <div style={{ fontSize:10, color:"#4ADE80", marginBottom:12 }}>▲ 18% vs. ayer</div>
+        {[72, 45, 90, 60, 34, 80].map((h, i) => (
+          <div key={i} className="bar-grow" style={{ display:"inline-block", width:18, margin:2, borderRadius:4,
+            background:i===2?"#3B82F6":"#1E3A5F", height:h*0.5, verticalAlign:"bottom", animationDelay:`${300 + i*90}ms` }}/>
+        ))}
+        <div style={{ marginTop:14, background:"#16233B", borderRadius:10, padding:"8px 10px", fontSize:10, color:"#CBD5E1" }}>
+          🧾 Factura #0231 — $1,250 <span style={{ color:"#4ADE80" }}>pagada</span>
         </div>
+        <div style={{ marginTop:6, background:"#16233B", borderRadius:10, padding:"8px 10px", fontSize:10, color:"#CBD5E1" }}>
+          ⚠️ Refresco La Tropical — quedan 4
+        </div>
+        <div style={{ marginTop:10, background:"linear-gradient(135deg,#3B82F6,#60A5FA)", borderRadius:10, padding:"9px 0", textAlign:"center", fontSize:11, fontWeight:700, color:"#fff" }}>
+          + Vender
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Landing = ({ onEnter }: { onEnter: () => void }) => (
+  <div style={{ minHeight:"100vh", background:"#F8FAFC", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", color:"#1E293B", overflowX:"hidden" }}>
+    <style>{`
+      /* Brillo que cruza el botón CTA */
+      .cta-shine::after {
+        content:""; position:absolute; top:0; left:-80%; width:50%; height:100%;
+        background:linear-gradient(105deg, transparent, rgba(255,255,255,0.35), transparent);
+        transform:skewX(-20deg); animation:ctaShine 3.2s ease-in-out infinite;
+      }
+      @keyframes ctaShine { 0%,60% { left:-80%; } 100% { left:160%; } }
+      /* Barras del mockup: crecen al montar */
+      .bar-grow { transform-origin:bottom; animation:barGrow 0.7s cubic-bezier(0.22,1,0.36,1) both; }
+      @keyframes barGrow { from { transform:scaleY(0); } to { transform:scaleY(1); } }
+      /* Card de feature interactiva */
+      .feature-card { transition:transform 0.25s cubic-bezier(0.22,1,0.36,1), box-shadow 0.25s, border-color 0.25s; }
+      .feature-card:hover { transform:translateY(-6px); box-shadow:0 18px 40px rgba(15,23,42,0.10); border-color:#BFDBFE !important; }
+      .feature-card:hover .feature-icon { transform:scale(1.12) rotate(-4deg); }
+      .feature-icon { transition:transform 0.25s cubic-bezier(0.22,1,0.36,1); }
+      /* Plan destacado con flotación suave */
+      .plan-float { animation:planFloat 4.5s ease-in-out infinite; }
+      @keyframes planFloat { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-8px); } }
+      /* Hero: entrada inicial */
+      .hero-in { animation:heroIn 0.9s cubic-bezier(0.22,1,0.36,1) both; }
+      @keyframes heroIn { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+      .pulse-dot { animation:pulseDot 2s ease-in-out infinite; }
+      @keyframes pulseDot { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+      @media (prefers-reduced-motion: reduce) {
+        .cta-shine::after, .plan-float, .hero-in, .bar-grow, .pulse-dot { animation:none !important; }
+      }
+    `}</style>
+
+    {/* Nav */}
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", maxWidth:960, margin:"0 auto", position:"sticky", top:0, zIndex:50, background:"rgba(248,250,252,0.85)", backdropFilter:"blur(10px)", WebkitBackdropFilter:"blur(10px)" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+        <BrandLogo size={34}/>
         <span style={{ fontWeight:800, fontSize:17 }}>CubaGest</span>
       </div>
-      <button onClick={onEnter} style={{ ...btn("ghost"), fontSize:14 }}>Iniciar sesión</button>
+      <button onClick={onEnter} style={{ background:"none", border:"none", cursor:"pointer", color:"#3B82F6", fontSize:14, fontWeight:600, padding:"8px 14px", borderRadius:10, transition:"background 0.2s" }}
+        onMouseEnter={e=>((e.currentTarget as HTMLElement).style.background="rgba(59,130,246,0.08)")}
+        onMouseLeave={e=>((e.currentTarget as HTMLElement).style.background="none")}>
+        Iniciar sesión
+      </button>
     </div>
 
     {/* Hero */}
-    <div style={{ background:"linear-gradient(135deg,#0F172A 0%,#1E3A5F 55%,#1E293B 100%)", color:"#fff", padding:"56px 24px 64px", textAlign:"center" }}>
-      <div style={{ maxWidth:680, margin:"0 auto" }}>
-        <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:999, padding:"6px 14px", fontSize:13, fontWeight:600, marginBottom:22 }}>
-          ✅ Funciona sin VPN en Cuba
+    <div style={{ background:"linear-gradient(135deg,#0F172A 0%,#1E3A5F 55%,#1E293B 100%)", color:"#fff", padding:"56px 24px 64px", textAlign:"center", position:"relative", overflow:"hidden" }}>
+      {/* Halos decorativos con blur */}
+      <div style={{ position:"absolute", width:420, height:420, borderRadius:"50%", background:"radial-gradient(circle,rgba(59,130,246,0.22),transparent 65%)", top:-140, right:-120, pointerEvents:"none" }}/>
+      <div style={{ position:"absolute", width:360, height:360, borderRadius:"50%", background:"radial-gradient(circle,rgba(96,165,250,0.14),transparent 65%)", bottom:-160, left:-120, pointerEvents:"none" }}/>
+      <div style={{ maxWidth:680, margin:"0 auto", position:"relative" }}>
+        <div className="hero-in" style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:999, padding:"6px 14px", fontSize:13, fontWeight:600, marginBottom:22 }}>
+          <span className="pulse-dot" style={{ width:8, height:8, borderRadius:"50%", background:"#4ADE80", display:"inline-block" }}/>
+          Funciona sin VPN en Cuba
         </div>
-        <h1 style={{ margin:"0 0 14px", fontSize:38, lineHeight:1.15, fontWeight:800, letterSpacing:"-1px" }}>
+        <h1 className="hero-in" style={{ animationDelay:"0.1s", margin:"0 0 14px", fontSize:38, lineHeight:1.15, fontWeight:800, letterSpacing:"-1px" }}>
           Gestiona tu negocio<br/>desde el celular
         </h1>
-        <p style={{ margin:"0 auto 28px", fontSize:16, lineHeight:1.6, color:"#CBD5E1", maxWidth:520 }}>
+        <p className="hero-in" style={{ animationDelay:"0.2s", margin:"0 auto 28px", fontSize:16, lineHeight:1.6, color:"#CBD5E1", maxWidth:520 }}>
           Inventario, punto de venta, facturación y contabilidad en una sola app.
           Diseñada para bodegas, cafeterías y tiendecitas cubanas — <strong style={{color:"#fff"}}>incluso sin internet</strong>.
         </p>
-        <button onClick={onEnter} style={{ ...btn("primary"), fontSize:16, padding:"14px 34px", borderRadius:14, boxShadow:"0 10px 30px rgba(59,130,246,0.45)" }}>
-          Crear mi negocio — gratis 30 días
-        </button>
-        <p style={{ margin:"12px 0 0", fontSize:12, color:"#94A3B8" }}>Sin tarjeta · Plan Empresarial completo de prueba · Pago con QvaPay cuando quieras</p>
-
-        {/* Mockup de teléfono */}
-        <div style={{ margin:"44px auto 0", width:230, background:"#0B1220", borderRadius:28, border:"6px solid #1E293B", padding:"14px 12px", boxShadow:"0 30px 60px rgba(0,0,0,0.5)", textAlign:"left" }}>
-          <div style={{ fontSize:10, color:"#94A3B8", marginBottom:8 }}>Hoy · Resumen</div>
-          <div style={{ fontSize:20, fontWeight:800, color:"#fff" }}>$ 12,450</div>
-          <div style={{ fontSize:10, color:"#4ADE80", marginBottom:12 }}>▲ 18% vs. ayer</div>
-          {[72, 45, 90, 60, 34, 80].map((h, i) => (
-            <div key={i} style={{ display:"inline-block", width:18, margin:2, borderRadius:4, background:i===2?"#3B82F6":"#1E3A5F", height:h*0.5, verticalAlign:"bottom" }}/>
-          ))}
-          <div style={{ marginTop:14, background:"#16233B", borderRadius:10, padding:"8px 10px", fontSize:10, color:"#CBD5E1" }}>
-            🧾 Factura #0231 — $1,250 <span style={{ color:"#4ADE80" }}>pagada</span>
-          </div>
-          <div style={{ marginTop:6, background:"#16233B", borderRadius:10, padding:"8px 10px", fontSize:10, color:"#CBD5E1" }}>
-            ⚠️ Refresco La Tropical — quedan 4
-          </div>
-          <div style={{ marginTop:10, background:"linear-gradient(135deg,#3B82F6,#60A5FA)", borderRadius:10, padding:"9px 0", textAlign:"center", fontSize:11, fontWeight:700, color:"#fff" }}>
-            + Vender
-          </div>
+        <div className="hero-in" style={{ animationDelay:"0.3s" }}>
+          <CtaButton onClick={onEnter} big>Crear mi negocio — gratis 30 días</CtaButton>
         </div>
+        <p className="hero-in" style={{ animationDelay:"0.4s", margin:"12px 0 0", fontSize:12, color:"#94A3B8" }}>Sin tarjeta · Plan Empresarial completo de prueba · Pago con QvaPay cuando quieras</p>
+
+        <div className="hero-in" style={{ animationDelay:"0.5s" }}>
+          <PhoneMockup/>
+        </div>
+      </div>
+    </div>
+
+    {/* Cinta de métricas con contadores animados */}
+    <div style={{ background:"#fff", borderBottom:"1px solid #E2E8F0" }}>
+      <div style={{ maxWidth:860, margin:"0 auto", padding:"30px 20px", display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, textAlign:"center" }}>
+        {[
+          { n:1200, suffix:"+", label:"ventas registradas" },
+          { n:99, suffix:"%", label:"disponibilidad del servicio" },
+          { n:10, suffix:" min", label:"para tu primera factura" },
+        ].map((m, i) => (
+          <Reveal key={m.label} delay={i*120}>
+            <div style={{ fontSize:26, fontWeight:800, color:"#1E293B" }}><CountUp to={m.n} suffix={m.suffix}/></div>
+            <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>{m.label}</div>
+          </Reveal>
+        ))}
       </div>
     </div>
 
     {/* Features */}
     <div style={{ maxWidth:960, margin:"0 auto", padding:"52px 20px" }}>
-      <h2 style={{ textAlign:"center", fontSize:26, fontWeight:800, margin:"0 0 8px" }}>Todo lo que tu negocio necesita</h2>
-      <p style={{ textAlign:"center", color:"#64748B", margin:"0 0 32px", fontSize:14 }}>Sin planillas de Excel, sin cuadernos, sin dolores de cabeza.</p>
+      <Reveal>
+        <h2 style={{ textAlign:"center", fontSize:26, fontWeight:800, margin:"0 0 8px" }}>Todo lo que tu negocio necesita</h2>
+        <p style={{ textAlign:"center", color:"#64748B", margin:"0 0 32px", fontSize:14 }}>Sin planillas de Excel, sin cuadernos, sin dolores de cabeza.</p>
+      </Reveal>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))", gap:14 }}>
-        {LANDING_FEATURES.map(f => (
-          <div key={f.title} style={{ background:"#fff", borderRadius:16, padding:"22px 20px", border:"1px solid #E2E8F0" }}>
-            <div style={{ width:40, height:40, borderRadius:12, background:"#EFF6FF", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
-              <Icon name={f.icon} size={20} color="#3B82F6"/>
+        {LANDING_FEATURES.map((f, i) => (
+          <Reveal key={f.title} delay={(i % 3) * 100}>
+            <div className="feature-card" style={{ background:"#fff", borderRadius:16, padding:"22px 20px", border:"1px solid #E2E8F0", height:"100%", boxSizing:"border-box" }}>
+              <div className="feature-icon" style={{ width:40, height:40, borderRadius:12, background:"#EFF6FF", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
+                <Icon name={f.icon} size={20} color="#3B82F6"/>
+              </div>
+              <div style={{ fontWeight:700, fontSize:15, marginBottom:6 }}>{f.title}</div>
+              <div style={{ fontSize:13, color:"#64748B", lineHeight:1.55 }}>{f.text}</div>
             </div>
-            <div style={{ fontWeight:700, fontSize:15, marginBottom:6 }}>{f.title}</div>
-            <div style={{ fontSize:13, color:"#64748B", lineHeight:1.55 }}>{f.text}</div>
-          </div>
+          </Reveal>
         ))}
       </div>
     </div>
@@ -89,18 +254,20 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => (
     {/* Cómo funciona */}
     <div style={{ background:"#fff", borderTop:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0", padding:"48px 20px" }}>
       <div style={{ maxWidth:820, margin:"0 auto" }}>
-        <h2 style={{ textAlign:"center", fontSize:24, fontWeight:800, margin:"0 0 28px" }}>Empieza a vender en 3 pasos</h2>
+        <Reveal><h2 style={{ textAlign:"center", fontSize:24, fontWeight:800, margin:"0 0 28px" }}>Empieza a vender en 3 pasos</h2></Reveal>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))", gap:18 }}>
           {[
             { n:1, t:"Crea tu cuenta", d:"Registra tu negocio con tu correo. 30 días del plan completo gratis." },
             { n:2, t:"Agrega tus productos", d:"Carga tu inventario con precios y stock por ubicación. Toma 10 minutos." },
             { n:3, t:"Vende y crece", d:"Cobra, factura y mira tus números. Funciona con o sin internet." },
-          ].map(s => (
-            <div key={s.n} style={{ textAlign:"center", padding:"0 8px" }}>
-              <div style={{ width:44, height:44, borderRadius:"50%", background:"#3B82F6", color:"#fff", fontSize:19, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px" }}>{s.n}</div>
-              <div style={{ fontWeight:700, marginBottom:6 }}>{s.t}</div>
-              <div style={{ fontSize:13, color:"#64748B", lineHeight:1.55 }}>{s.d}</div>
-            </div>
+          ].map((s, i) => (
+            <Reveal key={s.n} delay={i*140}>
+              <div style={{ textAlign:"center", padding:"0 8px" }}>
+                <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#3B82F6,#2563EB)", color:"#fff", fontSize:19, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px", boxShadow:"0 8px 20px rgba(59,130,246,0.35)" }}>{s.n}</div>
+                <div style={{ fontWeight:700, marginBottom:6 }}>{s.t}</div>
+                <div style={{ fontSize:13, color:"#64748B", lineHeight:1.55 }}>{s.d}</div>
+              </div>
+            </Reveal>
           ))}
         </div>
       </div>
@@ -108,27 +275,53 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => (
 
     {/* Precios */}
     <div style={{ maxWidth:960, margin:"0 auto", padding:"52px 20px" }}>
-      <h2 style={{ textAlign:"center", fontSize:26, fontWeight:800, margin:"0 0 8px" }}>Precios claros, en USD</h2>
-      <p style={{ textAlign:"center", color:"#64748B", margin:"0 0 32px", fontSize:14 }}>Empieza gratis. Paga solo cuando tu negocio lo necesite.</p>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))", gap:16, maxWidth:860, margin:"0 auto" }}>
-        {LANDING_PLANS.map(p => (
-          <div key={p.key} style={{ background:p.key==="pro"?"#0F172A":"#fff", color:p.key==="pro"?"#fff":"#1E293B", borderRadius:18, padding:"26px 22px", border:p.key==="pro"?"none":"1px solid #E2E8F0", position:"relative" }}>
-            {p.key==="pro" && <div style={{ position:"absolute", top:-11, left:"50%", transform:"translateX(-50%)", background:"#3B82F6", color:"#fff", fontSize:11, fontWeight:700, borderRadius:999, padding:"4px 12px" }}>{p.tag}</div>}
-            <div style={{ fontWeight:800, fontSize:17, marginBottom:2 }}>{p.label}</div>
-            {p.key!=="pro" && <div style={{ fontSize:12, color:"#94A3B8", marginBottom:8 }}>{p.tag}</div>}
-            <div style={{ fontSize:34, fontWeight:800, margin:"8px 0 14px" }}>${p.priceUSD}<span style={{ fontSize:13, fontWeight:400, color:p.key==="pro"?"#94A3B8":"#64748B" }}>/mes</span></div>
-            {p.features.map(f => <div key={f} style={{ fontSize:13, padding:"5px 0", color:p.key==="pro"?"#CBD5E1":"#475569" }}>✓ {f}</div>)}
-            <button onClick={onEnter} style={{ ...(p.key==="pro"?btn("primary"):btn("ghost")), width:"100%", justifyContent:"center", marginTop:16 }}>{p.priceUSD===0?"Empezar gratis":"Elegir plan"}</button>
-          </div>
+      <Reveal>
+        <h2 style={{ textAlign:"center", fontSize:26, fontWeight:800, margin:"0 0 8px" }}>Precios claros, en USD</h2>
+        <p style={{ textAlign:"center", color:"#64748B", margin:"0 0 32px", fontSize:14 }}>Empieza gratis. Paga solo cuando tu negocio lo necesite.</p>
+      </Reveal>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))", gap:16, maxWidth:860, margin:"0 auto", alignItems:"stretch" }}>
+        {LANDING_PLANS.map((p, i) => (
+          <Reveal key={p.key} delay={i*120}>
+            <div className={p.key==="pro" ? "plan-float" : ""} style={{
+              background:p.key==="pro"?"#0F172A":"#fff", color:p.key==="pro"?"#fff":"#1E293B",
+              borderRadius:18, padding:"26px 22px", border:p.key==="pro"?"2px solid #3B82F6":"1px solid #E2E8F0",
+              position:"relative", height:"100%", boxSizing:"border-box",
+              boxShadow:p.key==="pro"?"0 20px 50px rgba(15,23,42,0.25)":"none",
+              transition:"transform 0.25s, box-shadow 0.25s",
+            }}
+            onMouseEnter={e=>{ if(p.key!=="pro"){ (e.currentTarget as HTMLElement).style.transform="translateY(-4px)"; (e.currentTarget as HTMLElement).style.boxShadow="0 14px 34px rgba(15,23,42,0.10)"; } }}
+            onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.transform="none"; (e.currentTarget as HTMLElement).style.boxShadow=p.key==="pro"?"0 20px 50px rgba(15,23,42,0.25)":"none"; }}>
+              {p.key==="pro" && <div style={{ position:"absolute", top:-11, left:"50%", transform:"translateX(-50%)", background:"#3B82F6", color:"#fff", fontSize:11, fontWeight:700, borderRadius:999, padding:"4px 12px", whiteSpace:"nowrap" }}>{p.tag}</div>}
+              <div style={{ fontWeight:800, fontSize:17, marginBottom:2 }}>{p.label}</div>
+              {p.key!=="pro" && <div style={{ fontSize:12, color:"#94A3B8", marginBottom:8 }}>{p.tag}</div>}
+              <div style={{ fontSize:34, fontWeight:800, margin:"8px 0 14px" }}>${p.priceUSD}<span style={{ fontSize:13, fontWeight:400, color:p.key==="pro"?"#94A3B8":"#64748B" }}>/mes</span></div>
+              {p.features.map(f => <div key={f} style={{ fontSize:13, padding:"5px 0", color:p.key==="pro"?"#CBD5E1":"#475569" }}>✓ {f}</div>)}
+              <button onClick={onEnter} style={{
+                width:"100%", justifyContent:"center", marginTop:16, cursor:"pointer",
+                border:p.key==="pro"?"none":"1px solid #CBD5E1", borderRadius:12, padding:"11px 0",
+                fontSize:14, fontWeight:700,
+                background:p.key==="pro"?"linear-gradient(135deg,#3B82F6,#2563EB)":"transparent",
+                color:p.key==="pro"?"#fff":"#1E293B",
+                transition:"opacity 0.2s, transform 0.15s",
+              }}
+              onMouseEnter={e=>((e.currentTarget as HTMLElement).style.opacity="0.85")}
+              onMouseLeave={e=>((e.currentTarget as HTMLElement).style.opacity="1")}>
+                {p.priceUSD===0?"Empezar gratis":"Elegir plan"}
+              </button>
+            </div>
+          </Reveal>
         ))}
       </div>
     </div>
 
     {/* CTA final */}
-    <div style={{ background:"linear-gradient(135deg,#1E3A5F,#0F172A)", color:"#fff", padding:"52px 24px", textAlign:"center" }}>
-      <h2 style={{ margin:"0 0 10px", fontSize:26, fontWeight:800 }}>¿Listo para organizar tu negocio?</h2>
-      <p style={{ margin:"0 0 24px", color:"#CBD5E1", fontSize:15 }}>Crea tu cuenta hoy y ten tu primera factura en 10 minutos.</p>
-      <button onClick={onEnter} style={{ ...btn("primary"), fontSize:16, padding:"14px 34px", borderRadius:14 }}>Crear mi negocio</button>
+    <div style={{ background:"linear-gradient(135deg,#1E3A5F,#0F172A)", color:"#fff", padding:"52px 24px", textAlign:"center", position:"relative", overflow:"hidden" }}>
+      <div style={{ position:"absolute", width:380, height:380, borderRadius:"50%", background:"radial-gradient(circle,rgba(59,130,246,0.18),transparent 65%)", top:-120, left:"50%", transform:"translateX(-50%)", pointerEvents:"none" }}/>
+      <Reveal>
+        <h2 style={{ margin:"0 0 10px", fontSize:26, fontWeight:800, position:"relative" }}>¿Listo para organizar tu negocio?</h2>
+        <p style={{ margin:"0 0 24px", color:"#CBD5E1", fontSize:15, position:"relative" }}>Crea tu cuenta hoy y ten tu primera factura en 10 minutos.</p>
+        <div style={{ position:"relative" }}><CtaButton onClick={onEnter} big>Crear mi negocio</CtaButton></div>
+      </Reveal>
     </div>
 
     {/* Footer */}

@@ -9,9 +9,12 @@ const DiscountsAdmin = ({ showToast, onClose }: { showToast: (m:string,t:string)
   const [locs, setLocs]       = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
+  // Nota: los valores de type/locationScope usan EXACTAMENTE los enums del
+  // backend (type: "porcentaje"|"fijo" — locationScope: "todas"|"seleccion").
+  // Usar otros valores hace que el API responda "type inválido".
   const [form, setForm]       = useState<any>({
-    name:"", code:"", scope:"venta", type:"porcentual", value:"",
-    maxUses:"", maxUsesPerSale:"", locationScope:"todas", locations:[] as string[], active:true,
+    name:"", code:"", scope:"venta", type:"porcentaje", value:"",
+    maxUses:"", locationScope:"todas", locationIds:[] as string[], active:true,
   });
 
   const load = async () => {
@@ -27,7 +30,8 @@ const DiscountsAdmin = ({ showToast, onClose }: { showToast: (m:string,t:string)
 
   const create = async () => {
     if (!form.name || !form.value) return showToast("Nombre y valor son requeridos", "error");
-    if (form.type==="porcentual" && Number(form.value)>100) return showToast("El % no puede ser mayor a 100", "error");
+    if (form.type==="porcentaje" && Number(form.value)>100) return showToast("El % no puede ser mayor a 100", "error");
+    if (form.locationScope==="seleccion" && form.locationIds.length===0) return showToast("Selecciona al menos una ubicación", "error");
     setSaving(true);
     try {
       await apiFetch("/discounts", { method:"POST", body:{
@@ -36,14 +40,13 @@ const DiscountsAdmin = ({ showToast, onClose }: { showToast: (m:string,t:string)
         scope: form.scope,
         type: form.type,
         value: Number(form.value),
-        maxUses: form.maxUses ? Number(form.maxUses) : undefined,
-        maxUsesPerSale: form.maxUsesPerSale ? Number(form.maxUsesPerSale) : undefined,
+        maxUses: form.maxUses ? Number(form.maxUses) : null,
         locationScope: form.locationScope,
-        locations: form.locationScope==="algunas" ? form.locations : [],
+        locationIds: form.locationScope==="seleccion" ? form.locationIds : [],
         active: form.active,
       }});
       showToast("Descuento creado", "success");
-      setForm({ name:"", code:"", scope:"venta", type:"porcentual", value:"", maxUses:"", maxUsesPerSale:"", locationScope:"todas", locations:[], active:true });
+      setForm({ name:"", code:"", scope:"venta", type:"porcentaje", value:"", maxUses:"", locationScope:"todas", locationIds:[], active:true });
       load();
     } catch(e:any) { showToast(e.message, "error"); }
     finally { setSaving(false); }
@@ -86,25 +89,25 @@ const DiscountsAdmin = ({ showToast, onClose }: { showToast: (m:string,t:string)
             </Field>
             <Field label="Tipo">
               <select style={sel} value={form.type} onChange={e=>setForm((f:any)=>({...f,type:e.target.value}))}>
-                <option value="porcentual">Porcentaje (%)</option>
-                <option value="fixed">Monto fijo</option>
+                <option value="porcentaje">Porcentaje (%)</option>
+                <option value="fijo">Monto fijo</option>
               </select>
             </Field>
-            <Field label={form.type==="porcentual"?"Valor (%)":"Valor (monto)"} required><input style={inp} type="number" value={form.value} onChange={e=>setForm((f:any)=>({...f,value:e.target.value}))}/></Field>
+            <Field label={form.type==="porcentaje"?"Valor (%)":"Valor (monto)"} required><input style={inp} type="number" value={form.value} onChange={e=>setForm((f:any)=>({...f,value:e.target.value}))}/></Field>
             <Field label="Usos máximos (vacío = ilimitado)"><input style={inp} type="number" value={form.maxUses} onChange={e=>setForm((f:any)=>({...f,maxUses:e.target.value}))} placeholder="∞"/></Field>
           </div>
           <Field label="Disponible en">
             <div style={{ display:"flex", gap:10 }}>
               <button onClick={()=>setForm((f:any)=>({...f,locationScope:"todas"}))} style={{ ...btn(form.locationScope==="todas"?"primary":"secondary"), flex:1, justifyContent:"center", fontSize:13 }}>Todas las ubicaciones</button>
-              <button onClick={()=>setForm((f:any)=>({...f,locationScope:"algunas"}))} style={{ ...btn(form.locationScope==="algunas"?"primary":"secondary"), flex:1, justifyContent:"center", fontSize:13 }}>Solo algunas</button>
+              <button onClick={()=>setForm((f:any)=>({...f,locationScope:"seleccion"}))} style={{ ...btn(form.locationScope==="seleccion"?"primary":"secondary"), flex:1, justifyContent:"center", fontSize:13 }}>Solo algunas</button>
             </div>
           </Field>
-          {form.locationScope==="algunas" && (
+          {form.locationScope==="seleccion" && (
             <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-              {locs.map(l => {
-                const on = form.locations.includes(l.id);
+              {locs.map((l:any) => {
+                const on = form.locationIds.includes(l.id);
                 return (
-                  <button key={l.id} onClick={()=>setForm((f:any)=>({...f, locations: on ? f.locations.filter((x:string)=>x!==l.id) : [...f.locations, l.id]}))}
+                  <button key={l.id} onClick={()=>setForm((f:any)=>({...f, locationIds: on ? f.locationIds.filter((x:string)=>x!==l.id) : [...f.locationIds, l.id]}))}
                     style={{ ...btn(on?"primary":"secondary"), fontSize:12, padding:"6px 12px" }}>
                     {on?"✓ ":""}{l.name}
                   </button>
@@ -127,9 +130,9 @@ const DiscountsAdmin = ({ showToast, onClose }: { showToast: (m:string,t:string)
                 <div style={{ flex:1, minWidth:180 }}>
                   <div style={{ fontWeight:700, fontSize:14 }}>{d.name} {d.code && <span style={{ fontFamily:"monospace", fontSize:11, background:"var(--input-bg)", borderRadius:6, padding:"1px 6px", marginLeft:6 }}>{d.code}</span>}</div>
                   <div style={{ fontSize:12, color:"var(--muted)" }}>
-                    {d.scope==="venta"?"Venta completa":"Por producto"} · {d.type==="fixed"?`−${d.value} fijo`:`−${d.value}%`}
-                    · {d.locationScope==="todas"?"Todas las ubicaciones":`${(d.locations||[]).length} ubicación(es)`}
-                    · Usos: {d.usedCount||0}{d.maxUses?`/${d.maxUses}`:""}
+                    {d.scope==="venta"?"Venta completa":"Por producto"} · {d.type==="fijo"?`−${d.value} fijo`:`−${d.value}%`}
+                    · {d.locationScope==="todas"?"Todas las ubicaciones":`${(d.locationIds||[]).length} ubicación(es)`}
+                    · Usos: {d.timesUsed||0}{d.maxUses?`/${d.maxUses}`:""}
                     {d.active===false && <span style={{ color:"#DC2626", fontWeight:700 }}> · INACTIVO</span>}
                   </div>
                 </div>

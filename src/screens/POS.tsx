@@ -42,7 +42,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   const activeSaleDiscount = discounts.find(d=>d.id===saleDiscountId) || null;
   // El descuento solo aplica en línea (el flujo offline no lo soporta aún)
   const saleDiscAmount = online && activeSaleDiscount ? (() => {
-    if (activeSaleDiscount.type === "fixed") return Math.min(Number(activeSaleDiscount.value), subtotal);
+    if (activeSaleDiscount.type === "fijo") return Math.min(Number(activeSaleDiscount.value), subtotal);
     return subtotal * Number(activeSaleDiscount.value) / 100;
   })() : 0;
   const total = Math.max(0, subtotal - saleDiscAmount);
@@ -317,7 +317,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
               <select style={{ ...sel, fontSize:12, padding:"6px 10px" }} value={saleDiscountId} onChange={e=>setSaleDiscountId(e.target.value)}>
                 <option value="">—</option>
                 {discounts.filter(d=>d.scope==="venta" && d.active!==false).map(d=>(
-                  <option key={d.id} value={d.id}>{d.code || d.name} ({d.type==="fixed"?`-${d.value}`:`-${d.value}%`})</option>
+                  <option key={d.id} value={d.id}>{d.code || d.name} ({d.type==="fijo"?`-${d.value}`:`-${d.value}%`})</option>
                 ))}
               </select>
             </Field>

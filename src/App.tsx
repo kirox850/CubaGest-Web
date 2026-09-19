@@ -14,6 +14,7 @@ import { Toast, OfflineBanner, Badge, Spinner } from "@/components/shared/primit
 import { DialogHost } from "@/components/shared/dialogs";
 import { LegalModal } from "@/components/shared/LegalModal";
 import { WelcomeTour } from "@/components/shared/WelcomeTour";
+import { BrandLogo } from "@/screens/Landing";
 
 import Landing from "@/screens/Landing";
 import LoginScreen from "@/screens/LoginScreen";
@@ -320,9 +321,7 @@ export default function App() {
       {/* Top header */}
       <div style={{ background:"#1E293B", padding:"0 16px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, zIndex:10, boxShadow:"0 1px 8px rgba(0,0,0,0.12)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <div style={{ width:32, height:32, background:"linear-gradient(135deg,#3B82F6,#60A5FA)", borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center" }}>
-            <svg width="18" height="18" viewBox="0 0 32 32" fill="none"><path d="M8 24L16 8L24 24" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M10.5 19h11" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
-          </div>
+          <BrandLogo size={32}/>
           <div style={{ color:"#ffffff", fontWeight:800, fontSize:15 }}>CubaGest</div>
         </div>
         {/* Profile button */}

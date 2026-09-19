@@ -70,7 +70,7 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
           <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"var(--ink)" }}>Usuarios y Roles</h2>
-          <p style={{ margin:0, fontSize:14, color:"var(--muted)" }}>{users.length} usuarios registrados</p>
+          <p style={{ margin:0, fontSize:14, color:"var(--muted)" }}>{users.filter((u:any)=>u.active!==false).length} usuarios activos de {users.length} registrados</p>
         </div>
         <button style={btn("primary")} onClick={openAdd}><Icon name="plus" size={16}/>Nuevo Usuario</button>
       </div>
@@ -98,9 +98,14 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
                   <td style={{ padding:"14px 16px", fontSize:13, color:"var(--ink)" }}>{u.email}</td>
                   <td style={{ padding:"14px 16px" }}><Badge label={ROLES[u.role]?.label||u.role} color={ROLES[u.role]?.color||"#888"}/></td>
                   <td style={{ padding:"14px 16px" }}>
-                    {u.pending
-                      ? <Badge label="Pendiente de activar" color="#F97316"/>
-                      : <Badge label="Activo" color="#10B981"/>}
+                    {/* "Dar de baja" es soft-delete (active=false): el usuario
+                        SIGUE existiendo — por eso lo mostramos con su badge —
+                        y login lo rechaza. No es un bug de borrado. */}
+                    {u.active === false
+                      ? <Badge label="Inactivo (baja)" color="#DC2626"/>
+                      : u.pending
+                        ? <Badge label="Pendiente de activar" color="#F97316"/>
+                        : <Badge label="Activo" color="#10B981"/>}
                   </td>
                   <td style={{ padding:"14px 16px" }}>
                     <div style={{ display:"flex", gap:6 }}>
