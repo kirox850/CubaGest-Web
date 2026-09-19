@@ -5,6 +5,26 @@ body {
   color: #1E293B;
   -webkit-font-smoothing: antialiased;
 }
+/* ── Modo oscuro (base) ──────────────────────────────────────────────
+   La app usa colores inline; esta capa cubre lo global y permite que
+   los módulos vayan migrando con variables cuando se refactorice. */
+html.dark {
+  color-scheme: dark;
+  filter: none;
+}
+html.dark body {
+  background: #0B1220;
+  color: #E2E8F0;
+}
+html.dark ::-webkit-scrollbar-track { background: #0F172A; }
+html.dark ::-webkit-scrollbar-thumb { background: #334155; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+html.dark input, html.dark select, html.dark textarea {
+  background: #1E293B;
+  color: #E2E8F0;
+  border-color: #334155;
+}
+html.dark ::placeholder { color: #64748B; }
 input, select, button, textarea { font-family: inherit; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

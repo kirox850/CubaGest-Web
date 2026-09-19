@@ -96,6 +96,35 @@ async function apiFetch(path: string, opts: { method?: string; body?: object; au
   }
 }
 
+// ─── EXPORT CSV (respaldo por módulo) ───────────────────────────────────────
+// Convierte filas a CSV escapando comillas/comas/saltos, y descarga un archivo
+// con BOM UTF-8 para que Excel lo abra bien con acentos y ñ.
+function toCSV(rows: Record<string, any>[], headers?: { key: string; label: string }[]): string {
+  if (!rows.length) return "";
+  const cols = headers || Object.keys(rows[0]).map(k => ({ key: k, label: k }));
+  const esc = (v: any) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [cols.map(c => esc(c.label)).join(",")];
+  for (const r of rows) lines.push(cols.map(c => esc(r[c.key])).join(","));
+  return lines.join("\n");
+}
+
+function downloadCSV(filename: string, rows: Record<string, any>[], headers?: { key: string; label: string }[]) {
+  const csv = toCSV(rows, headers);
+  if (!csv) return;
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ─── ROLES (igual que backend) ────────────────────────────────────────────────
 const ROLES: Record<string, { label: string; color: string; perms: string[] }> = {
   admin:       { label: "Administrador", color: "#3B82F6", perms: ["dashboard","inventario","facturacion","contabilidad","cierre","usuarios","config","transferencias","auditoria"] },
@@ -105,9 +134,18 @@ const ROLES: Record<string, { label: string; color: string; perms: string[] }> =
 };
 
 const PAY_METHODS = [
-  { id: "efectivo",      label: "Efectivo CUP" },
-  { id: "transferencia", label: "Transferencia (Zun/Enzona)" },
+  { id: "efectivo",      label: "Efectivo" },
+  { id: "transferencia", label: "Transferencia" },
+  { id: "usd",           label: "USD (efectivo)" },
+  { id: "clasica",       label: "Clásica" },
+  { id: "zelle",         label: "Zelle" },
+  { id: "mlc",           label: "MLC" },
+  { id: "eur",           label: "EUR (efectivo)" },
 ];
+
+const CURRENCIES = ["CUP", "USD", "EUR", "MLC"];
+
+const CURRENCY_SYMBOLS: Record<string, string> = { CUP: "$", USD: "$", EUR: "€", MLC: "MLC" };
 
 const CATEGORIES = ["Alimentos","Higiene","Bebidas","Limpieza","Electrónica","Ropa","Otros"];
 const UNITS       = ["ud","kg","g","L","ml","paq","lata","caja","docena"];
@@ -394,6 +432,143 @@ const SetPasswordScreen = ({ token, onDone }: { token: string; onDone: () => voi
   );
 };
 
+// ─── LANDING PAGE (pública, antes del login) ────────────────────────────────
+const LANDING_PLANS = [
+  { key:"free", label:"Free", priceUSD:0, tag:"Para empezar", features:["1 usuario","Hasta 10 productos","100 ventas al mes","Reportes básicos"] },
+  { key:"pro", label:"Pro", priceUSD:5, tag:"El más elegido", features:["3 usuarios","Hasta 50 productos","1.000 ventas al mes","Cierre de caja e inventario","Soporte prioritario"] },
+  { key:"empresarial", label:"Empresarial", priceUSD:10, tag:"Sin límites", features:["Usuarios ilimitados","Productos y ventas ilimitados","Roles y permisos avanzados","Backup y exportación"] },
+];
+
+const LANDING_FEATURES = [
+  { icon:"pos", title:"Vende sin internet", text:"El punto de venta funciona offline: las ventas se guardan y sincronizan solas al volver la conexión." },
+  { icon:"inventario", title:"Inventario multi-ubicación", text:"Controla el stock de tu almacén central y de cada tienda o caja por separado, con envíos entre ellas." },
+  { icon:"facturacion", title:"Facturación con numeración", text:"Facturas con número consecutivo, datos del cliente, descuentos y anulación con registro en auditoría." },
+  { icon:"contabilidad", title:"Contabilidad simple", text:"Registra gastos, mira ingresos por método de pago y conoce tu ganancia neta sin ser contador." },
+  { icon:"cierre", title:"Cierre de caja", text:"Lecturas de caja con validación de stock: cada cajero responde por su dinero y su mercancía." },
+  { icon:"usuarios", title:"Roles y auditoría", text:"Cajero, almacenista y contador solo ven lo suyo. Cada acción queda registrada en el log de auditoría." },
+];
+
+const Landing = ({ onEnter }: { onEnter: () => void }) => (
+  <div style={{ minHeight:"100vh", background:"#F8FAFC", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", color:"#1E293B" }}>
+    {/* Nav */}
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", maxWidth:960, margin:"0 auto" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+        <div style={{ width:34, height:34, background:"linear-gradient(135deg,#3B82F6,#60A5FA)", borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <svg width="19" height="19" viewBox="0 0 32 32" fill="none"><path d="M8 24L16 8L24 24" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M10.5 19h11" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
+        </div>
+        <span style={{ fontWeight:800, fontSize:17 }}>CubaGest</span>
+      </div>
+      <button onClick={onEnter} style={{ ...btn("ghost"), fontSize:14 }}>Iniciar sesión</button>
+    </div>
+
+    {/* Hero */}
+    <div style={{ background:"linear-gradient(135deg,#0F172A 0%,#1E3A5F 55%,#1E293B 100%)", color:"#fff", padding:"56px 24px 64px", textAlign:"center" }}>
+      <div style={{ maxWidth:680, margin:"0 auto" }}>
+        <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:999, padding:"6px 14px", fontSize:13, fontWeight:600, marginBottom:22 }}>
+          ✅ Funciona sin VPN en Cuba
+        </div>
+        <h1 style={{ margin:"0 0 14px", fontSize:38, lineHeight:1.15, fontWeight:800, letterSpacing:"-1px" }}>
+          Gestiona tu negocio<br/>desde el celular
+        </h1>
+        <p style={{ margin:"0 auto 28px", fontSize:16, lineHeight:1.6, color:"#CBD5E1", maxWidth:520 }}>
+          Inventario, punto de venta, facturación y contabilidad en una sola app.
+          Diseñada para bodegas, cafeterías y tiendecitas cubanas — <strong style={{color:"#fff"}}>incluso sin internet</strong>.
+        </p>
+        <button onClick={onEnter} style={{ ...btn("primary"), fontSize:16, padding:"14px 34px", borderRadius:14, boxShadow:"0 10px 30px rgba(59,130,246,0.45)" }}>
+          Crear mi negocio — gratis 30 días
+        </button>
+        <p style={{ margin:"12px 0 0", fontSize:12, color:"#94A3B8" }}>Sin tarjeta · Plan Empresarial completo de prueba · Pago con QvaPay cuando quieras</p>
+
+        {/* Mockup de teléfono */}
+        <div style={{ margin:"44px auto 0", width:230, background:"#0B1220", borderRadius:28, border:"6px solid #1E293B", padding:"14px 12px", boxShadow:"0 30px 60px rgba(0,0,0,0.5)", textAlign:"left" }}>
+          <div style={{ fontSize:10, color:"#94A3B8", marginBottom:8 }}>Hoy · Resumen</div>
+          <div style={{ fontSize:20, fontWeight:800, color:"#fff" }}>$ 12,450</div>
+          <div style={{ fontSize:10, color:"#4ADE80", marginBottom:12 }}>▲ 18% vs. ayer</div>
+          {[72, 45, 90, 60, 34, 80].map((h, i) => (
+            <div key={i} style={{ display:"inline-block", width:18, margin:2, borderRadius:4, background:i===2?"#3B82F6":"#1E3A5F", height:h*0.5, verticalAlign:"bottom" }}/>
+          ))}
+          <div style={{ marginTop:14, background:"#16233B", borderRadius:10, padding:"8px 10px", fontSize:10, color:"#CBD5E1" }}>
+            🧾 Factura #0231 — $1,250 <span style={{ color:"#4ADE80" }}>pagada</span>
+          </div>
+          <div style={{ marginTop:6, background:"#16233B", borderRadius:10, padding:"8px 10px", fontSize:10, color:"#CBD5E1" }}>
+            ⚠️ Refresco La Tropical — quedan 4
+          </div>
+          <div style={{ marginTop:10, background:"linear-gradient(135deg,#3B82F6,#60A5FA)", borderRadius:10, padding:"9px 0", textAlign:"center", fontSize:11, fontWeight:700, color:"#fff" }}>
+            + Vender
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Features */}
+    <div style={{ maxWidth:960, margin:"0 auto", padding:"52px 20px" }}>
+      <h2 style={{ textAlign:"center", fontSize:26, fontWeight:800, margin:"0 0 8px" }}>Todo lo que tu negocio necesita</h2>
+      <p style={{ textAlign:"center", color:"#64748B", margin:"0 0 32px", fontSize:14 }}>Sin planillas de Excel, sin cuadernos, sin dolores de cabeza.</p>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))", gap:14 }}>
+        {LANDING_FEATURES.map(f => (
+          <div key={f.title} style={{ background:"#fff", borderRadius:16, padding:"22px 20px", border:"1px solid #E2E8F0" }}>
+            <div style={{ width:40, height:40, borderRadius:12, background:"#EFF6FF", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
+              <Icon name={f.icon} size={20} color="#3B82F6"/>
+            </div>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:6 }}>{f.title}</div>
+            <div style={{ fontSize:13, color:"#64748B", lineHeight:1.55 }}>{f.text}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Cómo funciona */}
+    <div style={{ background:"#fff", borderTop:"1px solid #E2E8F0", borderBottom:"1px solid #E2E8F0", padding:"48px 20px" }}>
+      <div style={{ maxWidth:820, margin:"0 auto" }}>
+        <h2 style={{ textAlign:"center", fontSize:24, fontWeight:800, margin:"0 0 28px" }}>Empieza a vender en 3 pasos</h2>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))", gap:18 }}>
+          {[
+            { n:1, t:"Crea tu cuenta", d:"Registra tu negocio con tu correo. 30 días del plan completo gratis." },
+            { n:2, t:"Agrega tus productos", d:"Carga tu inventario con precios y stock por ubicación. Toma 10 minutos." },
+            { n:3, t:"Vende y crece", d:"Cobra, factura y mira tus números. Funciona con o sin internet." },
+          ].map(s => (
+            <div key={s.n} style={{ textAlign:"center", padding:"0 8px" }}>
+              <div style={{ width:44, height:44, borderRadius:"50%", background:"#3B82F6", color:"#fff", fontSize:19, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px" }}>{s.n}</div>
+              <div style={{ fontWeight:700, marginBottom:6 }}>{s.t}</div>
+              <div style={{ fontSize:13, color:"#64748B", lineHeight:1.55 }}>{s.d}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    {/* Precios */}
+    <div style={{ maxWidth:960, margin:"0 auto", padding:"52px 20px" }}>
+      <h2 style={{ textAlign:"center", fontSize:26, fontWeight:800, margin:"0 0 8px" }}>Precios claros, en USD</h2>
+      <p style={{ textAlign:"center", color:"#64748B", margin:"0 0 32px", fontSize:14 }}>Empieza gratis. Paga solo cuando tu negocio lo necesite.</p>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))", gap:16, maxWidth:860, margin:"0 auto" }}>
+        {LANDING_PLANS.map(p => (
+          <div key={p.key} style={{ background:p.key==="pro"?"#0F172A":"#fff", color:p.key==="pro"?"#fff":"#1E293B", borderRadius:18, padding:"26px 22px", border:p.key==="pro"?"none":"1px solid #E2E8F0", position:"relative" }}>
+            {p.key==="pro" && <div style={{ position:"absolute", top:-11, left:"50%", transform:"translateX(-50%)", background:"#3B82F6", color:"#fff", fontSize:11, fontWeight:700, borderRadius:999, padding:"4px 12px" }}>{p.tag}</div>}
+            <div style={{ fontWeight:800, fontSize:17, marginBottom:2 }}>{p.label}</div>
+            {p.key!=="pro" && <div style={{ fontSize:12, color:"#94A3B8", marginBottom:8 }}>{p.tag}</div>}
+            <div style={{ fontSize:34, fontWeight:800, margin:"8px 0 14px" }}>${p.priceUSD}<span style={{ fontSize:13, fontWeight:400, color:p.key==="pro"?"#94A3B8":"#64748B" }}>/mes</span></div>
+            {p.features.map(f => <div key={f} style={{ fontSize:13, padding:"5px 0", color:p.key==="pro"?"#CBD5E1":"#475569" }}>✓ {f}</div>)}
+            <button onClick={onEnter} style={{ ...(p.key==="pro"?btn("primary"):btn("ghost")), width:"100%", justifyContent:"center", marginTop:16 }}>{p.priceUSD===0?"Empezar gratis":"Elegir plan"}</button>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* CTA final */}
+    <div style={{ background:"linear-gradient(135deg,#1E3A5F,#0F172A)", color:"#fff", padding:"52px 24px", textAlign:"center" }}>
+      <h2 style={{ margin:"0 0 10px", fontSize:26, fontWeight:800 }}>¿Listo para organizar tu negocio?</h2>
+      <p style={{ margin:"0 0 24px", color:"#CBD5E1", fontSize:15 }}>Crea tu cuenta hoy y ten tu primera factura en 10 minutos.</p>
+      <button onClick={onEnter} style={{ ...btn("primary"), fontSize:16, padding:"14px 34px", borderRadius:14 }}>Crear mi negocio</button>
+    </div>
+
+    {/* Footer */}
+    <div style={{ padding:"26px 20px", textAlign:"center", fontSize:12, color:"#94A3B8" }}>
+      © {new Date().getFullYear()} CubaGest · Sistema de gestión empresarial
+    </div>
+  </div>
+);
+
 const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
@@ -404,7 +579,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
-  const [regForm, setRegForm]   = useState({ companyName:"", companyNit:"", name:"", email:"", password:"", password2:"" });
+  const [regForm, setRegForm]   = useState({ companyName:"", companyNit:"", name:"", email:"", password:"", password2:"", referralCode:"" });
   const [regError, setRegError] = useState("");
   const [regLoading, setRegLoading] = useState(false);
 
@@ -436,7 +611,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
     try {
       const res = await apiFetch("/auth/register", {
         method: "POST",
-        body: { companyName: regForm.companyName, companyNit: regForm.companyNit || undefined, name: regForm.name, email: regForm.email, password: regForm.password },
+        body: { companyName: regForm.companyName, companyNit: regForm.companyNit || undefined, name: regForm.name, email: regForm.email, password: regForm.password, referralCode: (regForm.referralCode||"").trim().toUpperCase() || undefined },
         auth: false,
       });
       const token = res.accessToken || res.token;
@@ -494,8 +669,11 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
             ¿Olvidaste tu contraseña?
           </button>
         </div>
-        <button style={{ ...btn("ghost"), width:"100%", justifyContent:"center", marginTop:8, fontSize:13 }} onClick={()=>setShowRegister(true)}>
+          <button style={{ ...btn("ghost"), width:"100%", justifyContent:"center", marginTop:8, fontSize:13 }} onClick={()=>setShowRegister(true)}>
           Crear mi negocio (primera vez)
+        </button>
+        <button style={{ background:"none", border:"none", color:"#94A3B8", fontSize:12, cursor:"pointer", marginTop:14 }} onClick={()=>setShowLanding(true)}>
+          ← Volver al inicio
         </button>
         <p style={{ textAlign:"center", marginTop:16, fontSize:11, color:"#b0a090" }}>Sistema de gestión empresarial · CubaGest</p>
       </div>
@@ -546,6 +724,10 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
                 <input style={inp} value={regForm.companyNit} onChange={e=>setRegForm(f=>({...f,companyNit:e.target.value}))} placeholder="12345678901" maxLength={11}/>
               </div>
               <div style={{ height:1, background:"#E2E8F0" }}/>
+              <div>
+                <label style={{ fontSize:12, fontWeight:600, color:"#64748B", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:5 }}>Código de referido <span style={{ fontWeight:400, color:"#94A3B8" }}>(opcional)</span></label>
+                <input style={inp} value={regForm.referralCode} onChange={e=>setRegForm(f=>({...f,referralCode:e.target.value.toUpperCase()}))} placeholder="Si un amigo te invitó, pon su código" maxLength={10}/>
+              </div>
               <div>
                 <label style={{ fontSize:12, fontWeight:600, color:"#64748B", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:5 }}>Su nombre completo *</label>
                 <input style={inp} value={regForm.name} onChange={e=>setRegForm(f=>({...f,name:e.target.value}))} placeholder="Ej: Ana García"/>
@@ -626,11 +808,22 @@ const Dashboard = ({ user }: { user: any }) => {
     }
   }, [dashOnline]);
 
+  // Analítica (mes vs mes, top productos, tendencia, muertos) — hook ANTES de
+  // cualquier return condicional para respetar las reglas de React.
+  const [analytics, setAnalytics] = useState<any>(null);
+  useEffect(() => {
+    apiFetch("/dashboard/analytics").then(setAnalytics).catch(() => {});
+  }, []);
+
   if (loading) return <Spinner/>;
   if (!summary && error) return <div style={{ color:"#3B82F6", padding:24 }}>Error: {error}</div>;
   if (!summary) return null;
 
-  const { totalRevenue=0, totalExpenses=0, netProfit=0, salesCount=0, lowStockProducts=[] } = summary;
+  const byCurrency: Record<string, { revenue: number; expenses: number }> = summary?.byCurrency || {};
+  const salesCount: number = summary?.salesCount || 0;
+  const lowStockProducts: any[] = summary?.lowStock || [];
+  const todayCount: number = summary?.todaySalesCount || 0;
+  const chartDays: { date: string; total: number }[] = summary?.chartDays || [];
 
   const StatCard = ({ label, value, sub, color, icon }: any) => (
     <div style={{ background:"#ffffff", borderRadius:16, padding:"22px 24px", border:"1px solid #e8e0d8", display:"flex", flexDirection:"column", gap:8 }}>
@@ -647,6 +840,11 @@ const Dashboard = ({ user }: { user: any }) => {
     </div>
   );
 
+  const maxChart = Math.max(1, ...chartDays.map(d=>d.total));
+  const trend = analytics?.trend30 || [];
+  const maxTrend = Math.max(1, ...trend.map((d:any)=>d.total));
+  const rev = analytics?.revenueByCurrency || {};
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
       <div>
@@ -654,12 +852,104 @@ const Dashboard = ({ user }: { user: any }) => {
         <p style={{ margin:0, fontSize:14, color:"#64748B" }}>Bienvenido, {user.name} · {ROLES[user.role]?.label}</p>
         {error && <p style={{ margin:"4px 0 0", fontSize:12, color:"#F97316" }}>⚡ {error}</p>}
       </div>
+
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:16 }}>
-        <StatCard label="Ingresos del Mes"   value={`$${fmt(totalRevenue)} CUP`}  sub={`${salesCount} facturas emitidas`}                                color="#10B981" icon="trend_up"/>
-        <StatCard label="Gastos del Mes"     value={`$${fmt(totalExpenses)} CUP`} sub="Total de egresos registrados"                                    color="#3B82F6" icon="contabilidad"/>
-        <StatCard label="Utilidad Neta"      value={`$${fmt(netProfit)} CUP`}     sub={`Margen: ${Math.round(netProfit/Math.max(totalRevenue,1)*100)}%`} color={netProfit>=0?"#3B82F6":"#3B82F6"} icon="facturacion"/>
-        <StatCard label="Alertas de Stock"   value={lowStockProducts.length}      sub={lowStockProducts.length ? lowStockProducts.map((p:any)=>p.name).join(", ").slice(0,60) : "Todos los productos OK"} color={lowStockProducts.length?"#F97316":"#10B981"} icon="alert"/>
+        <StatCard label="Ventas de Hoy" value={`${todayCount}`} sub={`${fmt(summary?.todaySalesTotal||0)} en el día`} color="#10B981" icon="pos"/>
+        <StatCard label="Facturas Emitidas" value={`${salesCount}`} sub="Histórico total" color="#3B82F6" icon="facturacion"/>
+        <StatCard label="Alertas de Stock" value={lowStockProducts.length} sub={lowStockProducts.length ? lowStockProducts.map((p:any)=>p.name).join(", ").slice(0,60) : "Todos los productos OK"} color={lowStockProducts.length?"#F97316":"#10B981"} icon="alert"/>
       </div>
+
+      {/* Ingresos/gastos POR MONEDA — nunca se convierten entre sí */}
+      {Object.keys(byCurrency).length > 0 && (
+        <div>
+          <h3 style={{ margin:"0 0 10px", fontSize:15, fontWeight:800, color:"#1E293B" }}>Ingresos y gastos por moneda</h3>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:12 }}>
+            {Object.entries(byCurrency).map(([cur, v]) => (
+              <div key={cur} style={{ background:"#ffffff", borderRadius:14, border:"1px solid #e8e0d8", padding:"14px 16px" }}>
+                <div style={{ fontSize:12, fontWeight:700, color:"#64748B", marginBottom:6 }}>{cur}</div>
+                <div style={{ fontSize:20, fontWeight:800, color:"#10B981" }}>{cur==="EUR"?"€":"$"}{fmt(v.revenue)}</div>
+                <div style={{ fontSize:12, color:"#3B82F6", marginTop:2 }}>Gastos: {cur==="EUR"?"€":"$"}{fmt(v.expenses)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Gráfico 7 días */}
+      {chartDays.length > 0 && (
+        <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", padding:20 }}>
+          <h3 style={{ margin:"0 0 14px", fontSize:15, fontWeight:800, color:"#1E293B" }}>Últimos 7 días</h3>
+          <div style={{ display:"flex", alignItems:"flex-end", gap:8, height:90 }}>
+            {chartDays.map(d => (
+              <div key={d.date} style={{ flex:1, textAlign:"center" }} title={`${d.date}: ${fmt(d.total)}`}>
+                <div style={{ height:Math.max(4, (d.total/maxChart)*70), background:"#3B82F6", borderRadius:4, margin:"0 auto", width:"60%" }}/>
+                <div style={{ fontSize:9, color:"#94A3B8", marginTop:4 }}>{d.date.slice(5)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Analítica — inteligencia de negocio */}
+      {analytics && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:16 }}>
+          <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", padding:20 }}>
+            <h3 style={{ margin:"0 0 12px", fontSize:15, fontWeight:800, color:"#1E293B" }}>Mes vs. mes anterior</h3>
+            {Object.entries(rev).map(([cur, v]: any) => (
+              <div key={cur} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:"1px solid #F1F5F9" }}>
+                <div>
+                  <strong style={{ fontSize:14 }}>{cur}</strong>
+                  <div style={{ fontSize:11, color:"#64748B" }}>{fmt(v.thisMonth)} vs {fmt(v.prevMonth)} mes anterior</div>
+                </div>
+                {v.deltaPct !== null && (
+                  <span style={{ fontSize:13, fontWeight:800, color:v.deltaPct>=0?"#10B981":"#DC2626" }}>
+                    {v.deltaPct>=0?"▲":"▼"} {Math.abs(v.deltaPct)}%
+                  </span>
+                )}
+              </div>
+            ))}
+            {Object.keys(rev).length===0 && <p style={{ fontSize:13, color:"#64748B", margin:0 }}>Sin ventas registradas todavía.</p>}
+          </div>
+
+          <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", padding:20 }}>
+            <h3 style={{ margin:"0 0 12px", fontSize:15, fontWeight:800, color:"#1E293B" }}>Top productos (histórico)</h3>
+            {(analytics.topProducts||[]).length===0 && <p style={{ fontSize:13, color:"#64748B", margin:0 }}>Sin datos aún.</p>}
+            {(analytics.topProducts||[]).map((p:any, i:number) => (
+              <div key={p.name} style={{ display:"flex", alignItems:"center", gap:10, padding:"5px 0" }}>
+                <span style={{ width:22, height:22, borderRadius:"50%", background:i===0?"#3B82F6":"#E2E8F0", color:i===0?"#fff":"#475569", fontSize:11, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{i+1}</span>
+                <span style={{ flex:1, fontSize:13, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</span>
+                <span style={{ fontSize:12, color:"#64748B" }}>{p.qty} u · {fmt(p.revenue)}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", padding:20 }}>
+            <h3 style={{ margin:"0 0 6px", fontSize:15, fontWeight:800, color:"#1E293B" }}>Tendencia 30 días</h3>
+            <div style={{ display:"flex", alignItems:"flex-end", gap:2, height:60 }}>
+              {trend.map((d:any) => (
+                <div key={d.date} title={`${d.date}: ${fmt(d.total)}`} style={{ flex:1, height:Math.max(2,(d.total/maxTrend)*54), background:d.total>0?"#60A5FA":"#E2E8F0", borderRadius:2 }}/>
+              ))}
+            </div>
+            <p style={{ margin:"8px 0 0", fontSize:11, color:"#94A3B8" }}>Suma de todas las monedas por día (las monedas no se convierten entre sí).</p>
+          </div>
+
+          <div style={{ background:"#ffffff", borderRadius:16, border:"1px solid #e8e0d8", padding:20 }}>
+            <h3 style={{ margin:"0 0 10px", fontSize:15, fontWeight:800, color:"#1E293B" }}>Sin ventas hace 30 días</h3>
+            {(analytics.deadProducts||[]).length===0 ? (
+              <p style={{ fontSize:13, color:"#10B981", margin:0 }}>✅ Todo tu inventario se ha movido recientemente.</p>
+            ) : (
+              <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                {analytics.deadProducts.slice(0,12).map((p:any) => (
+                  <div key={p.id} style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:10, padding:"6px 10px", fontSize:12 }}>
+                    <strong>{p.name}</strong> <span style={{ color:"#DC2626" }}>stock: {p.stock} {p.unit}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {lowStockProducts.length > 0 && (
         <div style={{ background:"#FFF7ED", border:"1px solid #f0d070", borderRadius:16, padding:20 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
@@ -698,6 +988,10 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
 
   const canManage = ["admin","almacenista"].includes(user.role);
   const isAlmacen = locationInfo?.type === "almacen";
+  const [availCurrencies, setAvailCurrencies] = useState<string[]>(["CUP"]);
+  useEffect(() => {
+    apiFetch("/settings").then((s:any)=>{ if (s?.currencies?.length) setAvailCurrencies(s.currencies); }).catch(()=>{});
+  }, []);
 
   const invOnline = useOnlineStatus();
 
@@ -749,11 +1043,11 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
 
   const filtered = products.filter(p =>
     (filterCat==="Todas" || p.category===filterCat) &&
-    (p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase()))
+    (p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase()) || String(p.barcode||"").toLowerCase().includes(search.toLowerCase()))
   );
   const cats = ["Todas", ...Array.from(new Set(products.map(p=>p.category).filter(Boolean)))];
 
-  const openAdd  = () => { setForm({ code:`P${String(products.length+1).padStart(3,"0")}`, name:"", category:"Alimentos", unit:"ud", price:"", cost:"", stock:"", minStock:"10" }); setModal("add"); };
+  const openAdd  = () => { setForm({ code:`P${String(products.length+1).padStart(3,"0")}`, barcode:"", currency:"CUP", name:"", category:"Alimentos", unit:"ud", price:"", cost:"", stock:"", minStock:"10" }); setModal("add"); };
   const openEdit = (p:any) => { setForm({...p, price:String(p.price), cost:String(p.cost||""), stock:String(p.stock), minStock:String(p.minStock||"")}); setSelected(p); setModal("edit"); };
   const openAdjust = (p:any) => { setSelected(p); setAdjustQty(""); setAdjustType("entrada"); setModal("adjust"); };
 
@@ -761,7 +1055,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
     if (!form.name||!form.price) return showToast("Complete los campos requeridos","error");
     setSaving(true);
     try {
-      const payload = { code:form.code, name:form.name, category:form.category, unit:form.unit, price:Number(form.price), cost:Number(form.cost)||0, stock:Number(form.stock)||0, minStock:Number(form.minStock)||0 };
+      const payload = { code:form.code, barcode:(form.barcode||"").trim() || undefined, currency: form.currency || "CUP", name:form.name, category:form.category, unit:form.unit, price:Number(form.price), cost:Number(form.cost)||0, stock:Number(form.stock)||0, minStock:Number(form.minStock)||0 };
       if (modal==="add") {
         await apiFetch("/products", { method:"POST", body:payload });
         showToast("Producto creado en Almacén Central","success");
@@ -817,6 +1111,11 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
+          <button style={btn("secondary")} onClick={() => downloadCSV("inventario", products, [
+            { key:"code", label:"Código" },{ key:"name", label:"Producto" },{ key:"category", label:"Categoría" },
+            { key:"unit", label:"Unidad" },{ key:"price", label:"Precio" },{ key:"cost", label:"Costo" },
+            { key:"stock", label:"Stock" },{ key:"minStock", label:"Mínimo" },{ key:"active", label:"Activo" },
+          ])}><Icon name="doc" size={15}/>CSV</button>
           {canManage && isAlmacen && invOnline && <button style={btn("primary")} onClick={openAdd}><Icon name="plus" size={16}/>Nuevo Producto</button>}
           {canManage && !invOnline && <span style={{ fontSize:12, color:"#F97316", padding:"8px 0" }}>Edición requiere conexión</span>}
         </div>
@@ -862,7 +1161,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
                   <td style={{ padding:"11px 14px", fontSize:12, fontWeight:600, color:"#64748B", fontFamily:"monospace" }}>{p.code}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#1E293B" }}>{p.name} <span style={{ fontSize:11, color:"#aaa", fontWeight:400 }}>/{p.unit}</span></td>
                   <td style={{ padding:"11px 14px" }}><Badge label={p.category||"—"} color="#5a3a1a"/></td>
-                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(p.price)}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>{p.currency==="EUR"?"€":"$"}{fmt(p.price)} <span style={{ fontWeight:400, color:"#94A3B8", fontSize:11 }}>{p.currency||"CUP"}</span></td>
                   <td style={{ padding:"11px 14px", fontSize:13, color:"#475569" }}>${fmt(p.cost)}</td>
                   <td style={{ padding:"11px 14px" }}>
                     <span style={{ fontWeight:700, color:p.stock<=p.minStock?"#F97316":"#10B981", fontSize:14 }}>{p.stock}</span>
@@ -900,7 +1199,13 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
                 {UNITS.map(u=><option key={u}>{u}</option>)}
               </select>
             </Field>
-            <Field label="Precio Venta (CUP)" required><input style={inp} type="number" value={form.price||""} onChange={e=>setForm((f:any)=>({...f,price:e.target.value}))}/></Field>
+            <Field label="Código de Barras"><input style={inp} value={form.barcode||""} onChange={e=>setForm((f:any)=>({...f,barcode:e.target.value}))} placeholder="Escanea o digita el código (opcional)"/></Field>
+            <Field label="Moneda del precio">
+              <select style={sel} value={form.currency||"CUP"} onChange={e=>setForm((f:any)=>({...f,currency:e.target.value}))}>
+                {availCurrencies.map((m)=> <option key={m} value={m}>{m}</option>)}
+              </select>
+            </Field>
+            <Field label={`Precio Venta (${form.currency||"CUP"})`} required><input style={inp} type="number" value={form.price||""} onChange={e=>setForm((f:any)=>({...f,price:e.target.value}))}/></Field>
             <Field label="Costo (CUP)"><input style={inp} type="number" value={form.cost||""} onChange={e=>setForm((f:any)=>({...f,cost:e.target.value}))}/></Field>
             {modal==="add" && <Field label="Stock Inicial (entra al Almacén Central)"><input style={inp} type="number" value={form.stock||""} onChange={e=>setForm((f:any)=>({...f,stock:e.target.value}))}/></Field>}
             <Field label="Stock Mínimo"><input style={inp} type="number" value={form.minStock||""} onChange={e=>setForm((f:any)=>({...f,minStock:e.target.value}))}/></Field>
@@ -950,11 +1255,34 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   const [cashGiven, setCashGiven]   = useState("");
   const [lastReceipt, setLastReceipt] = useState<any>(null);
   const [processing, setProcessing]   = useState(false);
+  const [saleCurrency, setSaleCurrency] = useState("CUP");
+  const [currencies, setCurrencies]     = useState<string[]>(["CUP"]);
+  const [discounts, setDiscounts]       = useState<any[]>([]);
+  const [saleDiscountId, setSaleDiscountId] = useState("");
+  const [cameraOpen, setCameraOpen]     = useState(false);
+  const [camMsg, setCamMsg]             = useState("");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const scanTimer = useRef<any>(null);
+
+  // Config de empresa (monedas habilitadas) + descuentos de tipo venta
+  useEffect(() => {
+    apiFetch("/settings").then((s: any) => {
+      if (s?.currencies?.length) setCurrencies(s.currencies);
+    }).catch(() => {});
+    apiFetch("/discounts").then((d: any[]) => setDiscounts(d || [])).catch(() => {});
+  }, []);
 
   const subtotal = cart.reduce((a,i)=>a+i.price*i.qty,0);
-  const total    = subtotal;
+  const activeSaleDiscount = discounts.find(d=>d.id===saleDiscountId) || null;
+  // El descuento solo aplica en línea (el flujo offline no lo soporta aún)
+  const saleDiscAmount = online && activeSaleDiscount ? (() => {
+    if (activeSaleDiscount.type === "fixed") return Math.min(Number(activeSaleDiscount.value), subtotal);
+    return subtotal * Number(activeSaleDiscount.value) / 100;
+  })() : 0;
+  const total = Math.max(0, subtotal - saleDiscAmount);
   const change   = Number(cashGiven) - total;
   const needsTransferData = payMethod === "transferencia";
+  const curSym = CURRENCY_SYMBOLS[saleCurrency] || "$";
 
   const online = useOnlineStatus();
 
@@ -993,9 +1321,89 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
     }
   },[online]);
 
-  const avail = products.filter(p=>p.name.toLowerCase().includes(search.toLowerCase()));
+  const q = search.trim().toLowerCase();
+  const avail = products.filter(p =>
+    p.name.toLowerCase().includes(q) ||
+    String(p.code||"").toLowerCase().includes(q) ||
+    String(p.barcode||"").toLowerCase().includes(q)
+  );
 
   const qtyFor = (id:string) => cart.find(i=>i.id===id)?.qty || 0;
+
+  // Añadir al carrito (clic en lista y escáner)
+  const addToCart = (p:any) => {
+    const cur = qtyFor(p.id);
+    if (cur + 1 > p.stock) { showToast(`Stock insuficiente de ${p.name}`, "warning"); return; }
+    setCart(prev => {
+      const ex = prev.find(i=>i.id===p.id);
+      if (ex) return prev.map(i=>i.id===p.id?{...i, qty:i.qty+1}:i);
+      return [...prev, {...p, qty:1}];
+    });
+  };
+
+  // Lectores USB/Bluetooth: "escriben" el código y dan Enter. Si lo tecleado
+  // matchea exactamente un barcode/código, se agrega al carrito y se limpia.
+  const tryBarcodeSearch = (raw: string) => {
+    const v = raw.trim().toLowerCase();
+    if (!v) return false;
+    const matches = products.filter(p =>
+      String(p.barcode||"").toLowerCase() === v || String(p.code||"").toLowerCase() === v
+    );
+    if (matches.length === 1) {
+      addToCart(matches[0]);
+      setSearch("");
+      return true;
+    }
+    return false;
+  };
+
+  // ── Escáner por cámara (BarcodeDetector API — sin dependencias) ────────────
+  const stopCamera = () => {
+    if (scanTimer.current) { clearInterval(scanTimer.current); scanTimer.current = null; }
+    const v = videoRef.current;
+    const stream = (v?.srcObject as MediaStream | null) || null;
+    stream?.getTracks().forEach(t => t.stop());
+    if (v) v.srcObject = null;
+    setCameraOpen(false);
+  };
+
+  const startCamera = async () => {
+    const AnyWin = window as any;
+    if (!AnyWin.BarcodeDetector) {
+      showToast("Este navegador no soporta escaneo por cámara. Usa un lector USB o digita el código.", "warning");
+      return;
+    }
+    setCameraOpen(true);
+    setCamMsg("Iniciando cámara...");
+    try {
+      const detector = new AnyWin.BarcodeDetector({ formats: ["ean_13","ean_8","code_128","code_39","upc_a","upc_e","qr_code"] });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      setTimeout(() => {
+        const v = videoRef.current;
+        if (!v) return;
+        v.srcObject = stream;
+        v.setAttribute("playsinline", "true");
+        v.play().catch(()=>{});
+        setCamMsg("Apunta al código de barras");
+        scanTimer.current = setInterval(async () => {
+          try {
+            if (!videoRef.current || videoRef.current.readyState < 2) return;
+            const codes = await detector.detect(videoRef.current);
+            if (codes?.length) {
+              const val = codes[0].rawValue;
+              const match = products.find(p => String(p.barcode||"") === val || String(p.code||"") === val);
+              if (match) { addToCart(match); showToast(`${match.name} agregado`, "success"); }
+              else showToast(`Código ${val} sin producto asociado`, "warning");
+            }
+          } catch { /* frame inválido, ignorar */ }
+        }, 350);
+      }, 50);
+    } catch {
+      setCamMsg("No se pudo acceder a la cámara");
+    }
+  };
+
+  useEffect(() => () => stopCamera(), []);
 
   const setQty = (p:any, newQty:number) => {
     if (newQty <= 0) { setCart(prev=>prev.filter(i=>i.id!==p.id)); return; }
@@ -1017,14 +1425,15 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
     setProcessing(true);
     try {
       const saleData = {
-        client: needsTransferData ? clientName : "Consumidor Final",
+        clientName: needsTransferData ? clientName : "Consumidor Final",
         clientNit: needsTransferData ? clientNit : "00000000000",
         clientPhone: needsTransferData ? clientPhone : undefined,
         items: cart.map(i=>({ productId:i.id, name:i.name, qty:i.qty, price:i.price, total:i.price*i.qty })),
         payMethod,
-        subtotal: cart.reduce((a,i)=>a+i.price*i.qty,0),
-        total: cart.reduce((a,i)=>a+i.price*i.qty,0),
-        currency:"CUP",
+        subtotal,
+        total,
+        discountId: online && saleDiscountId ? saleDiscountId : undefined,
+        currency: saleCurrency,
       };
 
       if (!online) {
@@ -1032,7 +1441,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
         const offlineSale = await saveSaleOffline(saleData);
         setLastReceipt({ ...offlineSale, id: offlineSale.localId, isOffline: true });
         setCart([]);
-        setSearch(""); setCashGiven("");
+        setSearch(""); setCashGiven(""); setSaleDiscountId("");
         setClientName(""); setClientNit(""); setClientPhone("");
         // Actualizar lista con stock local
         const cached = await getOfflineProducts();
@@ -1049,7 +1458,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
         }
         setLastReceipt(invoice);
         setCart([]);
-        setSearch(""); setCashGiven("");
+        setSearch(""); setCashGiven(""); setSaleDiscountId("");
         setClientName(""); setClientNit(""); setClientPhone("");
         showToast(`Factura ${invoice.id} emitida correctamente`,"success");
       }
@@ -1068,8 +1477,24 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
       {/* Buscador fijo */}
       <div style={{ position:"relative", flexShrink:0, marginBottom:10 }}>
         <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}><Icon name="search" size={15} color="#64748B"/></span>
-        <input style={{ ...inp, paddingLeft:34 }} placeholder="Buscar producto..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        <input style={{ ...inp, paddingLeft:34, paddingRight:88 }} placeholder="Buscar producto o escanear..." value={search}
+          onChange={e=>setSearch(e.target.value)}
+          onKeyDown={e=>{ if (e.key==="Enter") { if (tryBarcodeSearch(search)) return; const one = avail.length===1 ? avail[0] : null; if (one) { addToCart(one); setSearch(""); } } }}/>
+        <button onClick={startCamera} title="Escanear código de barras" style={{ position:"absolute", right:44, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", padding:4 }}>
+          <Icon name="auditoria" size={18} color="#3B82F6"/>
+        </button>
+        <button onClick={()=>{ if (tryBarcodeSearch(search)) return; const one = avail.length===1 ? avail[0] : null; if (one) { addToCart(one); setSearch(""); } }} title="Agregar coincidencia única" style={{ position:"absolute", right:6, top:"50%", transform:"translateY(-50%)", background:"#EFF6FF", border:"none", borderRadius:8, cursor:"pointer", padding:"4px 7px", color:"#3B82F6", fontWeight:800, fontSize:13 }}>+</button>
       </div>
+
+      {cameraOpen && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:1200, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={stopCamera}>
+          <div style={{ background:"#0F172A", borderRadius:16, padding:14, maxWidth:420, width:"100%" }} onClick={e=>e.stopPropagation()}>
+            <video ref={videoRef} style={{ width:"100%", borderRadius:12, background:"#000", minHeight:260 }} muted playsInline/>
+            <p style={{ color:"#CBD5E1", fontSize:13, textAlign:"center", margin:"10px 0" }}>{camMsg}</p>
+            <button style={{ ...btn("secondary"), width:"100%", justifyContent:"center" }} onClick={stopCamera}>Cerrar cámara</button>
+          </div>
+        </div>
+      )}
 
       {/* Lista de productos — scroll independiente */}
       <div style={{ flex:1, overflowY:"auto", marginBottom:10, WebkitOverflowScrolling:"touch" as any }}>
@@ -1081,7 +1506,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
                 <div key={p.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", borderTop: idx===0?"none":"1px solid #f0ebe4" }}>
                   <div style={{ flex:1, minWidth:0 }}>
                     <p style={{ margin:0, fontSize:13, fontWeight:700, color:"#1E293B", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</p>
-                    <p style={{ margin:0, fontSize:11, color:"#64748B" }}>Stock: {p.stock} {p.unit} · ${fmt(p.price)}</p>
+                    <p style={{ margin:0, fontSize:11, color:"#64748B" }}>Stock: {p.stock} {p.unit} · {curSym}{fmt(p.price)}</p>
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
                     <button onClick={()=>setQty(p, q-1)} disabled={q===0} style={{ width:28, height:28, background:"#E2E8F0", border:"none", borderRadius:8, cursor:q===0?"default":"pointer", opacity:q===0?0.4:1, display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="minus" size={13}/></button>
@@ -1116,11 +1541,26 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
         )}
 
         <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" as any }}>
+          <Field label="Moneda">
+            <select style={{ ...sel, fontSize:12, padding:"6px 10px" }} value={saleCurrency} onChange={e=>setSaleCurrency(e.target.value)}>
+              {currencies.map(m=><option key={m} value={m}>{m}</option>)}
+            </select>
+          </Field>
           <Field label="Pago">
             <select style={{ ...sel, fontSize:12, padding:"6px 10px" }} value={payMethod} onChange={e=>setPayMethod(e.target.value)}>
               {PAY_METHODS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
           </Field>
+          {online && discounts.length>0 && (
+            <Field label="Descuento">
+              <select style={{ ...sel, fontSize:12, padding:"6px 10px" }} value={saleDiscountId} onChange={e=>setSaleDiscountId(e.target.value)}>
+                <option value="">—</option>
+                {discounts.filter(d=>d.scope==="venta" && d.active!==false).map(d=>(
+                  <option key={d.id} value={d.id}>{d.code || d.name} ({d.type==="fixed"?`-${d.value}`:`-${d.value}%`})</option>
+                ))}
+              </select>
+            </Field>
+          )}
           {payMethod==="efectivo" && (
             <Field label="Efectivo">
               <input style={{ ...inp, fontSize:12, padding:"6px 10px" }} type="number" value={cashGiven} onChange={e=>setCashGiven(e.target.value)} placeholder="0.00"/>
@@ -1129,7 +1569,14 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
         </div>
 
         {payMethod==="efectivo" && cashGiven && Number(cashGiven)>=total && (
-          <p style={{ margin:0, fontSize:13, fontWeight:700, color:"#10B981" }}>Cambio: ${fmt(change)} CUP</p>
+          <p style={{ margin:0, fontSize:13, fontWeight:700, color:"#10B981" }}>Cambio: {curSym}{fmt(change)} {saleCurrency}</p>
+        )}
+
+        {saleDiscAmount>0 && (
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#DC2626" }}>
+            <span>Descuento ({activeSaleDiscount?.code || activeSaleDiscount?.name}):</span>
+            <span>-{curSym}{fmt(saleDiscAmount)}</span>
+          </div>
         )}
 
         {needsTransferData && (
@@ -1143,7 +1590,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
         )}
 
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div style={{ fontSize:18, fontWeight:800, color:"#1E293B" }}>Total: ${fmt(total)} CUP</div>
+          <div style={{ fontSize:18, fontWeight:800, color:"#1E293B" }}>Total: {curSym}{fmt(total)} {saleCurrency}</div>
           <button style={{ ...btn("primary"), padding:"10px 20px", fontSize:14, opacity:processing?0.6:1, background:"#10B981", boxShadow:"0 4px 12px rgba(16,185,129,0.3)" }} onClick={processSale} disabled={cart.length===0||processing}>
             <Icon name="check" size={15}/>{processing?"...":"Cobrar"}
           </button>
@@ -1160,8 +1607,8 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
               <div>No. <strong>{lastReceipt.id || lastReceipt.localId}</strong> · Fecha: {lastReceipt.date?.split("T")[0]||lastReceipt.syncedAt||new Date().toISOString().split("T")[0]}</div>
             </div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
-            <div>Cliente: {lastReceipt.client}</div>
-            <div>NIT Cliente: {lastReceipt.clientNit}</div>
+            <div>Cliente: {lastReceipt.clientName || lastReceipt.client || "Consumidor Final"}</div>
+            <div>NIT Cliente: {lastReceipt.clientNit || "00000000000"}</div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
             {(lastReceipt.items||[]).map((item:any,i:number)=>(
               <div key={i} style={{ display:"flex", justifyContent:"space-between" }}>
@@ -1170,7 +1617,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
               </div>
             ))}
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
-            <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14, marginTop:4 }}><span>TOTAL:</span><span>${fmt(lastReceipt.total)} CUP</span></div>
+            <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14, marginTop:4 }}><span>TOTAL:</span><span>{CURRENCY_SYMBOLS[lastReceipt.currency]||"$"}{fmt(lastReceipt.total)} {lastReceipt.currency||"CUP"}</span></div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
             <div style={{ textAlign:"center", fontSize:10, color:"#888" }}>Gracias por su preferencia</div>
           </div>
@@ -1180,6 +1627,285 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
           </div>
         </Modal>
       )}
+    </div>
+  );
+};
+
+// ─── DESCUENTOS (panel de administración) ─────────────────────────────────
+const DiscountsAdmin = ({ showToast, onClose }: { showToast: (m:string,t:string)=>void; onClose: () => void }) => {
+  const [list, setList]       = useState<any[]>([]);
+  const [locs, setLocs]       = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(false);
+  const [form, setForm]       = useState<any>({
+    name:"", code:"", scope:"venta", type:"porcentual", value:"",
+    maxUses:"", maxUsesPerSale:"", locationScope:"todas", locations:[] as string[], active:true,
+  });
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [d, l] = await Promise.all([apiFetch("/discounts"), apiFetch("/locations")]);
+      setList(d || []);
+      setLocs(l || []);
+    } catch(e:any) { showToast(e.message, "error"); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const create = async () => {
+    if (!form.name || !form.value) return showToast("Nombre y valor son requeridos", "error");
+    if (form.type==="porcentual" && Number(form.value)>100) return showToast("El % no puede ser mayor a 100", "error");
+    setSaving(true);
+    try {
+      await apiFetch("/discounts", { method:"POST", body:{
+        name: form.name,
+        code: (form.code||"").trim() || undefined,
+        scope: form.scope,
+        type: form.type,
+        value: Number(form.value),
+        maxUses: form.maxUses ? Number(form.maxUses) : undefined,
+        maxUsesPerSale: form.maxUsesPerSale ? Number(form.maxUsesPerSale) : undefined,
+        locationScope: form.locationScope,
+        locations: form.locationScope==="algunas" ? form.locations : [],
+        active: form.active,
+      }});
+      showToast("Descuento creado", "success");
+      setForm({ name:"", code:"", scope:"venta", type:"porcentual", value:"", maxUses:"", maxUsesPerSale:"", locationScope:"todas", locations:[], active:true });
+      load();
+    } catch(e:any) { showToast(e.message, "error"); }
+    finally { setSaving(false); }
+  };
+
+  const remove = async (d:any) => {
+    if (!(window as any).confirmDialogOK && !window.confirm(`¿Eliminar el descuento "${d.name}"?`)) return;
+    try {
+      await apiFetch(`/discounts/${d.id}`, { method:"DELETE" });
+      showToast("Descuento eliminado", "success");
+      load();
+    } catch(e:any) { showToast(e.message, "error"); }
+  };
+
+  const toggleActive = async (d:any) => {
+    try {
+      await apiFetch(`/discounts/${d.id}`, { method:"PUT", body:{ active: !d.active } });
+      load();
+    } catch(e:any) { showToast(e.message, "error"); }
+  };
+
+  return (
+    <Modal title="Descuentos" onClose={onClose} width={640}>
+      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        <p style={{ margin:0, fontSize:13, color:"#64748B" }}>
+          Los descuentos de tipo <strong>Venta</strong> se aplican al total en el POS; los de <strong>Producto</strong> se aplicarían por línea.
+          Solo tú (admin) puedes crearlos o eliminarlos.
+        </p>
+
+        {/* Formulario de creación */}
+        <div style={{ background:"#F8FAFC", border:"1px solid #E2E8F0", borderRadius:14, padding:14, display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <Field label="Nombre" required><input style={inp} value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Ej: Rebaja verano"/></Field>
+            <Field label="Código corto"><input style={inp} value={form.code} onChange={e=>setForm(f=>({...f,code:e.target.value}))} placeholder="Ej: VERANO10"/></Field>
+            <Field label="Aplica a">
+              <select style={sel} value={form.scope} onChange={e=>setForm(f=>({...f,scope:e.target.value}))}>
+                <option value="venta">Total de la venta</option>
+                <option value="producto">Por producto (línea)</option>
+              </select>
+            </Field>
+            <Field label="Tipo">
+              <select style={sel} value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
+                <option value="porcentual">Porcentaje (%)</option>
+                <option value="fixed">Monto fijo</option>
+              </select>
+            </Field>
+            <Field label={form.type==="porcentual"?"Valor (%)":"Valor (monto)"} required><input style={inp} type="number" value={form.value} onChange={e=>setForm(f=>({...f,value:e.target.value}))}/></Field>
+            <Field label="Usos máximos (vacío = ilimitado)"><input style={inp} type="number" value={form.maxUses} onChange={e=>setForm(f=>({...f,maxUses:e.target.value}))} placeholder="∞"/></Field>
+          </div>
+          <Field label="Disponible en">
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={()=>setForm(f=>({...f,locationScope:"todas"}))} style={{ ...btn(form.locationScope==="todas"?"primary":"secondary"), flex:1, justifyContent:"center", fontSize:13 }}>Todas las ubicaciones</button>
+              <button onClick={()=>setForm(f=>({...f,locationScope:"algunas"}))} style={{ ...btn(form.locationScope==="algunas"?"primary":"secondary"), flex:1, justifyContent:"center", fontSize:13 }}>Solo algunas</button>
+            </div>
+          </Field>
+          {form.locationScope==="algunas" && (
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+              {locs.map(l => {
+                const on = form.locations.includes(l.id);
+                return (
+                  <button key={l.id} onClick={()=>setForm(f=>({...f, locations: on ? f.locations.filter((x:string)=>x!==l.id) : [...f.locations, l.id]}))}
+                    style={{ ...btn(on?"primary":"secondary"), fontSize:12, padding:"6px 12px" }}>
+                    {on?"✓ ":""}{l.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div style={{ display:"flex", justifyContent:"flex-end" }}>
+            <button style={{ ...btn("primary"), opacity:saving?0.6:1 }} onClick={create} disabled={saving}><Icon name="plus" size={15}/>Crear descuento</button>
+          </div>
+        </div>
+
+        {/* Lista */}
+        {loading ? <Spinner/> : list.length===0 ? (
+          <div style={{ textAlign:"center", color:"#64748B", fontSize:14, padding:24 }}>Todavía no hay descuentos creados</div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {list.map(d => (
+              <div key={d.id} style={{ border:"1px solid #E2E8F0", borderRadius:12, padding:"10px 14px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                <div style={{ flex:1, minWidth:180 }}>
+                  <div style={{ fontWeight:700, fontSize:14 }}>{d.name} {d.code && <span style={{ fontFamily:"monospace", fontSize:11, background:"#F1F5F9", borderRadius:6, padding:"1px 6px", marginLeft:6 }}>{d.code}</span>}</div>
+                  <div style={{ fontSize:12, color:"#64748B" }}>
+                    {d.scope==="venta"?"Venta completa":"Por producto"} · {d.type==="fixed"?`−${d.value} fijo`:`−${d.value}%`}
+                    · {d.locationScope==="todas"?"Todas las ubicaciones":`${(d.locations||[]).length} ubicación(es)`}
+                    · Usos: {d.usedCount||0}{d.maxUses?`/${d.maxUses}`:""}
+                    {d.active===false && <span style={{ color:"#DC2626", fontWeight:700 }}> · INACTIVO</span>}
+                  </div>
+                </div>
+                <button style={{ ...btn("secondary"), fontSize:12 }} onClick={()=>toggleActive(d)}>{d.active===false?"Activar":"Desactivar"}</button>
+                <button style={{ ...btn("secondary"), fontSize:12, color:"#DC2626" }} onClick={()=>remove(d)}>Eliminar</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+// ─── MONEDAS Y TASAS (config de empresa — solo admin) ──────────────────────
+const CurrenciesSettings = ({ showToast, onClose }: { showToast: (m:string,t:string)=>void; onClose: () => void }) => {
+  const [currencies, setCurrencies] = useState<string[]>(["CUP"]);
+  const [rateMode, setRateMode]     = useState("manual");
+  const [manualRates, setManualRates] = useState<Record<string,string>>({});
+  const [rates, setRates]           = useState<Record<string,number>>({});
+  const [ratesUpdatedAt, setRatesUpdatedAt] = useState<any>(null);
+  const [saving, setSaving]         = useState(false);
+
+  useEffect(() => {
+    apiFetch("/settings").then((s:any) => {
+      if (s?.currencies) setCurrencies(s.currencies);
+      if (s?.rateMode) setRateMode(s.rateMode);
+      const mr = s?.manualRates || {};
+      setManualRates({ USD:String(mr.USD||""), EUR:String(mr.EUR||""), MLC:String(mr.MLC||"") });
+      setRates(s?.rates || {});
+      setRatesUpdatedAt(s?.ratesUpdatedAt || null);
+    }).catch((e:any)=>showToast(e.message,"error"));
+  }, []);
+
+  const toggleCurrency = (m:string) => {
+    if (m==="CUP") return; // CUP es la base, siempre activa
+    setCurrencies(prev => prev.includes(m) ? prev.filter(x=>x!==m) : [...prev, m]);
+  };
+
+  const save = async () => {
+    if (currencies.length===0) return showToast("Debe haber al menos una moneda (CUP)", "error");
+    setSaving(true);
+    try {
+      const mr: Record<string, number> = {};
+      for (const [k,v] of Object.entries(manualRates)) if (v && Number(v)>0) mr[k] = Number(v);
+      await apiFetch("/settings", { method:"PUT", body:{ currencies, rateMode, manualRates: mr } });
+      showToast("Configuración de monedas guardada", "success");
+      onClose();
+    } catch(e:any) { showToast(e.message, "error"); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Modal title="Monedas y Tasas de Cambio" onClose={onClose} width={520}>
+      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        <div>
+          <Field label="Monedas que opera tu negocio" required>
+            <div style={{ display:"flex", flexDirection:"column", gap:8, marginTop:4 }}>
+              {["CUP","USD","EUR","MLC"].map(m => (
+                <label key={m} style={{ display:"flex", alignItems:"center", gap:10, fontSize:14, cursor:m==="CUP"?"default":"pointer", color:m==="CUP"?"#94A3B8":"#1E293B" }}>
+                  <input type="checkbox" checked={currencies.includes(m)} disabled={m==="CUP"} onChange={()=>toggleCurrency(m)}/>
+                  <strong>{m}</strong>
+                  {m==="CUP" && <span style={{ fontSize:11, color:"#94A3B8" }}>(moneda base — siempre activa)</span>}
+                </label>
+              ))}
+            </div>
+          </Field>
+          <p style={{ margin:"8px 0 0", fontSize:12, color:"#64748B" }}>
+            Las monedas seleccionadas estarán disponibles al registrar productos y al vender. Los ingresos se reportan por separado en cada moneda.
+          </p>
+        </div>
+
+        <div style={{ height:1, background:"#E2E8F0" }}/>
+
+        <Field label="Tasa de cambio">
+          <div style={{ display:"flex", flexDirection:"column", gap:8, marginTop:4 }}>
+            <label style={{ display:"flex", alignItems:"center", gap:10, fontSize:14, cursor:"pointer" }}>
+              <input type="radio" checked={rateMode==="manual"} onChange={()=>setRateMode("manual")}/>
+              <strong>Manual</strong> — yo fijo la tasa y la actualizo cuando quiera
+            </label>
+            <label style={{ display:"flex", alignItems:"center", gap:10, fontSize:14, cursor:"pointer" }}>
+              <input type="radio" checked={rateMode==="eltoque"} onChange={()=>setRateMode("eltoque")}/>
+              <strong>elToque (automática)</strong> — se actualiza sola cada 5 min
+            </label>
+          </div>
+        </Field>
+
+        {rateMode==="manual" ? (
+          <div style={{ background:"#F8FAFC", border:"1px solid #E2E8F0", borderRadius:12, padding:14 }}>
+            <p style={{ margin:"0 0 10px", fontSize:12, color:"#64748B" }}>Cuántos CUP vale 1 unidad de cada moneda:</p>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
+              {["USD","EUR","MLC"].map(m => (
+                <Field key={m} label={m}>
+                  <input style={inp} type="number" value={manualRates[m]||""} onChange={e=>setManualRates(r=>({...r,[m]:e.target.value}))} placeholder="0"/>
+                </Field>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{ background:"#EFF6FF", borderRadius:12, padding:"12px 14px", fontSize:13, color:"#1E40AF" }}>
+            <div style={{ fontWeight:700, marginBottom:6 }}>Tasas actuales (elToque):</div>
+            {Object.keys(rates).length>0 ? (
+              <div>Tasas cargadas: {Object.entries(rates).map(([k,v])=>`${k}=${v}`).join(" · ")}</div>
+            ) : <div>Aún no se han cargado tasas — se obtendrán automáticamente.</div>}
+            {ratesUpdatedAt && <div style={{ marginTop:4, fontSize:11, opacity:0.8 }}>Actualizado: {new Date(ratesUpdatedAt).toLocaleString()}</div>}
+          </div>
+        )}
+
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+          <button style={btn("secondary")} onClick={onClose}>Cancelar</button>
+          <button style={{ ...btn("primary"), opacity:saving?0.6:1 }} onClick={save} disabled={saving}>{saving?"Guardando...":"Guardar"}</button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// ─── TOUR DE BIENVENIDA (onboarding) ───────────────────────────────────────
+const TOUR_STEPS = [
+  { icon:"pos", title:"¡Bienvenido a CubaGest!", text:"Este es tu panel de gestión. Te mostramos lo esencial en 5 pasos (toca Siguiente para avanzar)." },
+  { icon:"pos", title:"Punto de Venta", text:"Cobra desde la pestaña Vender. Funciona incluso SIN internet: las ventas se sincronizan solas al volver la conexión." },
+  { icon:"inventario", title:"Inventario multi-ubicación", text:"Tu stock vive en ubicaciones (Almacén Central, cajas). Desde Envíos mandas mercancía entre ellas." },
+  { icon:"facturacion", title:"Facturas y respaldo", text:"Todas tus facturas quedan en Facturas, y puedes descargar CSV de inventario, ventas y gastos como respaldo." },
+  { icon:"contabilidad", title:"Configura tu negocio", text:"En el menú de tu perfil (arriba a la derecha): monedas que operas, descuentos, tu plan y más." },
+];
+
+const WelcomeTour = ({ onDone }: { onDone: () => void }) => {
+  const [step, setStep] = useState(0);
+  const s = TOUR_STEPS[step];
+  const last = step === TOUR_STEPS.length - 1;
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:1500, background:"rgba(15,23,42,0.55)", display:"flex", alignItems:"flex-end", justifyContent:"center", padding:20 }} onClick={last?onDone:undefined}>
+      <div style={{ background:"#ffffff", borderRadius:18, padding:"22px 20px", maxWidth:420, width:"100%", boxShadow:"0 20px 60px rgba(0,0,0,0.35)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
+          <div style={{ width:42, height:42, borderRadius:12, background:"#EFF6FF", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <Icon name={s.icon} size={20} color="#3B82F6"/>
+          </div>
+          <div style={{ fontWeight:800, fontSize:16, color:"#1E293B" }}>{s.title}</div>
+          <span style={{ marginLeft:"auto", fontSize:11, color:"#94A3B8", fontWeight:700 }}>{step+1}/{TOUR_STEPS.length}</span>
+        </div>
+        <p style={{ margin:"0 0 16px", fontSize:13.5, color:"#475569", lineHeight:1.6 }}>{s.text}</p>
+        <div style={{ display:"flex", gap:8 }}>
+          <button style={{ ...btn("ghost"), fontSize:13 }} onClick={onDone}>Saltar</button>
+          <button style={{ ...btn("primary"), flex:1, justifyContent:"center" }} onClick={()=> last ? onDone() : setStep(step+1)}>
+            {last ? "¡Empezar!" : "Siguiente"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -1226,6 +1952,18 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
   const planExpiry    = user?.company?.planExpiry;
   const daysLeft      = planExpiry ? Math.max(0, Math.ceil((new Date(planExpiry).getTime() - Date.now()) / 86400000)) : null;
 
+  // Programa de referidos — la empresa referente recibe el MISMO plan de
+  // regalo 30 días por cada referido que pague; referidos distintos se acumulan.
+  const [referralData, setReferralData] = useState<any>(null);
+  useEffect(() => {
+    apiFetch("/referrals").then((d:any) => setReferralData({ referralCode: d?.code, total: d?.invited, bonified: d?.bonified })).catch(() => {});
+  }, []);
+  const copyRef = () => {
+    if (referralData?.referralCode && navigator.clipboard) {
+      navigator.clipboard.writeText(referralData.referralCode).catch(()=>{});
+    }
+  };
+
   const handleQvaPay = async (planKey: string) => {
     try {
       setLoading(true);
@@ -1253,6 +1991,23 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
   return (
     <Modal title="Planes — CubaGest" onClose={onClose} width={660}>
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+
+        {/* Programa de referidos */}
+        {referralData?.referralCode && (
+          <div style={{ background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:12, padding:"12px 14px" }}>
+            <div style={{ fontWeight:800, fontSize:13, color:"#166534", marginBottom:4 }}>🎁 Invita y gana planes</div>
+            <div style={{ fontSize:12, color:"#166534", marginBottom:8 }}>
+              Comparte tu código: cuando otro negocio se registre con él y contrate un plan pago, <strong>tú recibes ese mismo plan gratis 30 días</strong>. Cada referido que pague suma un bono.
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <code style={{ background:"#DCFCE7", borderRadius:8, padding:"6px 12px", fontFamily:"monospace", fontWeight:800, fontSize:14, letterSpacing:1 }}>{referralData.referralCode}</code>
+              <button style={{ ...btn("secondary"), fontSize:12 }} onClick={copyRef}>Copiar</button>
+              <span style={{ fontSize:12, color:"#166534", marginLeft:"auto" }}>
+                Referidos: <strong>{referralData.total||0}</strong> · Bonos activos: <strong>{referralData.bonified||0}</strong>
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Banner trial */}
         {isTrial && daysLeft !== null && (
@@ -1442,7 +2197,15 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
             {offlineSales.filter(s=>s.status==="conflict").length > 0 && <span style={{ marginLeft:4, background:"#3B82F6", color:"#ffffff", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700 }}>{offlineSales.filter(s=>s.status==="conflict").length} conflicto</span>}
           </p>
         </div>
-        <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
+        <div style={{ display:"flex", gap:8 }}>
+          <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
+          <button style={btn("secondary")} onClick={() => downloadCSV("ventas", sales.map((s:any) => ({ ...s, itemsCount: s.items?.length ?? "" })), [
+            { key:"invoiceNumber", label:"Factura" },{ key:"date", label:"Fecha" },{ key:"clientName", label:"Cliente" },
+            { key:"subtotal", label:"Subtotal" },{ key:"discountTotal", label:"Descuento" },{ key:"tax", label:"Impuesto" },
+            { key:"total", label:"Total" },{ key:"currency", label:"Moneda" },{ key:"payMethod", label:"Método de pago" },
+            { key:"status", label:"Estado" },{ key:"itemsCount", label:"Líneas" },
+          ])}><Icon name="doc" size={15}/>CSV</button>
+        </div>
       </div>
 
       {/* Ventas offline pendientes */}
@@ -1708,6 +2471,10 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
         <div style={{ display:"flex", gap:8 }}>
           <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
           <button style={btn("secondary")} onClick={exportarInforme}><Icon name="print" size={15}/>Informe Fiscal</button>
+          <button style={btn("secondary")} onClick={() => downloadCSV("gastos", expenses, [
+            { key:"date", label:"Fecha" },{ key:"category", label:"Categoría" },{ key:"concept", label:"Concepto" },
+            { key:"amount", label:"Monto" },{ key:"method", label:"Método de pago" },
+          ])}><Icon name="doc" size={15}/>CSV</button>
           <button style={btn("primary")} onClick={()=>setModal(true)}><Icon name="plus" size={16}/>Registrar Gasto</button>
         </div>
       </div>
@@ -2796,6 +3563,11 @@ const Auditoria = ({ showToast }: { showToast: (m:string,t:string)=>void }) => {
 export default function App() {
   const [user, setUser]             = useState<any>(null);
   const [checkingAuth, setChecking] = useState(true);
+  // Landing pública: visible por defecto; ?app=1 la salta (p.ej. usuarios que
+  // ya saben que quieren ir directo al login). Una vez dentro, no vuelve a
+  // mostrarse hasta recargar.
+  const [showLanding, setShowLanding] = useState(() => !new URLSearchParams(window.location.search).get("app"));
+  const enterApp = () => { setShowLanding(false); try { window.history.replaceState({}, "", window.location.pathname + "?app=1"); } catch {} };
 
   // Link de "establecer contraseña" (?setpw=token) — es una pantalla
   // pública, independiente de si hay sesión o no. Se revisa una sola vez al
@@ -2815,6 +3587,23 @@ export default function App() {
   const [toast, setToast]           = useState<any>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const [discountsOpen, setDiscountsOpen] = useState(false);
+  const [currenciesOpen, setCurrenciesOpen] = useState(false);
+  // Tour de bienvenida: se muestra UNA sola vez (bandera persistente).
+  const [tourOpen, setTourOpen] = useState(false);
+  useEffect(() => {
+    if (user && !localStorage.getItem("cubagest_tour_done")) setTourOpen(true);
+  }, [user]);
+  const closeTour = () => {
+    localStorage.setItem("cubagest_tour_done", "1");
+    setTourOpen(false);
+  };
+  // Modo oscuro: preferencia persistida, class "dark" en <html>.
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("cubagest_theme") === "dark");
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    localStorage.setItem("cubagest_theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
   const [legalDoc, setLegalDoc] = useState<null | "privacy" | "terms">(null);
   const [syncing, setSyncing]       = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -3034,7 +3823,10 @@ export default function App() {
     </div>
   );
 
-  if (!user) return <LoginScreen onLogin={u=>{ setUser(u); setActiveModule("dashboard"); }}/>;
+  if (!user) {
+    if (showLanding) return <Landing onEnter={enterApp}/>;
+    return <LoginScreen onLogin={u=>{ setUser(u); setActiveModule("dashboard"); }}/>;
+  }
 
   const perms = ROLES[user.role]?.perms || [];
   const navItems = [
@@ -3086,6 +3878,22 @@ export default function App() {
                       <Icon name="auditoria" size={16} color="#475569"/>Auditoría
                     </button>
                   )}
+                  {user.role==="admin" && (
+                    <button onClick={()=>{setDiscountsOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#475569", fontSize:14, fontWeight:600 }}>
+                      <Icon name="facturacion" size={16} color="#475569"/>Descuentos
+                    </button>
+                  )}
+                  {user.role==="admin" && (
+                    <button onClick={()=>{setCurrenciesOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#475569", fontSize:14, fontWeight:600 }}>
+                      <Icon name="contabilidad" size={16} color="#475569"/>Monedas y Tasas
+                    </button>
+                  )}
+                  <button onClick={()=>{setTourOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#475569", fontSize:14, fontWeight:600 }}>
+                    <Icon name="dashboard" size={16} color="#475569"/>Ver tour de bienvenida
+                  </button>
+                  <button onClick={()=>setDarkMode(v=>!v)} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#475569", fontSize:14, fontWeight:600 }}>
+                    <span style={{ fontSize:16 }}>{darkMode?"☀️":"🌙"}</span>{darkMode?"Modo claro":"Modo oscuro"}
+                  </button>
                   <div style={{ height:1, background:"#E2E8F0", margin:"4px 0" }}/>
                   <button onClick={()=>{setLegalDoc("privacy");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#475569", fontSize:14, fontWeight:600 }}>
                     <Icon name="doc" size={16} color="#475569"/>Política de Privacidad
@@ -3149,6 +3957,9 @@ export default function App() {
       </div>
 
       {planOpen && <PlanModal onClose={()=>setPlanOpen(false)} user={user}/>}
+      {discountsOpen && <DiscountsAdmin showToast={showToast} onClose={()=>setDiscountsOpen(false)}/>}
+      {currenciesOpen && <CurrenciesSettings showToast={showToast} onClose={()=>setCurrenciesOpen(false)}/>}
+      {tourOpen && <WelcomeTour onDone={closeTour}/>}
       {legalDoc==="privacy" && <LegalModal title="Política de Privacidad" content={PRIVACY_POLICY_MD} onClose={()=>setLegalDoc(null)}/>}
       {legalDoc==="terms" && <LegalModal title="Términos y Condiciones" content={TERMS_MD} onClose={()=>setLegalDoc(null)}/>}
       {toast && <Toast key={toast.key} msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
