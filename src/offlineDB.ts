@@ -33,13 +33,16 @@ export interface OfflineSale {
   serverId?: string;     // ID del servidor tras sync
   timestamp: number;     // Para ordenar en sincronización
   status: SyncStatus;
-  client: string;
+  client?: string;       // Compat con ventas antiguas guardadas antes del cambio
+  clientName?: string;   // Nombre nuevo (coincide con el backend)
   clientNit: string;
   clientPhone?: string;
   payMethod: string;
   items: OfflineSaleItem[];
   subtotal: number;
   total: number;
+  currency?: string;     // Moneda de la venta (multimoneda)
+  discountId?: string;   // Descuento de venta aplicado
   conflictReason?: string;
   syncedAt?: number;
 }

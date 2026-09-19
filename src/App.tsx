@@ -569,7 +569,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => (
   </div>
 );
 
-const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
+const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => void; onBackToLanding?: () => void }) => {
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [error, setError]       = useState("");
@@ -672,7 +672,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: any) => void }) => {
           <button style={{ ...btn("ghost"), width:"100%", justifyContent:"center", marginTop:8, fontSize:13 }} onClick={()=>setShowRegister(true)}>
           Crear mi negocio (primera vez)
         </button>
-        <button style={{ background:"none", border:"none", color:"#94A3B8", fontSize:12, cursor:"pointer", marginTop:14 }} onClick={()=>setShowLanding(true)}>
+        <button style={{ background:"none", border:"none", color:"#94A3B8", fontSize:12, cursor:"pointer", marginTop:14 }} onClick={()=>{ onBackToLanding?.(); }}>
           ← Volver al inicio
         </button>
         <p style={{ textAlign:"center", marginTop:16, fontSize:11, color:"#b0a090" }}>Sistema de gestión empresarial · CubaGest</p>
@@ -1263,6 +1263,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   const [camMsg, setCamMsg]             = useState("");
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scanTimer = useRef<any>(null);
+  const online = useOnlineStatus();
 
   // Config de empresa (monedas habilitadas) + descuentos de tipo venta
   useEffect(() => {
@@ -1283,8 +1284,6 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   const change   = Number(cashGiven) - total;
   const needsTransferData = payMethod === "transferencia";
   const curSym = CURRENCY_SYMBOLS[saleCurrency] || "$";
-
-  const online = useOnlineStatus();
 
   const [myLocationId, setMyLocationId] = useState<string>("");
   const [myLocationName, setMyLocationName] = useState<string>("");
@@ -1704,27 +1703,27 @@ const DiscountsAdmin = ({ showToast, onClose }: { showToast: (m:string,t:string)
         {/* Formulario de creación */}
         <div style={{ background:"#F8FAFC", border:"1px solid #E2E8F0", borderRadius:14, padding:14, display:"flex", flexDirection:"column", gap:10 }}>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <Field label="Nombre" required><input style={inp} value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Ej: Rebaja verano"/></Field>
-            <Field label="Código corto"><input style={inp} value={form.code} onChange={e=>setForm(f=>({...f,code:e.target.value}))} placeholder="Ej: VERANO10"/></Field>
+            <Field label="Nombre" required><input style={inp} value={form.name} onChange={e=>setForm((f:any)=>({...f,name:e.target.value}))} placeholder="Ej: Rebaja verano"/></Field>
+            <Field label="Código corto"><input style={inp} value={form.code} onChange={e=>setForm((f:any)=>({...f,code:e.target.value}))} placeholder="Ej: VERANO10"/></Field>
             <Field label="Aplica a">
-              <select style={sel} value={form.scope} onChange={e=>setForm(f=>({...f,scope:e.target.value}))}>
+              <select style={sel} value={form.scope} onChange={e=>setForm((f:any)=>({...f,scope:e.target.value}))}>
                 <option value="venta">Total de la venta</option>
                 <option value="producto">Por producto (línea)</option>
               </select>
             </Field>
             <Field label="Tipo">
-              <select style={sel} value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
+              <select style={sel} value={form.type} onChange={e=>setForm((f:any)=>({...f,type:e.target.value}))}>
                 <option value="porcentual">Porcentaje (%)</option>
                 <option value="fixed">Monto fijo</option>
               </select>
             </Field>
-            <Field label={form.type==="porcentual"?"Valor (%)":"Valor (monto)"} required><input style={inp} type="number" value={form.value} onChange={e=>setForm(f=>({...f,value:e.target.value}))}/></Field>
-            <Field label="Usos máximos (vacío = ilimitado)"><input style={inp} type="number" value={form.maxUses} onChange={e=>setForm(f=>({...f,maxUses:e.target.value}))} placeholder="∞"/></Field>
+            <Field label={form.type==="porcentual"?"Valor (%)":"Valor (monto)"} required><input style={inp} type="number" value={form.value} onChange={e=>setForm((f:any)=>({...f,value:e.target.value}))}/></Field>
+            <Field label="Usos máximos (vacío = ilimitado)"><input style={inp} type="number" value={form.maxUses} onChange={e=>setForm((f:any)=>({...f,maxUses:e.target.value}))} placeholder="∞"/></Field>
           </div>
           <Field label="Disponible en">
             <div style={{ display:"flex", gap:10 }}>
-              <button onClick={()=>setForm(f=>({...f,locationScope:"todas"}))} style={{ ...btn(form.locationScope==="todas"?"primary":"secondary"), flex:1, justifyContent:"center", fontSize:13 }}>Todas las ubicaciones</button>
-              <button onClick={()=>setForm(f=>({...f,locationScope:"algunas"}))} style={{ ...btn(form.locationScope==="algunas"?"primary":"secondary"), flex:1, justifyContent:"center", fontSize:13 }}>Solo algunas</button>
+              <button onClick={()=>setForm((f:any)=>({...f,locationScope:"todas"}))} style={{ ...btn(form.locationScope==="todas"?"primary":"secondary"), flex:1, justifyContent:"center", fontSize:13 }}>Todas las ubicaciones</button>
+              <button onClick={()=>setForm((f:any)=>({...f,locationScope:"algunas"}))} style={{ ...btn(form.locationScope==="algunas"?"primary":"secondary"), flex:1, justifyContent:"center", fontSize:13 }}>Solo algunas</button>
             </div>
           </Field>
           {form.locationScope==="algunas" && (
@@ -1732,7 +1731,7 @@ const DiscountsAdmin = ({ showToast, onClose }: { showToast: (m:string,t:string)
               {locs.map(l => {
                 const on = form.locations.includes(l.id);
                 return (
-                  <button key={l.id} onClick={()=>setForm(f=>({...f, locations: on ? f.locations.filter((x:string)=>x!==l.id) : [...f.locations, l.id]}))}
+                  <button key={l.id} onClick={()=>setForm((f:any)=>({...f, locations: on ? f.locations.filter((x:string)=>x!==l.id) : [...f.locations, l.id]}))}
                     style={{ ...btn(on?"primary":"secondary"), fontSize:12, padding:"6px 12px" }}>
                     {on?"✓ ":""}{l.name}
                   </button>
@@ -2600,18 +2599,18 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
         <Modal title="Registrar Egreso" onClose={()=>setModal(false)} width={460}>
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-              <Field label="Fecha" required><input style={inp} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></Field>
+              <Field label="Fecha" required><input style={inp} type="date" value={form.date} onChange={e=>setForm((f:any)=>({...f,date:e.target.value}))}/></Field>
               <Field label="Categoría" required>
-                <select style={sel} value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>
+                <select style={sel} value={form.category} onChange={e=>setForm((f:any)=>({...f,category:e.target.value}))}>
                   {EXPENSE_CATS.map(c=><option key={c}>{c}</option>)}
                 </select>
               </Field>
             </div>
-            <Field label="Concepto" required><input style={inp} value={form.concept} onChange={e=>setForm(f=>({...f,concept:e.target.value}))}/></Field>
+            <Field label="Concepto" required><input style={inp} value={form.concept} onChange={e=>setForm((f:any)=>({...f,concept:e.target.value}))}/></Field>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-              <Field label="Monto (CUP)" required><input style={inp} type="number" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}/></Field>
+              <Field label="Monto (CUP)" required><input style={inp} type="number" value={form.amount} onChange={e=>setForm((f:any)=>({...f,amount:e.target.value}))}/></Field>
               <Field label="Método de Pago">
-                <select style={sel} value={form.method} onChange={e=>setForm(f=>({...f,method:e.target.value}))}>
+                <select style={sel} value={form.method} onChange={e=>setForm((f:any)=>({...f,method:e.target.value}))}>
                   {PAY_METHODS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
                 </select>
               </Field>
@@ -3149,10 +3148,10 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
       {modal && (
         <Modal title={editUser?"Editar Usuario":"Nuevo Usuario"} onClose={()=>setModal(false)} width={440}>
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-            <Field label="Nombre completo" required><input style={inp} value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/></Field>
-            <Field label="Correo electrónico" required><input style={inp} type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} disabled={!!editUser}/></Field>
+            <Field label="Nombre completo" required><input style={inp} value={form.name} onChange={e=>setForm((f:any)=>({...f,name:e.target.value}))}/></Field>
+            <Field label="Correo electrónico" required><input style={inp} type="email" value={form.email} onChange={e=>setForm((f:any)=>({...f,email:e.target.value}))} disabled={!!editUser}/></Field>
             <Field label="Rol del sistema" required>
-              <select style={sel} value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
+              <select style={sel} value={form.role} onChange={e=>setForm((f:any)=>({...f,role:e.target.value}))}>
                 {Object.entries(ROLES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
               </select>
             </Field>
@@ -3383,7 +3382,7 @@ const Transferencias = ({ user, showToast }: { user: any; showToast: (m:string,t
               <Field label="Desde" required>
                 <select style={sel} value={form.fromLocationId} onChange={async e=>{
                   const from = e.target.value;
-                  setForm(f=>({ ...f, fromLocationId: from, items: [] }));
+                  setForm((f:any)=>({ ...f, fromLocationId: from, items: [] }));
                   await loadProductsFor(from);
                 }}>
                   <option value="">Selecciona...</option>
@@ -3392,7 +3391,7 @@ const Transferencias = ({ user, showToast }: { user: any; showToast: (m:string,t
               </Field>
             )}
             <Field label="Hacia" required>
-              <select style={sel} value={form.toLocationId} onChange={e=>setForm(f=>({...f,toLocationId:e.target.value}))}>
+              <select style={sel} value={form.toLocationId} onChange={e=>setForm((f:any)=>({...f,toLocationId:e.target.value}))}>
                 <option value="">Selecciona...</option>
                 {allLocations.filter((l:any)=>l.id!==form.fromLocationId).map((l:any)=><option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
@@ -3416,7 +3415,7 @@ const Transferencias = ({ user, showToast }: { user: any; showToast: (m:string,t
                 {filteredMyProducts.length===0 && <div style={{ padding:20, textAlign:"center", fontSize:12, color:"#94A3B8" }}>{form.fromLocationId || !isAdmin ? "No hay productos disponibles en el origen" : "Selecciona primero el origen"}</div>}
               </div>
             </Field>
-            <Field label="Nota (opcional)"><input style={inp} value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/></Field>
+            <Field label="Nota (opcional)"><input style={inp} value={form.notes} onChange={e=>setForm((f:any)=>({...f,notes:e.target.value}))}/></Field>
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
               <button style={btn("secondary")} onClick={()=>setModal(null)}>Cancelar</button>
               <button style={{ ...btn("primary"), opacity:saving?0.6:1 }} onClick={submitTransfer} disabled={saving}>{saving?"Enviando...":"Crear envío"}</button>
@@ -3825,7 +3824,7 @@ export default function App() {
 
   if (!user) {
     if (showLanding) return <Landing onEnter={enterApp}/>;
-    return <LoginScreen onLogin={u=>{ setUser(u); setActiveModule("dashboard"); }}/>;
+    return <LoginScreen onLogin={u=>{ setUser(u); setActiveModule("dashboard"); }} onBackToLanding={()=>setShowLanding(true)}/>;
   }
 
   const perms = ROLES[user.role]?.perms || [];
