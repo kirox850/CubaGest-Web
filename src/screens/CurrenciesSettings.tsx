@@ -10,6 +10,25 @@ const CurrenciesSettings = ({ showToast, onClose }: { showToast: (m:string,t:str
   const [rates, setRates]           = useState<Record<string,number>>({});
   const [ratesUpdatedAt, setRatesUpdatedAt] = useState<any>(null);
   const [saving, setSaving]         = useState(false);
+  const [testing, setTesting]       = useState(false);
+
+  // Fuerza una consulta fresca a elToque (ignora la caché de 5 min). Sirve
+  // para verificar en vivo si el token (ELTOQUE_API_TOKEN) está configurado:
+  // si llegan tasas, funciona; si no, el Worker loguea el motivo (401/403).
+  const testRates = async () => {
+    setTesting(true);
+    try {
+      const s = await apiFetch("/settings?refresh=1");
+      const r = s?.rates || {};
+      setRates(r);
+      setRatesUpdatedAt(s?.ratesUpdatedAt || null);
+      showToast(Object.keys(r).length > 0
+        ? `Tasas obtenidas: ${Object.entries(r).map(([k,v])=>`${k}=${v}`).join(" · ")}`
+        : "No se pudieron obtener tasas — revisa el token de elToque (ver logs del Worker)",
+        Object.keys(r).length > 0 ? "success" : "error");
+    } catch(e:any) { showToast(e.message, "error"); }
+    finally { setTesting(false); }
+  };
 
   useEffect(() => {
     apiFetch("/settings").then((s:any) => {
@@ -91,8 +110,20 @@ const CurrenciesSettings = ({ showToast, onClose }: { showToast: (m:string,t:str
             <div style={{ fontWeight:700, marginBottom:6 }}>Tasas actuales (elToque):</div>
             {Object.keys(rates).length>0 ? (
               <div>Tasas cargadas: {Object.entries(rates).map(([k,v])=>`${k}=${v}`).join(" · ")}</div>
-            ) : <div>Aún no se han cargado tasas — se obtendrán automáticamente.</div>}
+            ) : <div>Aún no se han cargado tasas — usa “Probar ahora” para obtenerlas.</div>}
             {ratesUpdatedAt && <div style={{ marginTop:4, fontSize:11, opacity:0.8 }}>Actualizado: {new Date(ratesUpdatedAt).toLocaleString()}</div>}
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:10 }}>
+              <button onClick={testRates} disabled={testing} style={{ ...btn("secondary"), fontSize:12, opacity:testing?0.6:1 }}>
+                {testing ? "Consultando..." : "🔄 Probar ahora"}
+              </button>
+              <span style={{ fontSize:11, color:"var(--muted)" }}>Consulta fresca a elToque (ignora la caché)</span>
+            </div>
+            <div style={{ marginTop:8, fontSize:11, color:"var(--muted)", lineHeight:1.5 }}>
+              Si no llegan tasas: la API de elToque exige un token por aplicación
+              (se solicita en tasas.eltoque.com/docs). Configúralo en el backend con
+              <code style={{ fontFamily:"monospace", background:"var(--line)", borderRadius:4, padding:"1px 5px", margin:"0 4px" }}>npx wrangler secret put ELTOQUE_API_TOKEN</code>
+              — sin token, el sistema intenta un raspado de la página pública como respaldo.
+            </div>
           </div>
         )}
 
