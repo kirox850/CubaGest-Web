@@ -10,6 +10,21 @@ import {
 import Icon from "@/components/shared/Icon";
 import { Modal, Badge, Field, Spinner, btn, inp, sel } from "@/components/shared/primitives";
 import { showConfirm, showAlert } from "@/components/shared/dialogs";
+import { CURRENCY_SYMBOLS } from "@/config/constants";
+
+// Impresión: solo el recibo visible, con ancho de ticket.
+const factStyles = `
+@media print {
+  body * { visibility: hidden !important; }
+  .cg-receipt-print-area, .cg-receipt-print-area * { visibility: visible !important; }
+  .cg-receipt-print-area {
+    position: fixed !important; top: 0; left: 0; right: 0;
+    width: 80mm !important; margin: 0 auto !important;
+    background: #fff !important; color: #000 !important;
+    border: none !important; box-shadow: none !important;
+  }
+}
+`;
 
 // ─── FACTURACIÓN (cajero + admin) ────────────────────────────────────────────
 const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: { user: any; showToast: (m:string,t:string)=>void; onSyncRefresh?: ()=>void; onManualSync?: ()=>void; syncing?: boolean }) => {
@@ -206,27 +221,28 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
 
       {viewInv && (
         <Modal title={`Factura ${viewInv.invoiceNumber||viewInv.id}`} onClose={()=>setViewInv(null)} width={520}>
-          <div style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.9, background:"var(--input-bg)", padding:20, borderRadius:12, border:"1px solid var(--line)" }}>
+          <style>{factStyles}</style>
+          <div className="cg-receipt-print-area" style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.9, background:"var(--input-bg)", padding:20, borderRadius:12, border:"1px solid var(--line)" }}>
             <div style={{ textAlign:"center", marginBottom:14 }}>
-              <div style={{ fontWeight:800, fontSize:15 }}>CUBAGEST</div>
+              <div style={{ fontWeight:800, fontSize:15, color:"var(--ink)" }}>{user?.company?.name || "Mi Negocio"}</div>
               <div>FACTURA No. <strong style={{ color:"#3B82F6" }}>{viewInv.invoiceNumber||viewInv.id}</strong></div>
-              {viewInv.status==="anulada" && <div style={{ color:"#3B82F6", fontWeight:800 }}>⚠ ANULADA</div>}
+              {viewInv.status==="anulada" && <div style={{ color:"#DC2626", fontWeight:800 }}>⚠ ANULADA</div>}
             </div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
             <div>Fecha: {(viewInv.date||viewInv.createdAt||"").split("T")[0]}</div>
             <div>Cliente: {viewInv.clientName||viewInv.client}</div>
-            {viewInv.clientNit && <div>NIT: {viewInv.clientNit}</div>}
             {viewInv.clientPhone && <div>Teléfono: {viewInv.clientPhone}</div>}
             <div>Método: {PAY_METHODS.find(p=>p.id===viewInv.payMethod)?.label||viewInv.payMethod}</div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
             {(viewInv.items||viewInv.SaleItems||[]).map((item:any,i:number)=>(
               <div key={i} style={{ display:"flex", justifyContent:"space-between" }}>
                 <span>{item.qty}x {item.name}</span>
-                <span>${fmt(item.total||item.price*item.qty)}</span>
+                <span>{CURRENCY_SYMBOLS[viewInv.currency]||"$"}{fmt(item.total||item.price*item.qty)}</span>
               </div>
             ))}
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
-            <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14 }}><span>TOTAL:</span><span>${fmt(viewInv.total)} CUP</span></div>
+            <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14 }}><span>TOTAL:</span><span>{CURRENCY_SYMBOLS[viewInv.currency]||"$"}{fmt(viewInv.total)} {viewInv.currency||"CUP"}</span></div>
+            <div style={{ textAlign:"center", fontSize:8, color:"var(--muted)", marginTop:10 }}>Hecho con CubaGest</div>
           </div>
           <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:16, flexWrap:"wrap" as any }}>
             {viewInv.status==="emitida" && (
@@ -248,7 +264,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
               ⚠ Solo se pueden editar los datos del cliente y método de pago. Los productos y totales no cambian.
             </div>
             <Field label="Nombre del cliente"><input style={inp} value={editForm.clientName} onChange={e=>setEditForm((f:any)=>({...f,clientName:e.target.value}))}/></Field>
-            <Field label="NIT"><input style={inp} value={editForm.clientNit} onChange={e=>setEditForm((f:any)=>({...f,clientNit:e.target.value}))} maxLength={11}/></Field>
+            <Field label="Carnet"><input style={inp} value={editForm.clientNit} onChange={e=>setEditForm((f:any)=>({...f,clientNit:e.target.value}))} maxLength={11}/></Field>
             <Field label="Teléfono"><input style={inp} value={editForm.clientPhone} onChange={e=>setEditForm((f:any)=>({...f,clientPhone:e.target.value}))}/></Field>
             <Field label="Método de pago">
               <select style={sel} value={editForm.payMethod} onChange={e=>setEditForm((f:any)=>({...f,payMethod:e.target.value}))}>

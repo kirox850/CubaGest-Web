@@ -32,22 +32,27 @@ export async function apiFetch(path: string, opts: { method?: string; body?: obj
     clearTimeout(timeout);
     if (res.status === 204) return null;
 
-    // Token expirado o inválido — limpiar sesión y avisar a la app.
+    // El mensaje REAL del servidor ("Correo o contraseña incorrectos",
+    // "Demasiados intentos", etc.) debe llegar siempre a la UI — antes el
+    // 401 de login caía en el bloque de "sesión expirada" y el usuario veía
+    // un error genérico/confuso mientras la consola mostraba la verdad.
+    const data = await res.json().catch(() => null);
+    const serverError: string | undefined = data?.error || data?.message;
+
+    // Token expirado o inválido SOLO en peticiones autenticadas — el 401 de
+    // /auth/login (auth:false) es simplemente "credenciales incorrectas".
     // OJO: antes aquí se hacía window.location.reload(), pero eso podía
     // dispararse a mitad de una sincronización de ventas offline y
     // destruir el proceso antes de que pudiera revertir el estado de las
-    // ventas a "pending" — arriesgando perderlas o dejarlas "colgadas".
-    // En vez de recargar la página, avisamos con un evento y dejamos que
-    // el componente raíz muestre el login sin interrumpir nada en curso.
-    if (res.status === 401) {
+    // ventas a "pending" — por eso avisamos con un evento sin recargar.
+    if (res.status === 401 && auth) {
       saveToken(null);
       localStorage.removeItem("cubagest_user");
       window.dispatchEvent(new Event("cubagest-session-expired"));
-      throw new Error("Sesión expirada");
+      throw new Error(serverError || "Tu sesión expiró. Inicia sesión de nuevo.");
     }
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+    if (!res.ok) throw new Error(serverError || `Error ${res.status}`);
     // El backend envuelve casi todas las respuestas como { ok:true, data:... }
     // (excepto /auth/*, que devuelve accessToken/refreshToken/user "planos").
     // Desenvolvemos aquí, en un único lugar, para que el resto del código
@@ -58,7 +63,7 @@ export async function apiFetch(path: string, opts: { method?: string; body?: obj
     return data;
   } catch(e: any) {
     clearTimeout(timeout);
-    if (e.name === 'AbortError') throw new Error('Sin conexión');
+    if (e.name === 'AbortError') throw new Error('Sin conexión con el servidor — revisa tu internet e inténtalo de nuevo');
     throw e;
   }
 }

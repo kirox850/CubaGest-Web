@@ -8,6 +8,20 @@ import Icon from "@/components/shared/Icon";
 import { Modal, Field, Spinner, btn, inp, sel } from "@/components/shared/primitives";
 
 // ─── POS ──────────────────────────────────────────────────────────────────────
+// Impresión: al imprimir se oculta TODA la app y solo sale el recibo
+// (.cg-receipt-print-area), centrado y con ancho de ticket.
+const posStyles = `
+@media print {
+  body * { visibility: hidden !important; }
+  .cg-receipt-print-area, .cg-receipt-print-area * { visibility: visible !important; }
+  .cg-receipt-print-area {
+    position: fixed !important; top: 0; left: 0; right: 0;
+    width: 80mm !important; margin: 0 auto !important;
+    background: #fff !important; color: #000 !important;
+    border: none !important; box-shadow: none !important;
+  }
+}
+`;
 const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>void }) => {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -39,19 +53,49 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   }, []);
 
   const subtotal = cart.reduce((a,i)=>a+i.price*i.qty,0);
-  const activeSaleDiscount = discounts.find(d=>d.id===saleDiscountId) || null;
-  // El descuento solo aplica en línea (el flujo offline no lo soporta aún)
+  const change   = Number(cashGiven) - total;
+  // Transferencia: nombre + teléfono + carnet son obligatorios (el carnet
+  // se valida en el propio campo: se pide solo si está vacío).
+  const needsTransferData = payMethod === "transferencia";
+  const curSym = CURRENCY_SYMBOLS[saleCurrency] || "$";
+  // Moneda del recibo: la venta online devuelve currency; la offline la
+  // guardamos al vuelo (antes los items salían con $ aunque fuera CUP).
+  const recCur = lastReceipt?.currency || saleCurrency;
+  const recSym = CURRENCY_SYMBOLS[recCur] || "$";
+
+  const [myLocationId, setMyLocationId] = useState<string>("");
+  const [myLocationName, setMyLocationName] = useState<string>("");
+  // Datos fiscales que salen en el recibo — es LA FACTURA del negocio del
+  // cliente, no de CubaGest (el branding propio va solo en un pie discreto).
+  const companyName = user?.company?.name || "Mi Negocio";
+  const companyNit  = (user?.company as any)?.nit || "";
+
+  // Descuentos utilizables desde MI ubicación (el backend re-valida todo):
+  // activos, dentro de su vigencia y disponibles en esta location.
+  const usableDiscounts = discounts.filter(d =>
+    d.active !== false &&
+    (!d.startsAt || new Date(d.startsAt) <= new Date()) &&
+    (!d.endsAt || new Date(d.endsAt) >= new Date()) &&
+    (d.locationScope !== "seleccion" || (d.locationIds || []).includes(myLocationId))
+  );
+  const productDiscounts = usableDiscounts.filter(d=>d.scope==="producto");
+  // ── Descuento por venta (al total) — solo en línea (offline no lo soporta) ──
+  const activeSaleDiscount = usableDiscounts.find(d=>d.id===saleDiscountId) || null;
   const saleDiscAmount = online && activeSaleDiscount ? (() => {
     if (activeSaleDiscount.type === "fijo") return Math.min(Number(activeSaleDiscount.value), subtotal);
     return subtotal * Number(activeSaleDiscount.value) / 100;
   })() : 0;
-  const total = Math.max(0, subtotal - saleDiscAmount);
-  const change   = Number(cashGiven) - total;
-  const needsTransferData = payMethod === "transferencia";
-  const curSym = CURRENCY_SYMBOLS[saleCurrency] || "$";
-
-  const [myLocationId, setMyLocationId] = useState<string>("");
-  const [myLocationName, setMyLocationName] = useState<string>("");
+  // ── Descuentos por producto (por línea, mismo cálculo que el backend) ──
+  const lineDiscount = (item: any) => {
+    if (!online) return 0;
+    const d = usableDiscounts.find(x=>x.id===item.discountId);
+    if (!d) return 0;
+    const base = item.price * item.qty;
+    const amount = d.type === "porcentaje" ? base * Number(d.value) / 100 : Number(d.value) * item.qty;
+    return Math.max(0, Math.min(amount, base));
+  };
+  const itemDiscountTotal = cart.reduce((a,i)=>a+lineDiscount(i),0);
+  const total = Math.max(0, subtotal - saleDiscAmount - itemDiscountTotal);
 
   useEffect(()=>{
     if (online) {
@@ -184,7 +228,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   const processSale = async () => {
     if (cart.length===0) return showToast("El carrito está vacío","error");
     if (needsTransferData && (!clientName || !clientNit || !clientPhone)) {
-      return showToast("Complete nombre, NIT y teléfono del cliente para transferencia","error");
+      return showToast("Complete nombre, carnet y teléfono del cliente para transferencia","error");
     }
     setProcessing(true);
     try {
@@ -192,7 +236,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
         clientName: needsTransferData ? clientName : "Consumidor Final",
         clientNit: needsTransferData ? clientNit : "00000000000",
         clientPhone: needsTransferData ? clientPhone : undefined,
-        items: cart.map(i=>({ productId:i.id, name:i.name, qty:i.qty, price:i.price, total:i.price*i.qty })),
+        items: cart.map(i=>({ productId:i.id, name:i.name, qty:i.qty, price:i.price, total:i.price*i.qty, discountId: online && i.discountId ? i.discountId : undefined })),
         payMethod,
         subtotal,
         total,
@@ -232,6 +276,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 120px)", gap:0 }}>
+      <style>{posStyles}</style>
       <h2 style={{ margin:"0 0 4px", fontSize:20, fontWeight:800, color:"var(--ink)", flexShrink:0 }}>Punto de Venta</h2>
       {myLocationName && <p style={{ margin:"0 0 12px", fontSize:12, color:"var(--muted)", flexShrink:0 }}>Vendiendo desde: <strong>{myLocationName}</strong></p>}
 
@@ -292,12 +337,25 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
         {cart.length>0 && (
           <div style={{ maxHeight:80, overflowY:"auto", display:"flex", flexDirection:"column", gap:4 }}>
-            {cart.map(item=>(
-              <div key={item.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
+        {cart.map(item=>{
+          const ld = lineDiscount(item);
+          return (
+            <div key={item.id} style={{ display:"flex", flexDirection:"column", gap:2, borderBottom:"1px dashed var(--line)", paddingBottom:4 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
                 <span style={{ color:"var(--ink)" }}>{item.qty}× {item.name}</span>
-                <span style={{ fontWeight:700 }}>${fmt(item.price*item.qty)}</span>
+                <span style={{ fontWeight:700 }}>{curSym}{fmt(item.price*item.qty)}</span>
               </div>
-            ))}
+              {online && productDiscounts.length>0 && (
+                <select style={{ ...sel, fontSize:11, padding:"3px 6px" }} value={item.discountId||""}
+                  onChange={e=>setCart(prev=>prev.map(i=>i.id===item.id?{...i,discountId:e.target.value||undefined}:i))}>
+                  <option value="">Sin descuento</option>
+                  {productDiscounts.map(d=><option key={d.id} value={d.id}>{d.code || d.name} ({d.type==="porcentaje"?`${d.value}%`:`${curSym}${d.value}/u`})</option>)}
+                </select>
+              )}
+              {ld>0 && <div style={{ fontSize:11, color:"#DC2626" }}>Descuento: -{curSym}{fmt(ld)}</div>}
+            </div>
+          );
+        })}
           </div>
         )}
 
@@ -312,11 +370,11 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
               {PAY_METHODS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
           </Field>
-          {online && discounts.length>0 && (
+          {online && usableDiscounts.some(d=>d.scope==="venta") && (
             <Field label="Descuento">
               <select style={{ ...sel, fontSize:12, padding:"6px 10px" }} value={saleDiscountId} onChange={e=>setSaleDiscountId(e.target.value)}>
                 <option value="">—</option>
-                {discounts.filter(d=>d.scope==="venta" && d.active!==false).map(d=>(
+                {usableDiscounts.filter(d=>d.scope==="venta").map(d=>(
                   <option key={d.id} value={d.id}>{d.code || d.name} ({d.type==="fijo"?`-${d.value}`:`-${d.value}%`})</option>
                 ))}
               </select>
@@ -339,12 +397,18 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
             <span>-{curSym}{fmt(saleDiscAmount)}</span>
           </div>
         )}
+        {itemDiscountTotal>0 && (
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#DC2626" }}>
+            <span>Descuento por producto:</span>
+            <span>-{curSym}{fmt(itemDiscountTotal)}</span>
+          </div>
+        )}
 
         {needsTransferData && (
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             <input style={{ ...inp, fontSize:12 }} value={clientName} onChange={e=>setClientName(e.target.value)} placeholder="Nombre del cliente *"/>
             <div style={{ display:"flex", gap:8 }}>
-              <input style={{ ...inp, fontSize:12, flex:1, fontFamily:"monospace" }} value={clientNit} onChange={e=>setClientNit(e.target.value)} maxLength={11} placeholder="NIT *"/>
+              <input style={{ ...inp, fontSize:12, flex:1, fontFamily:"monospace" }} value={clientNit} onChange={e=>setClientNit(e.target.value)} maxLength={11} placeholder="Carnet *"/>
               <input style={{ ...inp, fontSize:12, flex:1 }} value={clientPhone} onChange={e=>setClientPhone(e.target.value)} placeholder="Teléfono *"/>
             </div>
           </div>
@@ -359,28 +423,30 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
       </div>
 
       {lastReceipt && (
-        <Modal title="Factura Emitida" onClose={()=>setLastReceipt(null)} width={480}>
-          <div style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.8, background:"var(--input-bg)", padding:20, borderRadius:12, border:"1px solid var(--line)" }}>
+        <Modal title="Factura Emitida" onClose={()=>setLastReceipt(null)} width={420}>
+          <div className="cg-receipt-print-area" style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.8, background:"var(--input-bg)", padding:20, borderRadius:12, border:"1px solid var(--line)" }}>
             {lastReceipt.isOffline && <div style={{ background:"rgba(201,162,39,0.15)", color:"#856404", padding:"6px 10px", borderRadius:8, marginBottom:10, fontSize:11, textAlign:"center" as any }}>⚡ GUARDADA OFFLINE — se sincronizará al recuperar conexión</div>}
-            <div style={{ textAlign:"center", marginBottom:16 }}>
-              <div style={{ fontWeight:800, fontSize:16 }}>CUBAGEST</div>
-              <div style={{ fontWeight:700, fontSize:14, color:"#3B82F6" }}>FACTURA COMERCIAL</div>
-              <div>No. <strong>{lastReceipt.id || lastReceipt.localId}</strong> · Fecha: {lastReceipt.date?.split("T")[0]||lastReceipt.syncedAt||new Date().toISOString().split("T")[0]}</div>
+            <div style={{ textAlign:"center", marginBottom:12 }}>
+              <div style={{ fontWeight:800, fontSize:16, color:"var(--ink)" }}>{companyName}</div>
+              {companyNit && <div style={{ fontSize:10.5, color:"var(--muted)" }}>RIF: {companyNit}</div>}
+              <div style={{ fontWeight:700, fontSize:13, color:"var(--muted)" }}>FACTURA</div>
+              <div>No. <strong>{lastReceipt.invoiceNumber || lastReceipt.id || lastReceipt.localId}</strong> · Fecha: {lastReceipt.date?.split("T")[0]||lastReceipt.syncedAt||new Date().toISOString().split("T")[0]}</div>
             </div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
             <div>Cliente: {lastReceipt.clientName || lastReceipt.client || "Consumidor Final"}</div>
-            <div>NIT Cliente: {lastReceipt.clientNit || "00000000000"}</div>
+            {lastReceipt.clientPhone && <div>Tel: {lastReceipt.clientPhone}</div>}
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
             {(lastReceipt.items||[]).map((item:any,i:number)=>(
               <div key={i} style={{ display:"flex", justifyContent:"space-between" }}>
                 <span>{item.qty}x {(item.name||item.Product?.name||"").slice(0,22)}</span>
-                <span>${fmt(item.total||item.price*item.qty)}</span>
+                <span>{recSym}{fmt(item.total||item.price*item.qty)}</span>
               </div>
             ))}
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
-            <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14, marginTop:4 }}><span>TOTAL:</span><span>{CURRENCY_SYMBOLS[lastReceipt.currency]||"$"}{fmt(lastReceipt.total)} {lastReceipt.currency||"CUP"}</span></div>
+            <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14, marginTop:4 }}><span>TOTAL:</span><span>{recSym}{fmt(lastReceipt.total)} {recCur}</span></div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
-            <div style={{ textAlign:"center", fontSize:10, color:"var(--muted)" }}>Gracias por su preferencia</div>
+            <div style={{ textAlign:"center", fontSize:10, color:"var(--ink)" }}>¡Gracias por su compra!</div>
+            <div style={{ textAlign:"center", fontSize:8, color:"var(--muted)", marginTop:4 }}>Hecho con CubaGest</div>
           </div>
           <div style={{ display:"flex", gap:10, marginTop:16, justifyContent:"flex-end" }}>
             <button style={btn("secondary")} onClick={()=>setLastReceipt(null)}><Icon name="check" size={15}/>Listo</button>

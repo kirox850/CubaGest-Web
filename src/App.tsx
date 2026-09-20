@@ -405,21 +405,45 @@ export default function App() {
       {/* Offline banner */}
       <OfflineBanner online={online} syncing={syncing} pending={pendingCount} conflicts={conflictCount}/>
 
+      <style>{`
+        .cg-sidebar { display: none; }
+        .cg-bottomnav { display: flex; }
+        @media (min-width: 1024px) {
+          .cg-sidebar { display: flex; }
+          .cg-bottomnav { display: none; }
+          .cg-content { padding-left: 232px !important; }
+        }
+      `}</style>
+
       {/* Content */}
-      <div style={{ flex:1, overflow:"auto", padding:16, paddingBottom:80 }}>
+      <div className="cg-content" style={{ flex:1, overflow:"auto", padding:16, paddingBottom:80 }}>
         {activeModule==="dashboard"    && <Dashboard user={user}/>}
         {activeModule==="inventario"   && <Inventario user={user} showToast={showToast}/>}
         {activeModule==="pos"          && <POS user={user} showToast={showToast}/>}
         {activeModule==="facturacion"  && <Facturacion user={user} showToast={showToast} onSyncRefresh={refreshPending} onManualSync={()=>runSync(true)} syncing={syncing}/>}
-        {activeModule==="contabilidad" && <Contabilidad showToast={showToast}/>}
+        {activeModule==="contabilidad" && <Contabilidad user={user} showToast={showToast}/>}
         {activeModule==="cierre"       && <CierreCaja user={user} showToast={showToast}/>}
         {activeModule==="transferencias" && <Transferencias user={user} showToast={showToast}/>}
         {activeModule==="usuarios"     && <Usuarios currentUser={user} showToast={showToast}/>}
         {activeModule==="auditoria"    && <Auditoria showToast={showToast}/>}
       </div>
 
-      {/* Bottom navigation */}
-      <div style={{ position:"fixed" as any, bottom:0, left:0, right:0, background:"var(--card, #ffffff)", borderTop:"1px solid var(--line, #e8e0d8)", display:"flex", zIndex:100, paddingBottom:"env(safe-area-inset-bottom)" }}>
+      {/* Sidebar desktop (≥1024px) — la bottom-nav solo aplica en móvil */}
+      <nav className="cg-sidebar" style={{ position:"fixed", top:56, bottom:0, left:0, width:216, background:"var(--card, #ffffff)", borderRight:"1px solid var(--line, #e8e0d8)", display:"flex", flexDirection:"column", padding:10, gap:2, zIndex:90, overflowY:"auto" }}>
+        {navItems.map(item=>{
+          const on = activeModule===item.id;
+          return (
+            <button key={item.id} onClick={()=>{ setActiveModule(item.id); setProfileOpen(false); }}
+              style={{ display:"flex", alignItems:"center", gap:11, padding:"11px 14px", borderRadius:12, border:"none", cursor:"pointer", textAlign:"left" as any, fontSize:13.5, fontWeight:on?700:500, background:on?"rgba(59,130,246,0.10)":"transparent", color:on?"#3B82F6":"var(--muted, #64748B)", transition:"background 0.12s" }}>
+              <Icon name={item.icon} size={19} color={on?"#3B82F6":"#64748B"}/>
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Bottom navigation (móvil) — oculta en desktop por el media query */}
+      <div className="cg-bottomnav" style={{ position:"fixed" as any, bottom:0, left:0, right:0, background:"var(--card, #ffffff)", borderTop:"1px solid var(--line, #e8e0d8)", display:"flex", zIndex:100, paddingBottom:"env(safe-area-inset-bottom)" }}>
         {navItems.map(item=>(
           <button key={item.id} onClick={()=>{ setActiveModule(item.id); setProfileOpen(false); }} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"10px 4px 8px", border:"none", cursor:"pointer", background:"none", color:activeModule===item.id?"#3B82F6":"var(--muted, #94A3B8)", gap:4, minWidth:0 }}>
             <Icon name={item.icon} size={22} color={activeModule===item.id?"#3B82F6":"#64748B"}/>

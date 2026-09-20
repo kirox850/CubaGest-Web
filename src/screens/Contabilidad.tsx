@@ -1,12 +1,26 @@
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
 import { fmt, today, downloadCSV } from "@/lib/format";
-import { PAY_METHODS, EXPENSE_CATS } from "@/config/constants";
+import { PAY_METHODS, EXPENSE_CATS, CURRENCY_SYMBOLS } from "@/config/constants";
 import Icon from "@/components/shared/Icon";
 import { Modal, Badge, Field, Spinner, btn, inp, sel } from "@/components/shared/primitives";
 
+// Impresión: solo el recibo visible, con ancho de ticket.
+const contStyles = `
+@media print {
+  body * { visibility: hidden !important; }
+  .cg-receipt-print-area, .cg-receipt-print-area * { visibility: visible !important; }
+  .cg-receipt-print-area {
+    position: fixed !important; top: 0; left: 0; right: 0;
+    width: 80mm !important; margin: 0 auto !important;
+    background: #fff !important; color: #000 !important;
+    border: none !important; box-shadow: none !important;
+  }
+}
+`;
+
 // ─── CONTABILIDAD ─────────────────────────────────────────────────────────────
-const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) => {
+const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>void }) => {
   const [sales, setSales]       = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -193,29 +207,30 @@ const Contabilidad = ({ showToast }: { showToast: (m:string,t:string)=>void }) =
 
       {viewInv && (
         <Modal title={`Factura ${viewInv.id}`} onClose={()=>setViewInv(null)} width={520}>
-          <div style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.9, background:"var(--input-bg)", padding:20, borderRadius:12, border:"1px solid var(--line)" }}>
+          <style>{contStyles}</style>
+          <div className="cg-receipt-print-area" style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.9, background:"var(--input-bg)", padding:20, borderRadius:12, border:"1px solid var(--line)" }}>
             <div style={{ textAlign:"center", marginBottom:14 }}>
-              <div style={{ fontWeight:800, fontSize:15 }}>CUBAGEST</div>
-              <div>FACTURA COMERCIAL No. <strong style={{ color:"#3B82F6", fontSize:15 }}>{viewInv.id}</strong></div>
-              {viewInv.status==="anulada" && <div style={{ color:"#3B82F6", fontWeight:800 }}>⚠ ANULADA</div>}
+              <div style={{ fontWeight:800, fontSize:15, color:"var(--ink)" }}>{user?.company?.name || "Mi Negocio"}</div>
+              <div>FACTURA No. <strong style={{ color:"#3B82F6", fontSize:15 }}>{viewInv.invoiceNumber||viewInv.id}</strong></div>
+              {viewInv.status==="anulada" && <div style={{ color:"#DC2626", fontWeight:800 }}>⚠ ANULADA</div>}
             </div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
             <div>Fecha: {(viewInv.date||viewInv.createdAt||"").split("T")[0]}</div>
-            <div>Cliente: {viewInv.client}</div>
-            <div>NIT: {viewInv.clientNit || "—"}</div>
-            <div>Teléfono: {viewInv.clientPhone || "—"}</div>
+            <div>Cliente: {viewInv.clientName||viewInv.client||"Consumidor Final"}</div>
+            {viewInv.clientPhone && <div>Teléfono: {viewInv.clientPhone}</div>}
             <div>Método: {PAY_METHODS.find(p=>p.id===viewInv.payMethod)?.label||viewInv.payMethod}</div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
             {(viewInv.items||viewInv.SaleItems||[]).map((item:any,i:number)=>(
               <div key={i} style={{ display:"flex", justifyContent:"space-between" }}>
                 <span>{item.qty}x {item.name||item.Product?.name}</span>
-                <span>${fmt(item.total||item.price*item.qty)}</span>
+                <span>{CURRENCY_SYMBOLS[viewInv.currency]||"$"}{fmt(item.total||item.price*item.qty)}</span>
               </div>
             ))}
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
-            <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14, marginTop:4 }}><span>TOTAL:</span><span>${fmt(viewInv.total)} CUP</span></div>
+            <div style={{ display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:14, marginTop:4 }}><span>TOTAL:</span><span>{CURRENCY_SYMBOLS[viewInv.currency]||"$"}{fmt(viewInv.total)} {viewInv.currency||"CUP"}</span></div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
-            <div style={{ textAlign:"center", fontSize:10, color:"var(--muted)" }}>Gracias por su preferencia</div>
+            <div style={{ textAlign:"center", fontSize:10, color:"var(--ink)" }}>¡Gracias por su compra!</div>
+            <div style={{ textAlign:"center", fontSize:8, color:"var(--muted)", marginTop:4 }}>Hecho con CubaGest</div>
           </div>
           <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:16 }}>
             <button style={btn("secondary")} onClick={()=>setViewInv(null)}>Cerrar</button>
