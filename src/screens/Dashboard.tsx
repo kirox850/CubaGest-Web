@@ -1,10 +1,148 @@
 import { useState, useEffect } from "react";
+import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 import { apiFetch } from "@/lib/api";
 import { fmt } from "@/lib/format";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { useOnlineStatus } from "@/hooks/useOnline";
 import { ROLES } from "@/config/constants";
 import Icon from "@/components/shared/Icon";
 import { Spinner } from "@/components/shared/primitives";
+
+// ─── Gráfico de área interactivo (estilo shadcn) ─────────────────────────────
+// Una serie por moneda (nunca se convierten entre sí). "Todas" suma las
+// monedas por día SOLO para dibujar la curva — el detalle real por moneda
+// está en las tarjetas de arriba y en el selector.
+const RANGE_OPTIONS = [
+  { value: "7d", label: "Últimos 7 días", days: 7 },
+  { value: "30d", label: "Últimos 30 días", days: 30 },
+  { value: "90d", label: "Últimos 3 meses", days: 90 },
+  { value: "180d", label: "Últimos 6 meses", days: 180 },
+];
+
+const dayLabel = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString("es", { day: "numeric", month: "short" });
+
+const curSymbol = (c: string) => (c === "EUR" ? "€" : "$" );
+
+const SalesAreaChart = ({ analytics, fallback, range, onRange, cur, onCur }: {
+  analytics: any;
+  fallback: { date: string; total: number }[];
+  range: string;
+  onRange: (r: string) => void;
+  cur: string;
+  onCur: (c: string) => void;
+}) => {
+  const currencies: string[] = analytics?.currencies?.length
+    ? analytics.currencies
+    : Object.keys(analytics?.trend30ByCurrency || {});
+  const byCur = analytics?.trend30ByCurrency || {};
+  const series: { date: string; total: number }[] =
+    cur === "all"
+      ? (analytics?.trend30 || []).map((d: any) => ({ ...d }))
+      : (byCur[cur] || []);
+  const hasData = series.some((d) => d.total > 0);
+  const rangeLabel = RANGE_OPTIONS.find((r) => r.value === range)?.label || "";
+
+  const chartConfig: ChartConfig = {
+    total: { label: cur === "all" ? "Todas las monedas" : cur, color: "#3B82F6" },
+  };
+  const chartId = `sales-${cur}`.replace(/[^a-zA-Z0-9-]/g, "");
+  const gradId = `fill-${chartId}`;
+
+  return (
+    <div style={{ background:"var(--card)", borderRadius:16, border:"1px solid var(--line)", padding:20 }}>
+      <div style={{ display:"flex", flexWrap:"wrap", gap:12, alignItems:"flex-start", justifyContent:"space-between", marginBottom:12 }}>
+        <div>
+          <h3 style={{ margin:"0 0 2px", fontSize:15, fontWeight:800, color:"var(--ink)" }}>Ingresos por día</h3>
+          <p style={{ margin:0, fontSize:12, color:"var(--muted)" }}>
+            {rangeLabel}{cur !== "all" ? ` · solo ${cur}` : ""}
+          </p>
+        </div>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          {currencies.length > 1 && (
+            <Select value={cur} onValueChange={onCur}>
+              <SelectTrigger className="w-[160px]" aria-label="Moneda">
+                <SelectValue placeholder="Moneda" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las monedas</SelectItem>
+                {currencies.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          <Select value={range} onValueChange={onRange}>
+            <SelectTrigger className="w-[160px]" aria-label="Rango">
+              <SelectValue placeholder={rangeLabel} />
+            </SelectTrigger>
+            <SelectContent>
+              {RANGE_OPTIONS.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {hasData ? (
+        <ChartContainer config={chartConfig} id={chartId} className="h-[260px] w-full">
+          <AreaChart data={series} margin={{ top: 10, right: 8, left: 8, bottom: 0 }}>
+            <defs>
+              <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="var(--color-total)" stopOpacity={1} />
+                <stop offset="95%" stopColor="var(--color-total)" stopOpacity={0.1} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} />
+            <XAxis
+              dataKey="date"
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              minTickGap={28}
+              tickFormatter={(v: string) => dayLabel(v)}
+            />
+            <ChartTooltip
+              cursor={false}
+              content={
+                <ChartTooltipContent
+                  labelFormatter={(l: any) => dayLabel(String(l))}
+                  valueFormatter={(v: number) => `${cur === "all" ? "" : curSymbol(cur)}${fmt(v)}`}
+                  indicator="dot"
+                />
+              }
+            />
+            <Area
+              dataKey="total"
+              type="natural"
+              stroke="var(--color-total)"
+              strokeWidth={2}
+              fill={`url(#${gradId})`}
+              activeDot={{ r: 4 }}
+            />
+          </AreaChart>
+        </ChartContainer>
+      ) : analytics ? (
+        <p style={{ padding:"40px 0", textAlign:"center", fontSize:13, color:"var(--muted)" }}>
+          Aún no hay ventas registradas en este período.
+        </p>
+      ) : fallback.length > 0 ? (
+        <div style={{ display:"flex", alignItems:"flex-end", gap:8, height:90 }}>
+          {fallback.map((d) => (
+            <div key={d.date} style={{ flex:1, textAlign:"center" }} title={`${d.date}: ${fmt(d.total)}`}>
+              <div style={{ height:Math.max(4, (d.total / Math.max(1, ...fallback.map((x) => x.total))) * 70), background:"#3B82F6", borderRadius:4, margin:"0 auto", width:"60%" }} />
+              <div style={{ fontSize:9, color:"var(--muted)", marginTop:4 }}>{d.date.slice(5)}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {cur === "all" && hasData && (
+        <p style={{ margin:"10px 0 0", fontSize:11, color:"var(--muted)" }}>
+          La curva suma las monedas para la tendencia; selecciona una moneda para verla aislada (nunca se convierten entre sí).
+        </p>
+      )}
+    </div>
+  );
+};
 
 // ─── DASHBOARD (con analítica de negocio) ─────────────────────────────────────
 const Dashboard = ({ user }: { user: any }) => {
@@ -51,9 +189,14 @@ const Dashboard = ({ user }: { user: any }) => {
   // Analítica (mes vs mes, top productos, tendencia, muertos) — hook ANTES de
   // cualquier return condicional para respetar las reglas de React.
   const [analytics, setAnalytics] = useState<any>(null);
+  // Rango y moneda del gráfico interactivo — cambiar el rango recarga la
+  // analítica pidiendo ?days=N al backend.
+  const [range, setRange] = useState("30d");
+  const [cur, setCur] = useState("all");
   useEffect(() => {
-    apiFetch("/dashboard/analytics").then(setAnalytics).catch(() => {});
-  }, []);
+    const days = range === "7d" ? 7 : range === "30d" ? 30 : range === "90d" ? 90 : 180;
+    apiFetch(`/dashboard/analytics?days=${days}`).then(setAnalytics).catch(() => {});
+  }, [range]);
 
   if (loading) return <Spinner/>;
   if (!summary && error) return <div style={{ color:"#3B82F6", padding:24 }}>Error: {error}</div>;
@@ -80,9 +223,6 @@ const Dashboard = ({ user }: { user: any }) => {
     </div>
   );
 
-  const maxChart = Math.max(1, ...chartDays.map(d=>d.total));
-  const trend = analytics?.trend30 || [];
-  const maxTrend = Math.max(1, ...trend.map((d:any)=>d.total));
   const rev = analytics?.revenueByCurrency || {};
 
   return (
@@ -115,20 +255,8 @@ const Dashboard = ({ user }: { user: any }) => {
         </div>
       )}
 
-      {/* Gráfico 7 días */}
-      {chartDays.length > 0 && (
-        <div style={{ background:"var(--card)", borderRadius:16, border:"1px solid var(--line)", padding:20 }}>
-          <h3 style={{ margin:"0 0 14px", fontSize:15, fontWeight:800, color:"var(--ink)" }}>Últimos 7 días</h3>
-          <div style={{ display:"flex", alignItems:"flex-end", gap:8, height:90 }}>
-            {chartDays.map(d => (
-              <div key={d.date} style={{ flex:1, textAlign:"center" }} title={`${d.date}: ${fmt(d.total)}`}>
-                <div style={{ height:Math.max(4, (d.total/maxChart)*70), background:"#3B82F6", borderRadius:4, margin:"0 auto", width:"60%" }}/>
-                <div style={{ fontSize:9, color:"var(--muted)", marginTop:4 }}>{d.date.slice(5)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Gráfico interactivo de área (estilo shadcn) con datos reales */}
+      <SalesAreaChart analytics={analytics} fallback={chartDays} range={range} onRange={setRange} cur={cur} onCur={setCur} />
 
       {/* Analítica — inteligencia de negocio */}
       {analytics && (
@@ -163,15 +291,6 @@ const Dashboard = ({ user }: { user: any }) => {
             ))}
           </div>
 
-          <div style={{ background:"var(--card)", borderRadius:16, border:"1px solid var(--line)", padding:20 }}>
-            <h3 style={{ margin:"0 0 6px", fontSize:15, fontWeight:800, color:"var(--ink)" }}>Tendencia 30 días</h3>
-            <div style={{ display:"flex", alignItems:"flex-end", gap:2, height:60 }}>
-              {trend.map((d:any) => (
-                <div key={d.date} title={`${d.date}: ${fmt(d.total)}`} style={{ flex:1, height:Math.max(2,(d.total/maxTrend)*54), background:d.total>0?"#60A5FA":"var(--input-bg)", borderRadius:2 }}/>
-              ))}
-            </div>
-            <p style={{ margin:"8px 0 0", fontSize:11, color:"var(--muted)" }}>Suma de todas las monedas por día (las monedas no se convierten entre sí).</p>
-          </div>
 
           <div style={{ background:"var(--card)", borderRadius:16, border:"1px solid var(--line)", padding:20 }}>
             <h3 style={{ margin:"0 0 10px", fontSize:15, fontWeight:800, color:"var(--ink)" }}>Sin ventas hace 30 días</h3>

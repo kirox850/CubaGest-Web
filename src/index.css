@@ -66,6 +66,23 @@ input, select, button, textarea { font-family: inherit; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
+/* ── recharts (components/ui/chart) ───────────────────────────────────────
+   Los bordes de la grilla y el color de los ticks heredan del tema vía
+   variables semánticas; el selector de moneda/rango usa los selects Radix. */
+.recharts-wrapper,
+.recharts-surface {
+  outline: none;
+}
+.recharts-cartesian-axis-tick text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.recharts-cartesian-grid line {
+  stroke: var(--line);
+  stroke-dasharray: none;
+}
+.recharts-text.recharts-label { fill: var(--muted); }
+
 @media print {
   nav, aside, header { display: none !important; }
   .no-print { display: none !important; }
