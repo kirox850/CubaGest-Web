@@ -1,0 +1,133 @@
+/* ═══ Sandbox /blocks — biblioteca de estilos de los bloques shadcn ═══
+   Aislado del resto de la app: solo se importa desde src/blocks/.
+   Extiende el tema CubaGest con los tokens que los bloques esperan
+   (bg-sidebar, --radius, animaciones Radix...). Nada de esto toca la
+   app normal. */
+
+/* ── Tokens de Tailwind v4 para utilidades de los bloques ──────────────
+   Sin esto, utilidades como bg-sidebar / text-sidebar-foreground /
+   bg-background no existen (Tailwind v4 genera utilidades desde @theme). */
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --color-primary: #3b82f6;
+  --color-primary-foreground: #ffffff;
+  --color-border: var(--line);
+  --color-accent: color-mix(in srgb, #3b82f6 8%, transparent);
+  --color-accent-foreground: var(--ink);
+  --color-ring: #3b82f6;
+  --color-input: var(--input-border);
+  --color-sidebar: var(--card);
+  --color-sidebar-foreground: var(--ink);
+  --color-sidebar-primary: #3b82f6;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: color-mix(in srgb, #3b82f6 8%, transparent);
+  --color-sidebar-accent-foreground: var(--ink);
+  --color-sidebar-border: var(--line);
+  --color-sidebar-ring: #3b82f6;
+}
+
+/* ── Tokens base esperados por los componentes de shadcn ───────────────
+   Mapeados a las variables semánticas de CubaGest para que los bloques
+   sigan el modo claro/oscuro de la app. */
+:root {
+  --radius: 0.75rem;
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --muted-foreground: var(--muted);
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --border: var(--line);
+  --accent: color-mix(in srgb, #3b82f6 8%, transparent);
+  --accent-foreground: var(--ink);
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: color-mix(in srgb, #3b82f6 8%, transparent);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--line);
+  --sidebar-ring: #3b82f6;
+  --input: var(--input-border);
+  --ring: #3b82f6;
+}
+
+/* ── Animaciones de Radix (dropdown / tooltip / sheet) ───────────────── */
+@keyframes bkb-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes bkb-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes bkb-pop-in {
+  from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes bkb-pop-out {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to { opacity: 0; transform: scale(0.96) translateY(-4px); }
+}
+@keyframes bkb-slide-left {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes bkb-slide-left-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+@keyframes bkb-slide-bottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes bkb-slide-bottom-out {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+@keyframes bkb-down {
+  from { height: 0; opacity: 0; }
+  to { height: var(--radix-collapsible-content-height); opacity: 1; }
+}
+@keyframes bkb-up {
+  from { height: var(--radix-collapsible-content-height); opacity: 1; }
+  to { height: 0; opacity: 0; }
+}
+
+/* Dropdown / Select en popper */
+.bkb-pop[data-state="open"] { animation: bkb-pop-in 150ms cubic-bezier(0.16, 1, 0.3, 1); }
+.bkb-pop[data-state="closed"] { animation: bkb-pop-out 100ms ease-in; }
+
+/* Tooltip */
+.bkb-tooltip[data-state="delayed-open"] { animation: bkb-fade-in 150ms ease-out; }
+.bkb-tooltip[data-state="instant-open"] { animation: bkb-fade-in 150ms ease-out; }
+
+/* Sheet (drawer lateral) */
+.bkb-sheet[data-state="open"] { animation: bkb-slide-left 300ms cubic-bezier(0.16, 1, 0.3, 1); }
+.bkb-sheet[data-state="closed"] { animation: bkb-slide-left-out 200ms ease-in; }
+.bkb-sheet-bottom[data-state="open"] { animation: bkb-slide-bottom 300ms cubic-bezier(0.16, 1, 0.3, 1); }
+.bkb-sheet-bottom[data-state="closed"] { animation: bkb-slide-bottom-out 200ms ease-in; }
+.bkb-overlay[data-state="open"] { animation: bkb-fade-in 200ms ease-out; }
+.bkb-overlay[data-state="closed"] { animation: bkb-fade-out 200ms ease-in; }
+
+/* Collapsible (chevrons del sidebar) */
+.bkb-collapsible[data-state="open"] { animation: bkb-down 200ms ease-out; }
+.bkb-collapsible[data-state="closed"] { animation: bkb-up 200ms ease-out; }
+
+/* ── Toggle group (selector de rango del chart) ─────────────────────── */
+[data-slot="toggle-group-item"][data-state="on"] {
+  background: color-mix(in srgb, #3b82f6 12%, transparent);
+  color: #3b82f6;
+}
+
+/* ── Estado del sidebar colapsado a iconos: utilidades usadas por ──────
+   los bloques (grupo padre = sidebar-wrapper) */
+[data-slot="sidebar-wrapper"] {
+  --sidebar-width: 16rem;
+  --sidebar-width-icon: 3rem;
+}
+
+/* Scrollbars dentro del área del bloque heredan el estilo global */
+[data-slot="sidebar-inset"] {
+  background: var(--card);
+}
