@@ -53,7 +53,6 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   }, []);
 
   const subtotal = cart.reduce((a,i)=>a+i.price*i.qty,0);
-  const change   = Number(cashGiven) - total;
   // Transferencia: nombre + teléfono + carnet son obligatorios (el carnet
   // se valida en el propio campo: se pide solo si está vacío).
   const needsTransferData = payMethod === "transferencia";
@@ -65,10 +64,10 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
   const [myLocationId, setMyLocationId] = useState<string>("");
   const [myLocationName, setMyLocationName] = useState<string>("");
-  // Datos fiscales que salen en el recibo — es LA FACTURA del negocio del
-  // cliente, no de CubaGest (el branding propio va solo en un pie discreto).
+  // El recibo es LA FACTURA del negocio del cliente, no de CubaGest (el
+  // branding propio va solo en un pie discreto). El carnet del comprador
+  // aparece solo cuando se capturó (transferencias).
   const companyName = user?.company?.name || "Mi Negocio";
-  const companyNit  = (user?.company as any)?.nit || "";
 
   // Descuentos utilizables desde MI ubicación (el backend re-valida todo):
   // activos, dentro de su vigencia y disponibles en esta location.
@@ -96,6 +95,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   };
   const itemDiscountTotal = cart.reduce((a,i)=>a+lineDiscount(i),0);
   const total = Math.max(0, subtotal - saleDiscAmount - itemDiscountTotal);
+  const change = Number(cashGiven) - total;
 
   useEffect(()=>{
     if (online) {
@@ -428,12 +428,12 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
             {lastReceipt.isOffline && <div style={{ background:"rgba(201,162,39,0.15)", color:"#856404", padding:"6px 10px", borderRadius:8, marginBottom:10, fontSize:11, textAlign:"center" as any }}>⚡ GUARDADA OFFLINE — se sincronizará al recuperar conexión</div>}
             <div style={{ textAlign:"center", marginBottom:12 }}>
               <div style={{ fontWeight:800, fontSize:16, color:"var(--ink)" }}>{companyName}</div>
-              {companyNit && <div style={{ fontSize:10.5, color:"var(--muted)" }}>RIF: {companyNit}</div>}
               <div style={{ fontWeight:700, fontSize:13, color:"var(--muted)" }}>FACTURA</div>
               <div>No. <strong>{lastReceipt.invoiceNumber || lastReceipt.id || lastReceipt.localId}</strong> · Fecha: {lastReceipt.date?.split("T")[0]||lastReceipt.syncedAt||new Date().toISOString().split("T")[0]}</div>
             </div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
             <div>Cliente: {lastReceipt.clientName || lastReceipt.client || "Consumidor Final"}</div>
+            {(lastReceipt.clientNit && lastReceipt.clientNit !== "00000000000") && <div>Carnet: {lastReceipt.clientNit}</div>}
             {lastReceipt.clientPhone && <div>Tel: {lastReceipt.clientPhone}</div>}
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"10px 0" }}/>
             {(lastReceipt.items||[]).map((item:any,i:number)=>(

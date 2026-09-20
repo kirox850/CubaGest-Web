@@ -217,6 +217,7 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
             <div>Fecha: {(viewInv.date||viewInv.createdAt||"").split("T")[0]}</div>
             <div>Cliente: {viewInv.clientName||viewInv.client||"Consumidor Final"}</div>
+            {(viewInv.clientNit && viewInv.clientNit !== "00000000000") && <div>Carnet: {viewInv.clientNit}</div>}
             {viewInv.clientPhone && <div>Teléfono: {viewInv.clientPhone}</div>}
             <div>Método: {PAY_METHODS.find(p=>p.id===viewInv.payMethod)?.label||viewInv.payMethod}</div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
