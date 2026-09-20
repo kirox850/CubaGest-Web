@@ -237,7 +237,7 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
                   act(() => pf(`/companies/${id}/plan`, { method: "POST", body: { plan: co.plan, months: Number(months) } }), "Extensión aplicada.");
                 }
               }}>
-                <SelectTrigger size="sm" style={{ width: 170 }}><SelectValue placeholder="Regalar +meses" /></SelectTrigger>
+                <SelectTrigger style={{ width: 170 }}><SelectValue placeholder="Regalar +meses" /></SelectTrigger>
                 <SelectContent>
                   {["1", "3", "6", "12"].map((m) => <SelectItem key={m} value={m}>+{m} meses</SelectItem>)}
                 </SelectContent>
