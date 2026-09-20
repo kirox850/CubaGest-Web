@@ -1,0 +1,7 @@
+# Seguridad básica para toda la app + noindex del panel de plataforma
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+/panel/*
+  X-Robots-Tag: noindex, nofollow
