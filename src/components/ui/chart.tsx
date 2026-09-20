@@ -150,4 +150,6 @@ ChartTooltipContent.displayName = "ChartTooltipContent";
 
 const ChartTooltip = RechartsPrimitive.Tooltip;
 
-export { ChartContainer, ChartStyle, ChartTooltip, ChartTooltipContent, useChart, compact };
+// `compact` ya se exporta arriba con `export const` — no repetirlo aquí
+// (TypeScript: "Cannot redeclare exported variable").
+export { ChartContainer, ChartStyle, ChartTooltip, ChartTooltipContent, useChart };
