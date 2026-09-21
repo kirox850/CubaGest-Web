@@ -318,8 +318,9 @@ export default function App() {
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100vh", background:"var(--bg, #F8FAFC)", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
 
-      {/* Top header */}
-      <div style={{ background:"#1E293B", padding:"0 16px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, zIndex:10, boxShadow:"0 1px 8px rgba(0,0,0,0.12)" }}>
+      {/* Top header — el paddingTop con safe-area baja el contenido por debajo
+          de la barra de estado del iPhone (reloj/batería); en desktop env() = 0 */}
+      <div style={{ background:"#1E293B", padding:"0 16px", paddingTop:"env(safe-area-inset-top)", height:"calc(56px + env(safe-area-inset-top))", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, zIndex:10, boxShadow:"0 1px 8px rgba(0,0,0,0.12)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <BrandLogo size={32}/>
           <div style={{ color:"#ffffff", fontWeight:800, fontSize:15 }}>CubaGest</div>
@@ -331,7 +332,7 @@ export default function App() {
           </button>
           {profileOpen && (
             <div style={{ position:"fixed" as any, inset:0, zIndex:400 }} onClick={()=>setProfileOpen(false)}>
-              <div style={{ position:"absolute" as any, right:12, top:56, background:"var(--card, #fff)", borderRadius:12, boxShadow:"0 8px 32px rgba(0,0,0,0.25)", border:"1px solid var(--line, #e8e0d8)", minWidth:220, zIndex:401 }} onClick={e=>e.stopPropagation()}>
+              <div style={{ position:"absolute" as any, right:12, top:"calc(56px + env(safe-area-inset-top))", background:"var(--card, #fff)", borderRadius:12, boxShadow:"0 8px 32px rgba(0,0,0,0.25)", border:"1px solid var(--line, #e8e0d8)", minWidth:220, zIndex:401 }} onClick={e=>e.stopPropagation()}>
                 <div style={{ padding:"14px 16px", borderBottom:"1px solid var(--line, #f0ebe4)" }}>
                   <div style={{ fontWeight:700, fontSize:14, color:"var(--ink, #1E293B)" }}>{user.name}</div>
                   <div style={{ fontSize:12, color:"var(--muted, #64748B)" }}>{user.email}</div>
@@ -405,13 +406,18 @@ export default function App() {
       {/* Offline banner */}
       <OfflineBanner online={online} syncing={syncing} pending={pendingCount} conflicts={conflictCount}/>
 
+      {/* Reglas de visibilidad de la navegación. ¡Con !important! Los estilos
+          inline de <nav> (display:flex) ganan por especificidad sobre esta hoja,
+          sin !important la sidebar aparecía también en el teléfono y la
+          bottom-nav también en desktop. */}
       <style>{`
-        .cg-sidebar { display: none; }
-        .cg-bottomnav { display: flex; }
+        .cg-sidebar { display: none !important; }
+        .cg-bottomnav { display: flex !important; }
+        .cg-content { padding-bottom: 96px !important; }
         @media (min-width: 1024px) {
-          .cg-sidebar { display: flex; }
-          .cg-bottomnav { display: none; }
-          .cg-content { padding-left: 232px !important; }
+          .cg-sidebar { display: flex !important; }
+          .cg-bottomnav { display: none !important; }
+          .cg-content { padding-left: 232px !important; padding-bottom: 16px !important; }
         }
       `}</style>
 
@@ -428,8 +434,9 @@ export default function App() {
         {activeModule==="auditoria"    && <Auditoria showToast={showToast}/>}
       </div>
 
-      {/* Sidebar desktop (≥1024px) — la bottom-nav solo aplica en móvil */}
-      <nav className="cg-sidebar" style={{ position:"fixed", top:56, bottom:0, left:0, width:216, background:"var(--card, #ffffff)", borderRight:"1px solid var(--line, #e8e0d8)", display:"flex", flexDirection:"column", padding:10, gap:2, zIndex:90, overflowY:"auto" }}>
+      {/* Sidebar desktop (≥1024px) — top con safe-area por si corre como PWA
+          en una tablet con notch; bottom alineado al borde real */}
+      <nav className="cg-sidebar" style={{ position:"fixed", top:"calc(56px + env(safe-area-inset-top))", bottom:0, left:0, width:216, background:"var(--card, #ffffff)", borderRight:"1px solid var(--line, #e8e0d8)", display:"flex", flexDirection:"column", padding:10, gap:2, zIndex:90, overflowY:"auto" }}>
         {navItems.map(item=>{
           const on = activeModule===item.id;
           return (
@@ -442,16 +449,18 @@ export default function App() {
         })}
       </nav>
 
-      {/* Bottom navigation (móvil) — oculta en desktop por el media query */}
-      <div className="cg-bottomnav" style={{ position:"fixed" as any, bottom:0, left:0, right:0, background:"var(--card, #ffffff)", borderTop:"1px solid var(--line, #e8e0d8)", display:"flex", zIndex:100, paddingBottom:"env(safe-area-inset-bottom)" }}>
+      {/* Bottom navigation (móvil) — la altura extra del safe-area ya la aporta
+          el padding-bottom del env(), el contenido respira con 96px arriba */}
+      <div className="cg-bottomnav" style={{ position:"fixed" as any, bottom:0, left:0, right:0, background:"var(--card, #ffffff)", borderTop:"1px solid var(--line, #e8e0d8)", display:"flex", zIndex:100, paddingBottom:"max(env(safe-area-inset-bottom), 4px)" }}>
         {navItems.map(item=>(
-          <button key={item.id} onClick={()=>{ setActiveModule(item.id); setProfileOpen(false); }} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"10px 4px 8px", border:"none", cursor:"pointer", background:"none", color:activeModule===item.id?"#3B82F6":"var(--muted, #94A3B8)", gap:4, minWidth:0 }}>
+          <button key={item.id} onClick={()=>{ setActiveModule(item.id); setProfileOpen(false); }} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"8px 4px 6px", border:"none", cursor:"pointer", background:"none", color:activeModule===item.id?"#3B82F6":"var(--muted, #94A3B8)", gap:3, minWidth:0 }}>
             <Icon name={item.icon} size={22} color={activeModule===item.id?"#3B82F6":"#64748B"}/>
             <span style={{ fontSize:10, fontWeight:activeModule===item.id?700:400, whiteSpace:"nowrap" as any, overflow:"hidden", textOverflow:"ellipsis", maxWidth:"100%" }}>{item.label}</span>
             {activeModule===item.id && <div style={{ width:4, height:4, borderRadius:"50%", background:"#3B82F6", marginTop:2 }}/>}
           </button>
         ))}
       </div>
+
 
       {planOpen && <PlanModal onClose={()=>setPlanOpen(false)} user={user}/>}
       {discountsOpen && <DiscountsAdmin showToast={showToast} onClose={()=>setDiscountsOpen(false)}/>}

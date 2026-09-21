@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { apiFetch, saveToken } from "@/lib/api";
 import { Field, btn, inp } from "@/components/shared/primitives";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Icon from "@/components/shared/Icon";
 import { BrandLogo } from "@/screens/Landing";
 
@@ -10,11 +9,37 @@ import { BrandLogo } from "@/screens/Landing";
 // cambia la presentación. En pantallas angostas el panel lateral desaparece.
 
 // Oculta el panel visual en móviles (los estilos inline no soportan media
-// queries, así que usamos una clase dedicada).
+// queries, así que usamos una clase dedicada). El panel de vidrio se logra
+// con backdrop-filter (blur + saturate) sobre el fondo decorado.
 const loginStyles = `
 .cg-login-aside { display: flex; }
 @media (max-width: 900px) { .cg-login-aside { display: none; } }
+.cg-login-bgart { display: block; }
+@media (min-width: 1024px) { .cg-login-bgart { display: none; } }
 `;
+
+const glassPanel = {
+  width: "100%", maxWidth: 400, margin: "0 20px",
+  background: "rgba(255,255,255,0.55)",
+  backdropFilter: "blur(14px) saturate(140%)",
+  WebkitBackdropFilter: "blur(14px) saturate(140%)",
+  border: "1px solid rgba(255,255,255,0.55)",
+  borderRadius: 20,
+  boxShadow: "0 20px 60px rgba(2,8,23,0.18)",
+} as const;
+
+const glassInput = {
+  ...inp,
+  background: "rgba(255,255,255,0.6)",
+  borderColor: "rgba(255,255,255,0.7)",
+} as const;
+
+const labelStyle = {
+  fontSize: 12, fontWeight: 600, color: "var(--ink)", opacity: 0.75,
+  letterSpacing: "0.3px", display: "block", marginBottom: 6,
+} as const;
+
+const fieldGap = { display: "flex", flexDirection: "column", gap: 20 } as const;
 
 const HIGHLIGHTS = [
   "Funciona sin VPN — incluso sin internet",
@@ -102,6 +127,13 @@ const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => voi
     <div style={{ minHeight:"100vh", background:"var(--bg)", display:"flex" }}>
       <style>{loginStyles}</style>
 
+      {/* Fondo decorado detrás del panel de vidrio (el blur necesita algo que
+          difuminar para notarse) — solo <1024px, en desktop lo aporta el aside */}
+      <div className="cg-login-bgart" style={{ position:"fixed", inset:0, zIndex:0, overflow:"hidden", pointerEvents:"none" }}>
+        <div style={{ position:"absolute", width:420, height:420, borderRadius:"50%", background:"radial-gradient(circle,rgba(59,130,246,0.18),transparent 65%)", top:-120, right:-100 }}/>
+        <div style={{ position:"absolute", width:320, height:320, borderRadius:"50%", background:"radial-gradient(circle,rgba(16,185,129,0.12),transparent 65%)", bottom:-80, left:-60 }}/>
+      </div>
+
       {/* ── Panel visual de marca (solo desktop) ── */}
       <aside
         className="cg-login-aside"
@@ -142,49 +174,49 @@ const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => voi
       </aside>
 
       {/* ── Columna del formulario ── */}
-      <main style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:20, padding:"32px 20px" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <span className="cg-login-brand"><BrandLogo size={30}/></span>
+      <main style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16, padding:"env(safe-area-inset-top) 20px calc(32px + env(safe-area-inset-bottom))" }}>
+        <div className="cg-login-brand" style={{ display:"flex", alignItems:"center", gap:10, marginBottom:2 }}>
+          <BrandLogo size={30}/>
           <span style={{ fontSize:15, fontWeight:700, color:"var(--ink)" }}>CubaGest</span>
         </div>
-        <style>{`.cg-login-brand { display:none; } @media (max-width: 900px) { .cg-login-brand { display:flex; } }`}</style>
 
-        <Card style={{ width:"100%", maxWidth:400, boxShadow:"0 24px 60px rgba(2,8,23,0.25)" }}>
-          <CardHeader style={{ textAlign:"center" }}>
-            <CardTitle style={{ fontSize:20 }}>Bienvenido de nuevo</CardTitle>
-            <CardDescription>Ingresa a tu negocio para continuar</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        {/* Panel de vidrio: fondo translúcido + blur sobre el gradiente del aside */}
+        <div style={glassPanel}>
+          <div style={{ padding:"32px 36px 30px" }}>
+            <div style={{ textAlign:"center", marginBottom:26 }}>
+              <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"var(--ink)", letterSpacing:"-0.3px" }}>Bienvenido de nuevo</h1>
+              <p style={{ margin:"8px 0 0", fontSize:13.5, color:"var(--muted)", lineHeight:1.5 }}>Ingresa a tu negocio para continuar</p>
+            </div>
+            <div style={fieldGap}>
               <Field label="Correo electrónico" required>
-                <input style={inp} type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="usuario@empresa.cu" onKeyDown={e=>e.key==="Enter"&&handleSubmit()} autoComplete="email"/>
+                <input style={glassInput} type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="usuario@empresa.cu" onKeyDown={e=>e.key==="Enter"&&handleSubmit()} autoComplete="email"/>
               </Field>
               <Field label="Contraseña" required>
-                <input style={inp} type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&handleSubmit()} autoComplete="current-password"/>
+                <input style={glassInput} type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&handleSubmit()} autoComplete="current-password"/>
               </Field>
               {error && (
-                <div style={{ background:"rgba(220,38,38,0.10)", border:"1px solid rgba(220,38,38,0.30)", color:"#DC2626", padding:"10px 14px", borderRadius:12, fontSize:13, display:"flex", gap:8, alignItems:"center" }}>
+                <div style={{ background:"rgba(220,38,38,0.10)", border:"1px solid rgba(220,38,38,0.30)", color:"#DC2626", padding:"10px 14px", borderRadius:12, fontSize:13, display:"flex", gap:8, alignItems:"center", margin:"2px 0" }}>
                   <Icon name="alert" size={15} color="#DC2626"/>{error}
                 </div>
               )}
               <button style={{ ...btn("primary"), justifyContent:"center", padding:"12px", fontSize:15, opacity:loading?0.7:1 }} onClick={handleSubmit} disabled={loading}>
                 {loading ? "Verificando..." : "Iniciar sesión"}
               </button>
-              <button style={{ background:"none", border:"none", color:"var(--brand,#3B82F6)", fontSize:13, cursor:"pointer", textAlign:"center" as any, padding:4 }} onClick={()=>{ setShowForgot(true); setForgotEmail(email); setForgotSent(false); }}>
+              <button style={{ background:"none", border:"none", color:"var(--brand,#3B82F6)", fontSize:13, cursor:"pointer", textAlign:"center" as any, padding:"2px 4px 0", alignSelf:"center" }} onClick={()=>{ setShowForgot(true); setForgotEmail(email); setForgotSent(false); }}>
                 ¿Olvidaste tu contraseña?
               </button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:10 }}>
-          <button style={{ ...btn("secondary"), width:"100%", minWidth:280, justifyContent:"center", fontSize:13 }} onClick={()=>setShowRegister(true)}>
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, width:"100%", maxWidth:400, padding:"0 20px" }}>
+          <button style={{ ...btn("secondary"), width:"100%", justifyContent:"center", fontSize:13 }} onClick={()=>setShowRegister(true)}>
             Crear mi negocio (primera vez)
           </button>
-          <button style={{ background:"none", border:"none", color:"var(--muted)", fontSize:12, cursor:"pointer", padding:4 }} onClick={()=>{ onBackToLanding?.(); }}>
+          <button style={{ background:"none", border:"none", color:"var(--muted)", fontSize:12, cursor:"pointer", padding:2 }} onClick={()=>{ onBackToLanding?.(); }}>
             ← Volver al inicio
           </button>
-          <p style={{ textAlign:"center", margin:0, fontSize:11, color:"var(--muted)" }}>
+          <p style={{ textAlign:"center", margin:0, fontSize:11, color:"var(--muted)", maxWidth:340, lineHeight:1.6 }}>
             Al continuar aceptas los Términos de Servicio y la Política de Privacidad de CubaGest.
           </p>
         </div>
@@ -204,10 +236,10 @@ const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => voi
                 <button style={{ ...btn("primary"), width:"100%", justifyContent:"center", marginTop:12 }} onClick={()=>setShowForgot(false)}>Entendido</button>
               </div>
             ) : (
-              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
                 <p style={{ margin:0, fontSize:13, color:"var(--muted)" }}>Ingresa tu correo y te mandamos un link para elegir una nueva contraseña.</p>
                 <Field label="Correo electrónico" required>
-                  <input style={inp} type="email" value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleForgot()}/>
+                  <input style={glassInput} type="email" value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleForgot()}/>
                 </Field>
                 <button style={{ ...btn("primary"), justifyContent:"center", opacity:forgotLoading?0.7:1 }} onClick={handleForgot} disabled={forgotLoading}>
                   {forgotLoading ? "Enviando..." : "Enviar link"}
@@ -226,34 +258,34 @@ const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => voi
               <h2 style={{ margin:0, fontSize:20, fontWeight:800, color:"var(--ink)" }}>Registrar mi negocio</h2>
               <button onClick={()=>{ setShowRegister(false); setRegError(""); }} style={{ background:"none", border:"none", cursor:"pointer", fontSize:20, color:"var(--muted)" }}>✕</button>
             </div>
-            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
               <div>
-                <label style={{ fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:5 }}>Nombre del negocio *</label>
+                <label style={{ ...labelStyle, textTransform:"uppercase" as any, letterSpacing:"0.5px" }}>Nombre del negocio *</label>
                 <input style={inp} value={regForm.companyName} onChange={e=>setRegForm(f=>({...f,companyName:e.target.value}))} placeholder="Ej: Bodega El Progreso"/>
               </div>
               <div>
-                <label style={{ fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:5 }}>NIT del negocio <span style={{ fontWeight:400, opacity:0.7 }}>(opcional)</span></label>
+                <label style={{ fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:6 }}>NIT del negocio <span style={{ fontWeight:400, opacity:0.7 }}>(opcional)</span></label>
                 <input style={inp} value={regForm.companyNit} onChange={e=>setRegForm(f=>({...f,companyNit:e.target.value}))} placeholder="12345678901" maxLength={11}/>
               </div>
               <div style={{ height:1, background:"var(--line)" }}/>
               <div>
-                <label style={{ fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:5 }}>Código de referido <span style={{ fontWeight:400, opacity:0.7 }}>(opcional)</span></label>
+                <label style={{ fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:6 }}>Código de referido <span style={{ fontWeight:400, opacity:0.7 }}>(opcional)</span></label>
                 <input style={inp} value={regForm.referralCode} onChange={e=>setRegForm(f=>({...f,referralCode:e.target.value.toUpperCase()}))} placeholder="Si un amigo te invitó, pon su código" maxLength={10}/>
               </div>
               <div>
-                <label style={{ fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:5 }}>Su nombre completo *</label>
+                <label style={{ fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:6 }}>Su nombre completo *</label>
                 <input style={inp} value={regForm.name} onChange={e=>setRegForm(f=>({...f,name:e.target.value}))} placeholder="Ej: Ana García"/>
               </div>
               <div>
-                <label style={{ fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:5 }}>Correo electrónico *</label>
+                <label style={{ fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:6 }}>Correo electrónico *</label>
                 <input style={inp} type="email" value={regForm.email} onChange={e=>setRegForm(f=>({...f,email:e.target.value}))} placeholder="admin@miempresa.cu"/>
               </div>
               <div>
-                <label style={{ fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:5 }}>Contraseña * <span style={{ fontWeight:400, opacity:0.7 }}>(mín. 8 caracteres)</span></label>
+                <label style={{ fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:6 }}>Contraseña * <span style={{ fontWeight:400, opacity:0.7 }}>(mín. 8 caracteres)</span></label>
                 <input style={inp} type="password" value={regForm.password} onChange={e=>setRegForm(f=>({...f,password:e.target.value}))} placeholder="••••••••"/>
               </div>
               <div>
-                <label style={{ fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:5 }}>Confirmar contraseña *</label>
+                <label style={{ fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase" as any, letterSpacing:"0.5px", display:"block", marginBottom:6 }}>Confirmar contraseña *</label>
                 <input style={inp} type="password" value={regForm.password2} onChange={e=>setRegForm(f=>({...f,password2:e.target.value}))} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&handleRegister()}/>
               </div>
               {regError && (
