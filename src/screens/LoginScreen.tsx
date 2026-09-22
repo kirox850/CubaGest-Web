@@ -139,21 +139,20 @@ const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => voi
         <div style={{ position:"absolute", width:420, height:420, borderRadius:"50%", background:"radial-gradient(circle,rgba(var(--brand-rgb-light),0.18),transparent 65%)", top:-120, right:-100 }}/>
         <div style={{ position:"absolute", width:320, height:320, borderRadius:"50%", background:"radial-gradient(circle,rgba(var(--brand-rgb-light),0.16),transparent 65%)", bottom:-80, left:-60 }}/>
       </div>      {/* ── Panel visual de marca (solo desktop) ──
-          Usa el hero oficial del Brand Kit (/brand/login-splash.jpg). Dos
-          capas: una difuminada que llena todo el marco (así cualquier
-          proporción de ventana se ve continua) y la imagen completa encima. */}
+          Usa el hero oficial del Brand Kit (/brand/login-splash.jpg) en modo
+          "cover": llena el recuadro completo borde a borde (recorte mínimo
+          por los lados según la pantalla). El asset ideal es vertical 2:3
+          (1200×1800) con el contenido importante centrado y márgenes de
+          seguridad ~15% horizontales / ~10% verticales. */}
       <aside
         className="cg-login-aside"
         style={{
           width:"46%", maxWidth:640, minHeight:"100vh", position:"relative", overflow:"hidden",
           background:"#0B1220",
-          flexDirection:"column", alignItems:"center", justifyContent:"center",
         }}
       >
-        <img src="/brand/login-splash.jpg" alt="" aria-hidden
-          style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", filter:"blur(48px)", transform:"scale(1.15)", opacity:0.55 }}/>
         <img src="/brand/login-splash.jpg" alt="CubaGest — Gestiona tu negocio desde el celular"
-          style={{ position:"relative", width:"100%", height:"100%", objectFit:"contain", padding:"clamp(20px, 4vh, 48px)" }}/>
+          style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }}/>
       </aside>
 
       {/* ── Columna del formulario ── */}

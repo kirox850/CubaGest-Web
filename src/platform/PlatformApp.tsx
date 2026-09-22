@@ -42,6 +42,58 @@ const statusBadge = (s: string) => {
 
 const fmtDate = (v: any) => (v ? new Date(v).toLocaleDateString("es-CU") : "—");
 
+// ── Estilo de marca (mismo lenguaje que la app regular) ──
+// Login = panel blanco 3D sobre navy de marca (como el login principal).
+const brandPanel = {
+  width: "100%", maxWidth: 380,
+  background: "linear-gradient(180deg,#FEFEFF 0%,#F3F7FF 100%)",
+  border: "1px solid rgba(15,23,42,0.06)",
+  borderRadius: 24,
+  boxShadow: [
+    "0 1px 2px rgba(15,23,42,0.05)",
+    "0 12px 28px rgba(15,23,42,0.09)",
+    "0 32px 72px rgba(var(--brand-rgb),0.18)",
+    "inset 0 1.5px 0 rgba(255,255,255,0.95)",
+  ].join(", "),
+  padding: "30px 28px",
+} as const;
+
+const brandInput = {
+  width: "100%", padding: "11px 14px", border: "1px solid #E2E8F0", borderRadius: 12,
+  fontSize: 14, color: "#0F172A", background: "#F8FAFC", boxSizing: "border-box" as const,
+  outline: "none", fontFamily: "inherit",
+} as const;
+
+const brandPrimaryBtn = {
+  width: "100%", padding: "12px", border: "none", borderRadius: 12, cursor: "pointer",
+  fontSize: 14.5, fontWeight: 700, color: "#fff", background: "var(--brand)",
+  boxShadow: "0 8px 22px rgba(var(--brand-rgb),0.35)", opacity: 1 as number,
+} as const;
+
+// Etiquetas técnicas de auditoría → texto claro para humanos
+const ACTION_LABELS: Record<string, string> = {
+  company_plan_changed: "Cambió el plan de la empresa",
+  company_payment_marked: "Registró un pago manual",
+  company_status_changed: "Cambió el estado de la cuenta",
+  company_notes_updated: "Actualizó las notas internas",
+  company_impersonated: "Entró como admin de la empresa",
+  platform_admin_created: "Se creó la cuenta del panel",
+  platform_admin_login: "Inicio de sesión en el panel",
+};
+
+const describeAction = (r: any) => {
+  const base = ACTION_LABELS[r.action] || r.action;
+  let extra = "";
+  try {
+    const d = r.detail ? JSON.parse(r.detail) : null;
+    if (d?.plan) extra = ` → plan "${d.plan}"`;
+    else if (d?.months) extra = ` → ${d.months} mes(es)`;
+    else if (d?.active === false) extra = " → suspendida";
+    else if (d?.active === true) extra = " → reactivada";
+  } catch { /* detail no era JSON */ }
+  return base + extra;
+};
+
 export default function PlatformApp() {
   const [admin, setAdmin] = useState<any>(null);
   const [email, setEmail] = useState("");
@@ -68,36 +120,41 @@ export default function PlatformApp() {
 
   if (!admin) {
     return (
-      <div style={{ minHeight: "100vh", background: "#0B1220", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-        <Card style={{ width: "100%", maxWidth: 380 }}>
-          <CardHeader style={{ textAlign: "center" }}>
-            <CardTitle style={{ fontSize: 19 }}>Panel de Plataforma</CardTitle>
-            <CardDescription>Acceso exclusivo del operador de CubaGest</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <Input type="email" placeholder="Correo del panel" value={email} onChange={(e: any) => setEmail(e.target.value)} onKeyDown={(e: any) => e.key === "Enter" && login()} />
-              <Input type="password" placeholder="Contraseña" value={password} onChange={(e: any) => setPassword(e.target.value)} onKeyDown={(e: any) => e.key === "Enter" && login()} />
-              {error && <div style={{ color: "#DC2626", fontSize: 13 }}>{error}</div>}
-              <Button onClick={login} disabled={loading} style={{ width: "100%" }}>{loading ? "Verificando..." : "Entrar"}</Button>
+      <div style={{ minHeight: "100vh", background: "linear-gradient(160deg,#0B1220 0%,#0D3B75 60%,#0B1220 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+        <div style={brandPanel}>
+          <div style={{ textAlign: "center", marginBottom: 22 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 10 }}>
+              <img src="/brand/logo.png" alt="CubaGest" width={38} height={38} style={{ borderRadius: 9, display: "block" }}/>
+              <span style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>CubaGest</span>
             </div>
-          </CardContent>
-        </Card>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.3px" }}>Panel de Plataforma</h1>
+            <p style={{ margin: "6px 0 0", fontSize: 13, color: "#64748B" }}>Acceso exclusivo del operador</p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <input style={brandInput} type="email" placeholder="Correo del panel" value={email} onChange={(e: any) => setEmail(e.target.value)} onKeyDown={(e: any) => e.key === "Enter" && login()} autoComplete="email"/>
+            <input style={brandInput} type="password" placeholder="Contraseña" value={password} onChange={(e: any) => setPassword(e.target.value)} onKeyDown={(e: any) => e.key === "Enter" && login()} autoComplete="current-password"/>
+            {error && <div style={{ background: "rgba(220,38,38,0.10)", border: "1px solid rgba(220,38,38,0.30)", color: "#DC2626", padding: "10px 14px", borderRadius: 12, fontSize: 13 }}>{error}</div>}
+            <button style={{ ...brandPrimaryBtn, opacity: loading ? 0.7 : 1 }} onClick={login} disabled={loading}>{loading ? "Verificando..." : "Entrar"}</button>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)" }}>
-      <header style={{ background: "#0B1220", color: "#fff", padding: "0 20px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <header style={{ background: "#0B1220", color: "#fff", padding: "0 20px", height: 54, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, boxShadow: "0 1px 10px rgba(0,0,0,0.25)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <strong>CubaGest · Panel</strong>
-          <button onClick={() => { setView("companies"); setCurrentCompanyId(null); }} style={{ background: view === "companies" ? "rgba(255,255,255,0.15)" : "none", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 13 }}>Empresas</button>
-          <button onClick={() => { setView("audit"); setCurrentCompanyId(null); }} style={{ background: view === "audit" ? "rgba(255,255,255,0.15)" : "none", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 13 }}>Auditoría</button>
+          <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <img src="/brand/logo.png" alt="" width={26} height={26} style={{ borderRadius: 7, display: "block" }}/>
+            <strong style={{ fontSize: 14.5 }}>CubaGest · Panel</strong>
+          </span>
+          <button onClick={() => { setView("companies"); setCurrentCompanyId(null); }} style={{ background: view === "companies" ? "rgba(var(--brand-rgb),0.35)" : "none", color: "#fff", border: "none", borderRadius: 9, padding: "6px 13px", cursor: "pointer", fontSize: 13, fontWeight: view === "companies" ? 700 : 400 }}>Empresas</button>
+          <button onClick={() => { setView("audit"); setCurrentCompanyId(null); }} style={{ background: view === "audit" ? "rgba(var(--brand-rgb),0.35)" : "none", color: "#fff", border: "none", borderRadius: 9, padding: "6px 13px", cursor: "pointer", fontSize: 13, fontWeight: view === "audit" ? 700 : 400 }}>Auditoría</button>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
           <span style={{ opacity: 0.8 }}>{admin.email}</span>
-          <button onClick={() => { localStorage.removeItem(TOKEN_KEY); setAdmin(null); }} style={{ background: "rgba(220,38,38,0.25)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 13 }}>Salir</button>
+          <button onClick={() => { localStorage.removeItem(TOKEN_KEY); setAdmin(null); }} style={{ background: "rgba(220,38,38,0.25)", color: "#fff", border: "none", borderRadius: 9, padding: "6px 12px", cursor: "pointer", fontSize: 13 }}>Salir</button>
         </div>
       </header>
 
@@ -345,16 +402,44 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
 // ─── Auditoría del panel ─────────────────────────────────────────────────────
 function AuditView() {
   const [rows, setRows] = useState<any[] | null>(null);
+  // Registro legible primero (qué pasó, quién, cuándo); el detalle técnico
+  // (JSON crudo del backend) queda plegado tras "Detalles".
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   useEffect(() => { pf("/audit").then((d: any[]) => setRows(d || [])).catch(() => setRows([])); }, []);
 
+  const toggle = (key: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
   return (
-    <div style={{ background: "var(--card)", border: "1px solid var(--line)", borderRadius: 14, padding: 6 }}>
-      {(rows || []).map((r, i) => (
-        <div key={r.id || i} style={{ padding: "10px 12px", borderTop: i === 0 ? "none" : "1px solid var(--line)", fontSize: 13 }}>
-          <strong>{r.action}</strong> · {r.entityType} {r.entityId?.slice(0, 8)} · {r.adminEmail || "sistema"} · {new Date((r.created_at || 0) * 1000).toLocaleString("es-CU")}
-          {r.detail && <div style={{ fontSize: 11.5, color: "var(--muted)", fontFamily: "monospace" }}>{r.detail}</div>}
-        </div>
-      ))}
+    <div style={{ background: "var(--card)", border: "1px solid var(--line)", borderRadius: 14, overflow: "hidden" }}>
+      {(rows || []).map((r, i) => {
+        const key = r.id || String(i);
+        const isOpen = expanded.has(key);
+        const hasDetail = !!r.detail;
+        return (
+          <div key={key} style={{ padding: "12px 16px", borderTop: i === 0 ? "none" : "1px solid var(--line)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" as any }}>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ink)" }}>{describeAction(r)}</span>
+              {hasDetail && (
+                <button onClick={() => toggle(key)} style={{ background: "var(--brand-tint, #EAF4FE)", color: "var(--brand-dark, #026ACE)", border: "none", borderRadius: 8, padding: "3px 10px", cursor: "pointer", fontSize: 11.5, fontWeight: 700 }}>
+                  {isOpen ? "Ocultar detalles" : "Detalles"}
+                </button>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
+              {r.adminEmail || "sistema"} · {r.entityType}{r.entityId ? ` (${r.entityId.slice(0, 8)})` : ""} · {new Date((r.created_at || 0) * 1000).toLocaleString("es-CU")}
+            </div>
+            {isOpen && hasDetail && (
+              <pre style={{ margin: "8px 0 0", padding: "10px 12px", background: "var(--input-bg, #F1F5F9)", border: "1px solid var(--line)", borderRadius: 10, fontSize: 11.5, color: "var(--muted)", fontFamily: "monospace", whiteSpace: "pre-wrap" as any, wordBreak: "break-all" as any }}>{r.detail}</pre>
+            )}
+          </div>
+        );
+      })}
       {rows && rows.length === 0 && <div style={{ padding: 30, textAlign: "center", color: "var(--muted)" }}>Sin acciones registradas aún</div>}
       {!rows && <div style={{ padding: 30, textAlign: "center", color: "var(--muted)" }}>Cargando...</div>}
     </div>

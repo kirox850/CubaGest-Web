@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
-import { fmt, today, downloadCSV } from "@/lib/format";
+import { fmt, today } from "@/lib/format";
 import { PAY_METHODS, EXPENSE_CATS, CURRENCY_SYMBOLS } from "@/config/constants";
 import Icon from "@/components/shared/Icon";
 import { Modal, Badge, Field, Spinner, btn, inp, sel } from "@/components/shared/primitives";
@@ -19,6 +19,23 @@ const contStyles = `
 }
 `;
 
+// Impresión del informe fiscal: solo el informe, ancho completo.
+const contPrintStyles = `
+@media print {
+  body * { visibility: hidden !important; }
+  .cg-informe-print, .cg-informe-print * { visibility: visible !important; }
+  .cg-informe-print {
+    position: fixed !important; top: 0; left: 0; right: 0;
+    width: 100% !important; max-width: 100% !important; margin: 0 !important;
+    background: #fff !important; color: #000 !important;
+    border: none !important; box-shadow: none !important;
+  }
+}
+`;
+
+const thStyle = { textAlign:"left" as any, fontSize:11, textTransform:"uppercase" as any, color:"var(--muted)", padding:"8px 0", borderBottom:"2px solid var(--line)" };
+const tdStyle = { padding:"9px 0", borderBottom:"1px solid var(--line)", fontSize:14 };
+
 // ─── CONTABILIDAD ─────────────────────────────────────────────────────────────
 const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>void }) => {
   const [sales, setSales]       = useState<any[]>([]);
@@ -26,9 +43,11 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
   const [loading, setLoading]   = useState(true);
   const [tab, setTab]           = useState("ingresos");
   const [modal, setModal]       = useState(false);
-  const [viewInv, setViewInv]   = useState<any>(null);
-  const [form, setForm]         = useState({ date:today(), concept:"", amount:"", category:"Compras", method:"efectivo" });
+  const [viewInv, setViewInv]   = useState<any>(null);  const [form, setForm]       = useState({ date:today(), concept:"", amount:"", category:"Compras", method:"efectivo" });
   const [saving, setSaving]     = useState(false);
+  // El informe fiscal se muestra como capa a pantalla completa DENTRO de la
+  // pantalla (no en una pestaña nueva): siempre se puede volver con "Volver".
+  const [showInforme, setShowInforme] = useState(false);
 
   const load = useCallback(async()=>{
     try {
@@ -50,45 +69,13 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
     const totalExp    = expenses.reduce((a:number,e:any)=>a+Number(e.amount),0);
     const totalTax    = Math.round(totalIncome * TAX_RATE);
     const net         = totalIncome - totalExp;
-    const mes         = new Date().toLocaleString("es-CU",{month:"long",year:"numeric"});
-    const win = window.open("","_blank","width=700,height=900");
-    if (!win) return;
-    win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
-      <title>Informe Fiscal CubaGest</title>
-      <style>
-        body{font-family:Arial,sans-serif;padding:40px;color:#1a1410;max-width:600px;margin:0 auto}
-        h1{color:#048afb;font-size:20px;margin-bottom:4px}
-        .sub{color:#8a7060;font-size:13px;margin-bottom:32px}
-        table{width:100%;border-collapse:collapse;margin-bottom:24px}
-        th{text-align:left;font-size:11px;text-transform:uppercase;color:#8a7060;padding:8px 0;border-bottom:2px solid #e8e0d8}
-        td{padding:10px 0;border-bottom:1px solid #f0ebe4;font-size:14px}
-        .total{font-weight:800;font-size:16px}
-        .red{color:#8B1A1A} .green{color:#1A7A3C}
-        .box{border:1px solid #e8e0d8;border-radius:8px;padding:16px;margin-bottom:16px}
-        .note{font-size:11px;color:#8a7060;margin-top:32px;border-top:1px solid #e8e0d8;padding-top:12px}
-        @media print{button{display:none}}
-      </style></head><body>
-      <h1>CubaGest — Informe Fiscal</h1>
-      <p class="sub">Período: ${mes} · Generado: ${new Date().toLocaleDateString("es-CU")}</p>
-      <div class="box">
-        <table>
-          <tr><th>Concepto</th><th style="text-align:right">Monto (CUP)</th></tr>
-          <tr><td>Ingresos brutos por ventas</td><td style="text-align:right">${fmt(totalIncome)}</td></tr>
-          <tr><td class="red">Total egresos registrados</td><td class="red" style="text-align:right">${fmt(totalExp)}</td></tr>
-          <tr class="total"><td class="${net>=0?"green":"red"}">Utilidad neta</td><td class="${net>=0?"green":"red"}" style="text-align:right">${fmt(net)}</td></tr>
-        </table>
-      </div>
-      <h3 style="font-size:14px;margin-bottom:12px">Detalle de Egresos</h3>
-      <table>
-        <tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th style="text-align:right">Monto</th></tr>
-        ${expenses.map((e:any)=>"<tr><td>"+(e.date||e.createdAt||"").split("T")[0]+"</td><td>"+e.concept+"</td><td>"+e.category+"</td><td style=\"text-align:right\">"+fmt(Number(e.amount))+"</td></tr>").join("")}
-      </table>
-      <p class="note">Este informe es generado automáticamente por CubaGest para uso interno.<br/>
-      Los datos son orientativos. Consulte con su contador para la declaración oficial.</p>
-      <br/><button onclick="window.print()" style="background:#048afb;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:14px">🖨 Imprimir / Guardar PDF</button>
-    </body></html>`);
-    win.document.close();
+    const mes = new Date().toLocaleString("es-CU",{month:"long",year:"numeric"});
+    return { mes, totalIncome, totalExp, totalTax, net };
   };
+
+  // Datos calculados UNA vez por render del informe (la capa se monta solo
+  // cuando showInforme=true, así los números no se recalculan en cada tick).
+  const informe = showInforme ? buildInforme() : null;
 
   const addExpense = async()=>{
     if (!form.concept||!form.amount) return showToast("Complete los campos requeridos","error");
@@ -105,6 +92,50 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
 
   if (loading) return <Spinner/>;
 
+  // ── Capa del Informe Fiscal (pantalla completa dentro del módulo) ──
+  // En el teléfono el ancho es el del propio dispositivo, así nunca hay
+  // scroll horizontal. Se sale con "← Volver" (o imprimiendo).
+  if (showInforme && informe) {
+    const { mes, totalIncome: ti, totalExp: te, net: nt } = informe as any;
+    return (
+      <div style={{ minHeight:"100%", background:"var(--bg)", display:"flex", flexDirection:"column" }}>
+        <style>{contPrintStyles}</style>
+        <div style={{ display:"flex", alignItems:"center", gap:10, padding:"2px 0 12px", flexShrink:0 }}>
+          <button onClick={()=>setShowInforme(false)} style={{ ...btn("secondary"), flexShrink:0 }}>
+            ← Volver
+          </button>
+          <span style={{ fontSize:13, color:"var(--muted)", fontWeight:600 }}>Informe Fiscal · {mes}</span>
+        </div>
+        <div className="cg-informe-print" style={{ background:"var(--card)", border:"1px solid var(--line)", borderRadius:16, padding:"24px 20px", maxWidth:640, width:"100%", margin:"0 auto" }}>
+          <h1 style={{ color:"var(--brand)", fontSize:20, margin:"0 0 4px" }}>CubaGest — Informe Fiscal</h1>
+          <p style={{ color:"var(--muted)", fontSize:13, margin:"0 0 24px" }}>Período: {mes} · Generado: {new Date().toLocaleDateString("es-CU")}</p>
+          <div style={{ border:"1px solid var(--line)", borderRadius:10, padding:16, marginBottom:20 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <tr><th style={thStyle}>Concepto</th><th style={{ ...thStyle, textAlign:"right" as any }}>Monto (CUP)</th></tr>
+              <tr><td style={tdStyle}>Ingresos brutos por ventas</td><td style={{ ...tdStyle, textAlign:"right" as any }}>{fmt(ti)}</td></tr>
+              <tr><td style={{ ...tdStyle, color:"#DC2626" }}>Total egresos registrados</td><td style={{ ...tdStyle, color:"#DC2626", textAlign:"right" as any }}>{fmt(te)}</td></tr>
+              <tr><td style={{ ...tdStyle, fontWeight:800, color: nt>=0?"#1A7A3C":"#DC2626" }}>Utilidad neta</td><td style={{ ...tdStyle, fontWeight:800, color: nt>=0?"#1A7A3C":"#DC2626", textAlign:"right" as any }}>{fmt(nt)}</td></tr>
+            </table>
+          </div>
+          <h3 style={{ fontSize:14, margin:"0 0 10px" }}>Detalle de Egresos</h3>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <tr><th style={thStyle}>Fecha</th><th style={thStyle}>Concepto</th><th style={thStyle}>Categoría</th><th style={{ ...thStyle, textAlign:"right" as any }}>Monto</th></tr>
+            {expenses.map((e:any)=>(
+              <tr key={e.id}><td style={tdStyle}>{(e.date||e.createdAt||"").split("T")[0]}</td><td style={tdStyle}>{e.concept}</td><td style={tdStyle}>{e.category}</td><td style={{ ...tdStyle, textAlign:"right" as any }}>{fmt(Number(e.amount))}</td></tr>
+            ))}
+          </table>
+          <p style={{ fontSize:11, color:"var(--muted)", marginTop:24, borderTop:"1px solid var(--line)", paddingTop:12 }}>
+            Este informe es generado automáticamente por CubaGest para uso interno.<br/>
+            Los datos son orientativos. Consulte con su contador para la declaración oficial.
+          </p>
+          <button onClick={()=>window.print()} style={{ background:"var(--brand)", color:"#fff", border:"none", padding:"10px 20px", borderRadius:10, cursor:"pointer", fontSize:14, fontWeight:600, marginTop:14 }}>
+            🖨 Imprimir / Guardar PDF
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
@@ -112,13 +143,9 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
           <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"var(--ink)" }}>Contabilidad</h2>
           <p style={{ margin:0, fontSize:14, color:"var(--muted)" }}>Registro contable</p>
         </div>
-        <div style={{ display:"flex", gap:8 }}>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" as any }}>
           <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
-          <button style={btn("secondary")} onClick={exportarInforme}><Icon name="print" size={15}/>Informe Fiscal</button>
-          <button style={btn("secondary")} onClick={() => downloadCSV("gastos", expenses, [
-            { key:"date", label:"Fecha" },{ key:"category", label:"Categoría" },{ key:"concept", label:"Concepto" },
-            { key:"amount", label:"Monto" },{ key:"method", label:"Método de pago" },
-          ])}><Icon name="doc" size={15}/>CSV</button>
+          <button style={btn("secondary")} onClick={()=>setShowInforme(true)}><Icon name="print" size={15}/>Informe Fiscal</button>
           <button style={btn("primary")} onClick={()=>setModal(true)}><Icon name="plus" size={16}/>Registrar Gasto</button>
         </div>
       </div>

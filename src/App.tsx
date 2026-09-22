@@ -39,8 +39,17 @@ export default function App() {
   // Landing pública: visible por defecto; ?app=1 la salta (p.ej. usuarios que
   // ya saben que quieren ir directo al login). Una vez dentro, no vuelve a
   // mostrarse hasta recargar.
-  const [showLanding, setShowLanding] = useState(() => !new URLSearchParams(window.location.search).get("app"));
-  const enterApp = () => { setShowLanding(false); try { window.history.replaceState({}, "", window.location.pathname + "?app=1"); } catch {} };
+  // La landing no se muestra si la URL ya es un deep-link de la app (/app/*)
+  const [showLanding, setShowLanding] = useState(() =>
+    !new URLSearchParams(window.location.search).get("app") && !window.location.pathname.startsWith("/app/"));
+  const enterApp = () => {
+    setShowLanding(false);
+    try {
+      // Si entramos por /app/<modulo>, respeta esa URL; si no, ?app=1 normal
+      const isDeepLink = window.location.pathname.startsWith("/app/");
+      window.history.replaceState({}, "", window.location.pathname + (isDeepLink ? "" : "?app=1"));
+    } catch {}
+  };
 
   // Link de "establecer contraseña" (?setpw=token) — es una pantalla
   // pública, independiente de si hay sesión o no. Se revisa una sola vez al
@@ -56,7 +65,30 @@ export default function App() {
     const t = setTimeout(()=>setChecking(false), 3000);
     return ()=>clearTimeout(t);
   },[]);
-  const [activeModule, setActiveModule] = useState("dashboard");
+  const [activeModule, setActiveModule] = useState(() => {
+    // Deep-link: /app/pos abre directamente el módulo POS (si el rol lo
+    // permite; si no, cae al dashboard por defecto).
+    const seg = window.location.pathname.split("/")[2];
+    return seg || "dashboard";
+  });
+  // Cada screen tiene su URL (/app/dashboard, /app/pos, ...): el botón
+  // "atrás" del navegador cambia de módulo en vez de salir de la app.
+  useEffect(() => {
+    const onPop = () => {
+      const seg = window.location.pathname.split("/")[2];
+      setActiveModule(seg || "dashboard");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const openModule = (id: string) => {
+    setActiveModule(id);
+    try {
+      const url = `/app/${id}${window.location.search}`;
+      window.history.pushState({}, "", url);
+    } catch {}
+  };
   const [toast, setToast]           = useState<any>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
@@ -314,6 +346,13 @@ export default function App() {
     { id:"transferencias", label:"Envíos",       icon:"transferencias" },
   ].filter(n=>perms.includes(n.id));
 
+  // Módulo efectivo: el de la URL solo si el rol lo permite (el backend
+  // igualmente enforcea, pero así un deep-link ajeno no renderiza la screen).
+  const allowedModules = new Set<string>([...navItems.map(n=>n.id), "dashboard"]);
+  if (user.role==="admin") allowedModules.add("usuarios");
+  if (perms.includes("auditoria")) allowedModules.add("auditoria");
+  const view = allowedModules.has(activeModule) ? activeModule : "dashboard";
+
 
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100vh", background:"var(--bg, #F8FAFC)", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
@@ -343,12 +382,12 @@ export default function App() {
                     <Icon name="facturacion" size={16} color="#475569"/>Mi Plan
                   </button>
                   {["admin"].includes(user.role) && (
-                    <button onClick={()=>{setActiveModule("usuarios");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
+                    <button onClick={()=>{openModule("usuarios");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
                       <Icon name="usuarios" size={16} color="#475569"/>Usuarios
                     </button>
                   )}
                   {perms.includes("auditoria") && (
-                    <button onClick={()=>{setActiveModule("auditoria");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
+                    <button onClick={()=>{openModule("auditoria");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
                       <Icon name="auditoria" size={16} color="#475569"/>Auditoría
                     </button>
                   )}
@@ -423,24 +462,30 @@ export default function App() {
 
       {/* Content */}
       <div className="cg-content" style={{ flex:1, overflow:"auto", padding:16, paddingBottom:80 }}>
-        {activeModule==="dashboard"    && <Dashboard user={user}/>}
-        {activeModule==="inventario"   && <Inventario user={user} showToast={showToast}/>}
-        {activeModule==="pos"          && <POS user={user} showToast={showToast}/>}
-        {activeModule==="facturacion"  && <Facturacion user={user} showToast={showToast} onSyncRefresh={refreshPending} onManualSync={()=>runSync(true)} syncing={syncing}/>}
-        {activeModule==="contabilidad" && <Contabilidad user={user} showToast={showToast}/>}
-        {activeModule==="cierre"       && <CierreCaja user={user} showToast={showToast}/>}
-        {activeModule==="transferencias" && <Transferencias user={user} showToast={showToast}/>}
-        {activeModule==="usuarios"     && <Usuarios currentUser={user} showToast={showToast}/>}
-        {activeModule==="auditoria"    && <Auditoria showToast={showToast}/>}
+        {view==="dashboard"    && <Dashboard user={user}/>}
+        {view==="inventario"   && <Inventario user={user} showToast={showToast}/>}
+        {view==="pos"          && <POS user={user} showToast={showToast}/>}
+        {view==="facturacion"  && <Facturacion user={user} showToast={showToast} onSyncRefresh={refreshPending} onManualSync={()=>runSync(true)} syncing={syncing}/>}
+        {view==="contabilidad" && <Contabilidad user={user} showToast={showToast}/>}
+        {view==="cierre"       && <CierreCaja user={user} showToast={showToast}/>}
+        {view==="transferencias" && <Transferencias user={user} showToast={showToast}/>}
+        {view==="usuarios"     && <Usuarios currentUser={user} showToast={showToast}/>}
+        {view==="auditoria"    && <Auditoria showToast={showToast}/>}
+        {/* Módulo desconocido en la URL (p.ej. /app/loquesea): fallback suave */}
+        {!["dashboard","inventario","pos","facturacion","contabilidad","cierre","transferencias","usuarios","auditoria"].includes(activeModule) && (
+          <div style={{ textAlign:"center", padding:60, color:"var(--muted)" }}>
+            Módulo no encontrado — usa el menú de navegación.
+          </div>
+        )}
       </div>
 
       {/* Sidebar desktop (≥1024px) — top con safe-area por si corre como PWA
           en una tablet con notch; bottom alineado al borde real */}
       <nav className="cg-sidebar" style={{ position:"fixed", top:"calc(56px + env(safe-area-inset-top))", bottom:0, left:0, width:216, background:"var(--card, #ffffff)", borderRight:"1px solid var(--line, #e8e0d8)", display:"flex", flexDirection:"column", padding:10, gap:2, zIndex:90, overflowY:"auto" }}>
         {navItems.map(item=>{
-          const on = activeModule===item.id;
+          const on = view===item.id;
           return (
-            <button key={item.id} onClick={()=>{ setActiveModule(item.id); setProfileOpen(false); }}
+            <button key={item.id} onClick={()=>{ openModule(item.id); setProfileOpen(false); }}
               style={{ display:"flex", alignItems:"center", gap:11, padding:"11px 14px", borderRadius:12, border:"none", cursor:"pointer", textAlign:"left" as any, fontSize:13.5, fontWeight:on?700:500, background:on?"rgba(var(--brand-rgb),0.10)":"transparent", color:on?"var(--brand)":"var(--muted, #64748B)", transition:"background 0.12s" }}>
               <Icon name={item.icon} size={19} color={on?"var(--brand)":"#64748B"}/>
               {item.label}
@@ -453,10 +498,10 @@ export default function App() {
           el padding-bottom del env(), el contenido respira con 96px arriba */}
       <div className="cg-bottomnav" style={{ position:"fixed" as any, bottom:0, left:0, right:0, background:"var(--card, #ffffff)", borderTop:"1px solid var(--line, #e8e0d8)", display:"flex", zIndex:100, paddingBottom:"max(env(safe-area-inset-bottom), 4px)" }}>
         {navItems.map(item=>(
-          <button key={item.id} onClick={()=>{ setActiveModule(item.id); setProfileOpen(false); }} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"8px 4px 6px", border:"none", cursor:"pointer", background:"none", color:activeModule===item.id?"var(--brand)":"var(--muted, #94A3B8)", gap:3, minWidth:0 }}>
-            <Icon name={item.icon} size={22} color={activeModule===item.id?"var(--brand)":"#64748B"}/>
-            <span style={{ fontSize:10, fontWeight:activeModule===item.id?700:400, whiteSpace:"nowrap" as any, overflow:"hidden", textOverflow:"ellipsis", maxWidth:"100%" }}>{item.label}</span>
-            {activeModule===item.id && <div style={{ width:4, height:4, borderRadius:"50%", background:"var(--brand)", marginTop:2 }}/>}
+          <button key={item.id} onClick={()=>{ openModule(item.id); setProfileOpen(false); }} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"8px 4px 6px", border:"none", cursor:"pointer", background:"none", color:view===item.id?"var(--brand)":"var(--muted, #94A3B8)", gap:3, minWidth:0 }}>
+            <Icon name={item.icon} size={22} color={view===item.id?"var(--brand)":"#64748B"}/>
+            <span style={{ fontSize:10, fontWeight:view===item.id?700:400, whiteSpace:"nowrap" as any, overflow:"hidden", textOverflow:"ellipsis", maxWidth:"100%" }}>{item.label}</span>
+            {view===item.id && <div style={{ width:4, height:4, borderRadius:"50%", background:"var(--brand)", marginTop:2 }}/>}
           </button>
         ))}
       </div>

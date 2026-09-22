@@ -145,8 +145,9 @@ const PhoneMockup = () => {
 };
 
 const Landing = ({ onEnter }: { onEnter: () => void }) => {
-  // Modales legales (mismo contenido que dentro de la app)
+  // Modales legales (mismo contenido que dentro de la app) + contacto
   const [legal, setLegal] = useState<null | "privacy" | "terms" >(null);
+  const [contactOpen, setContactOpen] = useState(false);
   const goId = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior:"smooth", block:"start" });
 
   return (
@@ -192,8 +193,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
       </div>
       <div style={{ display:"flex", alignItems:"center", gap:2, flexWrap:"wrap" as any }}>
         <button className="lnk" onClick={()=>goId("precios")}>Precios</button>
-        <button className="lnk" onClick={()=>setLegal("terms")}>Términos</button>
-        <button className="lnk" onClick={()=>setLegal("privacy")}>Privacidad</button>
+        <button className="lnk" onClick={()=>setContactOpen(true)}>Contáctenos</button>
         <button onClick={onEnter} style={{ background:"var(--brand)", border:"none", cursor:"pointer", color:"#fff", fontSize:13.5, fontWeight:700, padding:"8px 16px", borderRadius:10, marginLeft:4, boxShadow:"0 4px 14px rgba(var(--brand-rgb),0.35)", transition:"transform 0.15s, box-shadow 0.2s" }}
           onMouseEnter={e=>{ (e.currentTarget as HTMLElement).style.transform="translateY(-1px)"; (e.currentTarget as HTMLElement).style.boxShadow="0 8px 20px rgba(var(--brand-rgb),0.45)"; }}
           onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.transform="none"; (e.currentTarget as HTMLElement).style.boxShadow="0 4px 14px rgba(var(--brand-rgb),0.35)"; }}>
@@ -344,11 +344,47 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
     <div style={{ padding:"26px 20px", textAlign:"center", fontSize:12, color:"#94A3B8" }}>
       © {new Date().getFullYear()} CubaGest · Sistema de gestión empresarial
       <div style={{ marginTop:8, display:"flex", gap:6, justifyContent:"center", flexWrap:"wrap" as any }}>
+        <button className="lnk" style={{ fontSize:12, color:"#94A3B8" }} onClick={()=>setContactOpen(true)}>Contáctenos</button>
+        <span>·</span>
         <button className="lnk" style={{ fontSize:12, color:"#94A3B8" }} onClick={()=>setLegal("terms")}>Términos y Condiciones</button>
         <span>·</span>
         <button className="lnk" style={{ fontSize:12, color:"#94A3B8" }} onClick={()=>setLegal("privacy")}>Política de Privacidad</button>
       </div>
     </div>
+
+    {/* Modal de contacto */}
+    {contactOpen && (
+      <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.55)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={()=>setContactOpen(false)}>
+        <div style={{ background:"#fff", borderRadius:20, width:"100%", maxWidth:420, padding:"28px 26px", boxShadow:"0 24px 70px rgba(2,8,23,0.35)" }} onClick={e=>e.stopPropagation()}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+            <h3 style={{ margin:0, fontSize:19, fontWeight:800, color:"#0F172A" }}>Contáctenos</h3>
+            <button onClick={()=>setContactOpen(false)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:20, color:"#94A3B8" }}>✕</button>
+          </div>
+          <p style={{ margin:"0 0 18px", fontSize:13.5, color:"#64748B", lineHeight:1.55 }}>¿Dudas antes de empezar o necesitas ayuda con tu negocio? Escríbenos, respondemos rápido.</p>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <a href="mailto:soporte@cubagest.dpdns.org" style={{ display:"flex", alignItems:"center", gap:12, padding:"13px 15px", background:"var(--brand-tint, #EAF4FE)", borderRadius:14, textDecoration:"none" }}>
+              <span style={{ width:36, height:36, borderRadius:10, background:"var(--brand)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="m22 7-10 6L2 7"/></svg>
+              </span>
+              <span>
+                <span style={{ display:"block", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.5px" }}>Correo</span>
+                <span style={{ fontSize:14, fontWeight:600, color:"var(--brand-dark, #026ACE)" }}>soporte@cubagest.dpdns.org</span>
+              </span>
+            </a>
+            <a href="https://wa.me/5350000000" target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", gap:12, padding:"13px 15px", background:"#F0FDF4", borderRadius:14, textDecoration:"none" }}>
+              <span style={{ width:36, height:36, borderRadius:10, background:"#16A34A", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              </span>
+              <span>
+                <span style={{ display:"block", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.5px" }}>WhatsApp</span>
+                <span style={{ fontSize:14, fontWeight:600, color:"#15803D" }}>+53 5 000 0000</span>
+              </span>
+            </a>
+            <div style={{ fontSize:12, color:"#94A3B8", textAlign:"center", padding:"4px 0 2px" }}>Atención de lunes a sábado, 8:00–18:00</div>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Modales legales (mismo contenido que dentro de la app) */}
     {legal==="terms" && <LegalModal title="Términos y Condiciones" content={TERMS_MD} onClose={()=>setLegal(null)}/>}
