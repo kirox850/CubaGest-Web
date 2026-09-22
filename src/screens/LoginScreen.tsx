@@ -9,44 +9,50 @@ import { BrandLogo } from "@/screens/Landing";
 // cambia la presentación. En pantallas angostas el panel lateral desaparece.
 
 // Oculta el panel visual en móviles (los estilos inline no soportan media
-// queries, así que usamos una clase dedicada). El panel de vidrio se logra
-// con backdrop-filter (blur + saturate) sobre el fondo decorado.
+// queries, así que usamos una clase dedicada).
+//
+// El panel del formulario es BLANCO SÓLIDO con profundidad 3D (estilo
+// "liquid glass" de Apple sin translucidez): gradientes mínimos, brillo
+// interior superior y sombras en capas (contacto + ambiente + tinte de
+// marca). Al no ser translúcido, el contraste del texto es siempre máximo.
 const loginStyles = `
 .cg-login-aside { display: flex; }
 @media (max-width: 900px) { .cg-login-aside { display: none; } }
 .cg-login-bgart { display: block; }
 @media (min-width: 1024px) { .cg-login-bgart { display: none; } }
+/* El panel es blanco fijo: sus labels mantienen contraste incluso en modo oscuro */
+.cg-glass label { color: #64748B !important; }
 `;
 
 const glassPanel = {
   width: "100%", maxWidth: 400, margin: "0 20px",
-  background: "rgba(255,255,255,0.55)",
-  backdropFilter: "blur(14px) saturate(140%)",
-  WebkitBackdropFilter: "blur(14px) saturate(140%)",
-  border: "1px solid rgba(255,255,255,0.55)",
-  borderRadius: 20,
-  boxShadow: "0 20px 60px rgba(2,8,23,0.18)",
+  background: "linear-gradient(180deg,#FEFEFF 0%,#F3F7FF 100%)",
+  border: "1px solid rgba(15,23,42,0.06)",
+  borderRadius: 24,
+  boxShadow: [
+    "0 1px 2px rgba(15,23,42,0.05)",
+    "0 12px 28px rgba(15,23,42,0.09)",
+    "0 32px 72px rgba(var(--brand-rgb),0.18)",
+    "inset 0 1.5px 0 rgba(255,255,255,0.95)",
+    "inset 0 -1px 0 rgba(2,106,206,0.05)",
+  ].join(", "),
 } as const;
 
+// Inputs del panel blanco: colores FIJOS (claros) para que sean legibles
+// tanto en tema claro como en modo oscuro — el panel no cambia con el tema.
 const glassInput = {
   ...inp,
-  background: "rgba(255,255,255,0.6)",
-  borderColor: "rgba(255,255,255,0.7)",
+  background: "#F8FAFC",
+  borderColor: "#E2E8F0",
+  color: "#0F172A",
 } as const;
 
 const labelStyle = {
-  fontSize: 12, fontWeight: 600, color: "var(--ink)", opacity: 0.75,
+  fontSize: 12, fontWeight: 600, color: "var(--muted)",
   letterSpacing: "0.3px", display: "block", marginBottom: 6,
 } as const;
 
 const fieldGap = { display: "flex", flexDirection: "column", gap: 20 } as const;
-
-const HIGHLIGHTS = [
-  "Funciona sin VPN — incluso sin internet",
-  "Ventas, inventario y facturación en un solo lugar",
-  "Multi-moneda: CUP, USD, MLC, EUR y más",
-  "Cierre de caja y contabilidad en un clic",
-];
 
 const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => void; onBackToLanding?: () => void }) => {
   const [email, setEmail]       = useState("");
@@ -130,47 +136,24 @@ const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => voi
       {/* Fondo decorado detrás del panel de vidrio (el blur necesita algo que
           difuminar para notarse) — solo <1024px, en desktop lo aporta el aside */}
       <div className="cg-login-bgart" style={{ position:"fixed", inset:0, zIndex:0, overflow:"hidden", pointerEvents:"none" }}>
-        <div style={{ position:"absolute", width:420, height:420, borderRadius:"50%", background:"radial-gradient(circle,rgba(59,130,246,0.18),transparent 65%)", top:-120, right:-100 }}/>
-        <div style={{ position:"absolute", width:320, height:320, borderRadius:"50%", background:"radial-gradient(circle,rgba(16,185,129,0.12),transparent 65%)", bottom:-80, left:-60 }}/>
-      </div>
-
-      {/* ── Panel visual de marca (solo desktop) ── */}
+        <div style={{ position:"absolute", width:420, height:420, borderRadius:"50%", background:"radial-gradient(circle,rgba(var(--brand-rgb-light),0.18),transparent 65%)", top:-120, right:-100 }}/>
+        <div style={{ position:"absolute", width:320, height:320, borderRadius:"50%", background:"radial-gradient(circle,rgba(var(--brand-rgb-light),0.16),transparent 65%)", bottom:-80, left:-60 }}/>
+      </div>      {/* ── Panel visual de marca (solo desktop) ──
+          Usa el hero oficial del Brand Kit (/brand/login-splash.jpg). Dos
+          capas: una difuminada que llena todo el marco (así cualquier
+          proporción de ventana se ve continua) y la imagen completa encima. */}
       <aside
         className="cg-login-aside"
         style={{
           width:"46%", maxWidth:640, minHeight:"100vh", position:"relative", overflow:"hidden",
-          background:"linear-gradient(160deg,#0B1220 0%,#12263F 55%,#1E3A5F 100%)",
-          flexDirection:"column", justifyContent:"space-between", padding:"48px 52px",
+          background:"#0B1220",
+          flexDirection:"column", alignItems:"center", justifyContent:"center",
         }}
       >
-        {/* Trama de puntos + halo de luz */}
-        <div style={{ position:"absolute", inset:0, backgroundImage:"radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)", backgroundSize:"22px 22px", pointerEvents:"none" }}/>
-        <div style={{ position:"absolute", width:420, height:420, borderRadius:"50%", background:"radial-gradient(circle,rgba(59,130,246,0.35),transparent 65%)", top:-120, right:-100, pointerEvents:"none" }}/>
-        <div style={{ position:"absolute", width:300, height:300, borderRadius:"50%", background:"radial-gradient(circle,rgba(16,185,129,0.18),transparent 65%)", bottom:-80, left:-60, pointerEvents:"none" }}/>
-
-        <div style={{ position:"relative" }}>
-          <BrandLogo size={40}/>
-        </div>
-
-        <div style={{ position:"relative" }}>
-          <h2 style={{ margin:0, fontSize:34, fontWeight:800, color:"#F8FAFC", lineHeight:1.2, letterSpacing:"-0.5px" }}>
-            El sistema de gestión<br/>para tu negocio en Cuba.
-          </h2>
-          <div style={{ display:"flex", flexDirection:"column", gap:12, marginTop:28 }}>
-            {HIGHLIGHTS.map((h) => (
-              <div key={h} style={{ display:"flex", alignItems:"center", gap:10, fontSize:14, color:"rgba(226,232,240,0.92)" }}>
-                <span style={{ width:20, height:20, borderRadius:"50%", background:"rgba(16,185,129,0.2)", border:"1px solid rgba(16,185,129,0.45)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#34D399" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                </span>
-                {h}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p style={{ position:"relative", margin:0, fontSize:12.5, color:"rgba(148,163,184,0.9)" }}>
-          30 días gratis del plan Empresarial · Sin tarjeta · Cancela cuando quieras
-        </p>
+        <img src="/brand/login-splash.jpg" alt="" aria-hidden
+          style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", filter:"blur(48px)", transform:"scale(1.15)", opacity:0.55 }}/>
+        <img src="/brand/login-splash.jpg" alt="CubaGest — Gestiona tu negocio desde el celular"
+          style={{ position:"relative", width:"100%", height:"100%", objectFit:"contain", padding:"clamp(20px, 4vh, 48px)" }}/>
       </aside>
 
       {/* ── Columna del formulario ── */}
@@ -181,11 +164,11 @@ const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => voi
         </div>
 
         {/* Panel de vidrio: fondo translúcido + blur sobre el gradiente del aside */}
-        <div style={glassPanel}>
+        <div className="cg-glass" style={glassPanel}>
           <div style={{ padding:"32px 36px 30px" }}>
             <div style={{ textAlign:"center", marginBottom:26 }}>
-              <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"var(--ink)", letterSpacing:"-0.3px" }}>Bienvenido de nuevo</h1>
-              <p style={{ margin:"8px 0 0", fontSize:13.5, color:"var(--muted)", lineHeight:1.5 }}>Ingresa a tu negocio para continuar</p>
+              <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:"#0F172A", letterSpacing:"-0.3px" }}>Bienvenido de nuevo</h1>
+              <p style={{ margin:"8px 0 0", fontSize:13.5, color:"#64748B", lineHeight:1.5 }}>Ingresa a tu negocio para continuar</p>
             </div>
             <div style={fieldGap}>
               <Field label="Correo electrónico" required>
@@ -202,7 +185,7 @@ const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => voi
               <button style={{ ...btn("primary"), justifyContent:"center", padding:"12px", fontSize:15, opacity:loading?0.7:1 }} onClick={handleSubmit} disabled={loading}>
                 {loading ? "Verificando..." : "Iniciar sesión"}
               </button>
-              <button style={{ background:"none", border:"none", color:"var(--brand,#3B82F6)", fontSize:13, cursor:"pointer", textAlign:"center" as any, padding:"2px 4px 0", alignSelf:"center" }} onClick={()=>{ setShowForgot(true); setForgotEmail(email); setForgotSent(false); }}>
+              <button style={{ background:"none", border:"none", color:"var(--brand,var(--brand))", fontSize:13, cursor:"pointer", textAlign:"center" as any, padding:"2px 4px 0", alignSelf:"center" }} onClick={()=>{ setShowForgot(true); setForgotEmail(email); setForgotSent(false); }}>
                 ¿Olvidaste tu contraseña?
               </button>
             </div>
@@ -239,7 +222,7 @@ const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => voi
               <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
                 <p style={{ margin:0, fontSize:13, color:"var(--muted)" }}>Ingresa tu correo y te mandamos un link para elegir una nueva contraseña.</p>
                 <Field label="Correo electrónico" required>
-                  <input style={glassInput} type="email" value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleForgot()}/>
+                  <input style={inp} type="email" value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleForgot()}/>
                 </Field>
                 <button style={{ ...btn("primary"), justifyContent:"center", opacity:forgotLoading?0.7:1 }} onClick={handleForgot} disabled={forgotLoading}>
                   {forgotLoading ? "Enviando..." : "Enviar link"}
@@ -293,7 +276,7 @@ const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => voi
                   {regError}
                 </div>
               )}
-              <div style={{ background:"rgba(59,130,246,0.10)", border:"1px solid rgba(59,130,246,0.25)", borderRadius:10, padding:"10px 14px", fontSize:12.5, color:"var(--ink)" }}>
+              <div style={{ background:"rgba(var(--brand-rgb),0.10)", border:"1px solid rgba(var(--brand-rgb),0.25)", borderRadius:10, padding:"10px 14px", fontSize:12.5, color:"var(--ink)" }}>
                 🎁 Comienzas con <strong>30 días gratis</strong> del plan Empresarial completo.
               </div>
               <button style={{ ...btn("primary"), justifyContent:"center", padding:"12px", fontSize:15, opacity:regLoading?0.7:1 }} onClick={handleRegister} disabled={regLoading}>

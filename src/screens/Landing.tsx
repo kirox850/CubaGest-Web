@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/shared/Icon";
+import { LegalModal } from "@/components/shared/LegalModal";
+import { PRIVACY_POLICY_MD, TERMS_MD } from "@/legalContent";
 
 // ─── LANDING PAGE (pública, antes del login) ────────────────────────────────
 // Diseño premium: revelado al hacer scroll (IntersectionObserver), contadores
@@ -30,7 +32,7 @@ export const LOGO_URL = "/brand/logo.png";
 export const BrandLogo = ({ size = 34 }: { size?: number }) => {
   const [failed, setFailed] = useState(false);
   if (failed) return (
-    <div style={{ width:size, height:size, background:"linear-gradient(135deg,#3B82F6,#60A5FA)", borderRadius:size*0.35, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+    <div style={{ width:size, height:size, background:"linear-gradient(135deg,var(--brand),var(--brand-light))", borderRadius:size*0.35, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
       <span style={{ color:"#fff", fontWeight:800, fontSize:size*0.5, lineHeight:1 }}>C</span>
     </div>
   );
@@ -94,13 +96,13 @@ const CountUp = ({ to, suffix = "", duration = 1400 }: { to: number; suffix?: st
 const CtaButton = ({ onClick, children, big = false }: { onClick: () => void; children: any; big?: boolean }) => (
   <button onClick={onClick} className="cta-shine" style={{
     position:"relative", overflow:"hidden", border:"none", cursor:"pointer",
-    background:"linear-gradient(135deg,#3B82F6,#2563EB)", color:"#fff", fontWeight:700,
+    background:"linear-gradient(135deg,var(--brand),var(--brand-dark))", color:"#fff", fontWeight:700,
     fontSize:big?16:15, padding:big?"15px 36px":"12px 26px", borderRadius:14,
-    boxShadow:"0 10px 30px rgba(59,130,246,0.45)",
+    boxShadow:"0 10px 30px rgba(var(--brand-rgb),0.45)",
     transition:"transform 0.2s cubic-bezier(0.22,1,0.36,1), box-shadow 0.2s",
   }}
-  onMouseEnter={e=>{ (e.currentTarget as HTMLElement).style.transform="translateY(-2px) scale(1.02)"; (e.currentTarget as HTMLElement).style.boxShadow="0 16px 40px rgba(59,130,246,0.55)"; }}
-  onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.transform="none"; (e.currentTarget as HTMLElement).style.boxShadow="0 10px 30px rgba(59,130,246,0.45)"; }}
+  onMouseEnter={e=>{ (e.currentTarget as HTMLElement).style.transform="translateY(-2px) scale(1.02)"; (e.currentTarget as HTMLElement).style.boxShadow="0 16px 40px rgba(var(--brand-rgb),0.55)"; }}
+  onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.transform="none"; (e.currentTarget as HTMLElement).style.boxShadow="0 10px 30px rgba(var(--brand-rgb),0.45)"; }}
   >{children}</button>
 );
 
@@ -126,7 +128,7 @@ const PhoneMockup = () => {
         <div style={{ fontSize:10, color:"#4ADE80", marginBottom:12 }}>▲ 18% vs. ayer</div>
         {[72, 45, 90, 60, 34, 80].map((h, i) => (
           <div key={i} className="bar-grow" style={{ display:"inline-block", width:18, margin:2, borderRadius:4,
-            background:i===2?"#3B82F6":"#1E3A5F", height:h*0.5, verticalAlign:"bottom", animationDelay:`${300 + i*90}ms` }}/>
+            background:i===2?"var(--brand)":"#1E3A5F", height:h*0.5, verticalAlign:"bottom", animationDelay:`${300 + i*90}ms` }}/>
         ))}
         <div style={{ marginTop:14, background:"#16233B", borderRadius:10, padding:"8px 10px", fontSize:10, color:"#CBD5E1" }}>
           🧾 Factura #0231 — $1,250 <span style={{ color:"#4ADE80" }}>pagada</span>
@@ -134,7 +136,7 @@ const PhoneMockup = () => {
         <div style={{ marginTop:6, background:"#16233B", borderRadius:10, padding:"8px 10px", fontSize:10, color:"#CBD5E1" }}>
           ⚠️ Refresco La Tropical — quedan 4
         </div>
-        <div style={{ marginTop:10, background:"linear-gradient(135deg,#3B82F6,#60A5FA)", borderRadius:10, padding:"9px 0", textAlign:"center", fontSize:11, fontWeight:700, color:"#fff" }}>
+        <div style={{ marginTop:10, background:"linear-gradient(135deg,var(--brand),var(--brand-light))", borderRadius:10, padding:"9px 0", textAlign:"center", fontSize:11, fontWeight:700, color:"#fff" }}>
           + Vender
         </div>
       </div>
@@ -142,7 +144,12 @@ const PhoneMockup = () => {
   );
 };
 
-const Landing = ({ onEnter }: { onEnter: () => void }) => (
+const Landing = ({ onEnter }: { onEnter: () => void }) => {
+  // Modales legales (mismo contenido que dentro de la app)
+  const [legal, setLegal] = useState<null | "privacy" | "terms" >(null);
+  const goId = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior:"smooth", block:"start" });
+
+  return (
   <div style={{ minHeight:"100vh", background:"#F8FAFC", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", color:"#1E293B", overflowX:"hidden" }}>
     <style>{`
       /* Brillo que cruza el botón CTA */
@@ -157,7 +164,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => (
       @keyframes barGrow { from { transform:scaleY(0); } to { transform:scaleY(1); } }
       /* Card de feature interactiva */
       .feature-card { transition:transform 0.25s cubic-bezier(0.22,1,0.36,1), box-shadow 0.25s, border-color 0.25s; }
-      .feature-card:hover { transform:translateY(-6px); box-shadow:0 18px 40px rgba(15,23,42,0.10); border-color:#BFDBFE !important; }
+      .feature-card:hover { transform:translateY(-6px); box-shadow:0 18px 40px rgba(15,23,42,0.10); border-color:var(--brand-tint-b) !important; }
       .feature-card:hover .feature-icon { transform:scale(1.12) rotate(-4deg); }
       .feature-icon { transition:transform 0.25s cubic-bezier(0.22,1,0.36,1); }
       /* Plan destacado con flotación suave */
@@ -168,29 +175,38 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => (
       @keyframes heroIn { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
       .pulse-dot { animation:pulseDot 2s ease-in-out infinite; }
       @keyframes pulseDot { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+      /* Enlaces de la barra superior */
+      .lnk { background:none; border:none; cursor:pointer; font-size:13.5px; font-weight:600; color:#334155; padding:8px 10px; border-radius:10px; transition:color 0.2s; }
+      .lnk:hover { color:var(--brand); }
       @media (prefers-reduced-motion: reduce) {
         .cta-shine::after, .plan-float, .hero-in, .bar-grow, .pulse-dot { animation:none !important; }
       }
     `}</style>
 
-    {/* Nav */}
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", maxWidth:960, margin:"0 auto", position:"sticky", top:0, zIndex:50, background:"rgba(248,250,252,0.85)", backdropFilter:"blur(10px)", WebkitBackdropFilter:"blur(10px)" }}>
+    {/* Nav — el paddingTop con env(safe-area-inset-top) baja la barra por
+        debajo del reloj/batería cuando se instala como PWA en iOS */}
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap" as any, padding:"calc(10px + env(safe-area-inset-top)) 20px 10px", maxWidth:960, margin:"0 auto", position:"sticky", top:0, zIndex:50, background:"rgba(248,250,252,0.85)", backdropFilter:"blur(10px)", WebkitBackdropFilter:"blur(10px)" }}>
       <div style={{ display:"flex", alignItems:"center", gap:10 }}>
         <BrandLogo size={34}/>
         <span style={{ fontWeight:800, fontSize:17 }}>CubaGest</span>
       </div>
-      <button onClick={onEnter} style={{ background:"none", border:"none", cursor:"pointer", color:"#3B82F6", fontSize:14, fontWeight:600, padding:"8px 14px", borderRadius:10, transition:"background 0.2s" }}
-        onMouseEnter={e=>((e.currentTarget as HTMLElement).style.background="rgba(59,130,246,0.08)")}
-        onMouseLeave={e=>((e.currentTarget as HTMLElement).style.background="none")}>
-        Iniciar sesión
-      </button>
+      <div style={{ display:"flex", alignItems:"center", gap:2, flexWrap:"wrap" as any }}>
+        <button className="lnk" onClick={()=>goId("precios")}>Precios</button>
+        <button className="lnk" onClick={()=>setLegal("terms")}>Términos</button>
+        <button className="lnk" onClick={()=>setLegal("privacy")}>Privacidad</button>
+        <button onClick={onEnter} style={{ background:"var(--brand)", border:"none", cursor:"pointer", color:"#fff", fontSize:13.5, fontWeight:700, padding:"8px 16px", borderRadius:10, marginLeft:4, boxShadow:"0 4px 14px rgba(var(--brand-rgb),0.35)", transition:"transform 0.15s, box-shadow 0.2s" }}
+          onMouseEnter={e=>{ (e.currentTarget as HTMLElement).style.transform="translateY(-1px)"; (e.currentTarget as HTMLElement).style.boxShadow="0 8px 20px rgba(var(--brand-rgb),0.45)"; }}
+          onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.transform="none"; (e.currentTarget as HTMLElement).style.boxShadow="0 4px 14px rgba(var(--brand-rgb),0.35)"; }}>
+          Iniciar sesión
+        </button>
+      </div>
     </div>
 
-    {/* Hero */}
-    <div style={{ background:"linear-gradient(135deg,#0F172A 0%,#1E3A5F 55%,#1E293B 100%)", color:"#fff", padding:"56px 24px 64px", textAlign:"center", position:"relative", overflow:"hidden" }}>
+    {/* Hero — navy de marca (mismo tono que el splash del Brand Kit) */}
+    <div style={{ background:"linear-gradient(135deg,#0B1220 0%,#0D3B75 55%,#0B1220 100%)", color:"#fff", padding:"56px 24px 64px", textAlign:"center", position:"relative", overflow:"hidden" }}>
       {/* Halos decorativos con blur */}
-      <div style={{ position:"absolute", width:420, height:420, borderRadius:"50%", background:"radial-gradient(circle,rgba(59,130,246,0.22),transparent 65%)", top:-140, right:-120, pointerEvents:"none" }}/>
-      <div style={{ position:"absolute", width:360, height:360, borderRadius:"50%", background:"radial-gradient(circle,rgba(96,165,250,0.14),transparent 65%)", bottom:-160, left:-120, pointerEvents:"none" }}/>
+      <div style={{ position:"absolute", width:420, height:420, borderRadius:"50%", background:"radial-gradient(circle,rgba(var(--brand-rgb),0.22),transparent 65%)", top:-140, right:-120, pointerEvents:"none" }}/>
+      <div style={{ position:"absolute", width:360, height:360, borderRadius:"50%", background:"radial-gradient(circle,rgba(var(--brand-rgb-light),0.14),transparent 65%)", bottom:-160, left:-120, pointerEvents:"none" }}/>
       <div style={{ maxWidth:680, margin:"0 auto", position:"relative" }}>
         <div className="hero-in" style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:999, padding:"6px 14px", fontSize:13, fontWeight:600, marginBottom:22 }}>
           <span className="pulse-dot" style={{ width:8, height:8, borderRadius:"50%", background:"#4ADE80", display:"inline-block" }}/>
@@ -240,8 +256,8 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => (
         {LANDING_FEATURES.map((f, i) => (
           <Reveal key={f.title} delay={(i % 3) * 100}>
             <div className="feature-card" style={{ background:"#fff", borderRadius:16, padding:"22px 20px", border:"1px solid #E2E8F0", height:"100%", boxSizing:"border-box" }}>
-              <div className="feature-icon" style={{ width:40, height:40, borderRadius:12, background:"#EFF6FF", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
-                <Icon name={f.icon} size={20} color="#3B82F6"/>
+              <div className="feature-icon" style={{ width:40, height:40, borderRadius:12, background:"var(--brand-tint)", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
+                <Icon name={f.icon} size={20} color="var(--brand)"/>
               </div>
               <div style={{ fontWeight:700, fontSize:15, marginBottom:6 }}>{f.title}</div>
               <div style={{ fontSize:13, color:"#64748B", lineHeight:1.55 }}>{f.text}</div>
@@ -263,7 +279,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => (
           ].map((s, i) => (
             <Reveal key={s.n} delay={i*140}>
               <div style={{ textAlign:"center", padding:"0 8px" }}>
-                <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#3B82F6,#2563EB)", color:"#fff", fontSize:19, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px", boxShadow:"0 8px 20px rgba(59,130,246,0.35)" }}>{s.n}</div>
+                <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,var(--brand),var(--brand-dark))", color:"#fff", fontSize:19, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px", boxShadow:"0 8px 20px rgba(var(--brand-rgb),0.35)" }}>{s.n}</div>
                 <div style={{ fontWeight:700, marginBottom:6 }}>{s.t}</div>
                 <div style={{ fontSize:13, color:"#64748B", lineHeight:1.55 }}>{s.d}</div>
               </div>
@@ -274,7 +290,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => (
     </div>
 
     {/* Precios */}
-    <div style={{ maxWidth:960, margin:"0 auto", padding:"52px 20px" }}>
+    <div id="precios" style={{ maxWidth:960, margin:"0 auto", padding:"52px 20px", scrollMarginTop:80 }}>
       <Reveal>
         <h2 style={{ textAlign:"center", fontSize:26, fontWeight:800, margin:"0 0 8px" }}>Precios claros, en USD</h2>
         <p style={{ textAlign:"center", color:"#64748B", margin:"0 0 32px", fontSize:14 }}>Empieza gratis. Paga solo cuando tu negocio lo necesite.</p>
@@ -284,14 +300,14 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => (
           <Reveal key={p.key} delay={i*120}>
             <div className={p.key==="pro" ? "plan-float" : ""} style={{
               background:p.key==="pro"?"#0F172A":"#fff", color:p.key==="pro"?"#fff":"#1E293B",
-              borderRadius:18, padding:"26px 22px", border:p.key==="pro"?"2px solid #3B82F6":"1px solid #E2E8F0",
+              borderRadius:18, padding:"26px 22px", border:p.key==="pro"?"2px solid var(--brand)":"1px solid #E2E8F0",
               position:"relative", height:"100%", boxSizing:"border-box",
               boxShadow:p.key==="pro"?"0 20px 50px rgba(15,23,42,0.25)":"none",
               transition:"transform 0.25s, box-shadow 0.25s",
             }}
             onMouseEnter={e=>{ if(p.key!=="pro"){ (e.currentTarget as HTMLElement).style.transform="translateY(-4px)"; (e.currentTarget as HTMLElement).style.boxShadow="0 14px 34px rgba(15,23,42,0.10)"; } }}
             onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.transform="none"; (e.currentTarget as HTMLElement).style.boxShadow=p.key==="pro"?"0 20px 50px rgba(15,23,42,0.25)":"none"; }}>
-              {p.key==="pro" && <div style={{ position:"absolute", top:-11, left:"50%", transform:"translateX(-50%)", background:"#3B82F6", color:"#fff", fontSize:11, fontWeight:700, borderRadius:999, padding:"4px 12px", whiteSpace:"nowrap" }}>{p.tag}</div>}
+              {p.key==="pro" && <div style={{ position:"absolute", top:-11, left:"50%", transform:"translateX(-50%)", background:"var(--brand)", color:"#fff", fontSize:11, fontWeight:700, borderRadius:999, padding:"4px 12px", whiteSpace:"nowrap" }}>{p.tag}</div>}
               <div style={{ fontWeight:800, fontSize:17, marginBottom:2 }}>{p.label}</div>
               {p.key!=="pro" && <div style={{ fontSize:12, color:"#94A3B8", marginBottom:8 }}>{p.tag}</div>}
               <div style={{ fontSize:34, fontWeight:800, margin:"8px 0 14px" }}>${p.priceUSD}<span style={{ fontSize:13, fontWeight:400, color:p.key==="pro"?"#94A3B8":"#64748B" }}>/mes</span></div>
@@ -300,7 +316,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => (
                 width:"100%", justifyContent:"center", marginTop:16, cursor:"pointer",
                 border:p.key==="pro"?"none":"1px solid #CBD5E1", borderRadius:12, padding:"11px 0",
                 fontSize:14, fontWeight:700,
-                background:p.key==="pro"?"linear-gradient(135deg,#3B82F6,#2563EB)":"transparent",
+                background:p.key==="pro"?"linear-gradient(135deg,var(--brand),var(--brand-dark))":"transparent",
                 color:p.key==="pro"?"#fff":"#1E293B",
                 transition:"opacity 0.2s, transform 0.15s",
               }}
@@ -315,8 +331,8 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => (
     </div>
 
     {/* CTA final */}
-    <div style={{ background:"linear-gradient(135deg,#1E3A5F,#0F172A)", color:"#fff", padding:"52px 24px", textAlign:"center", position:"relative", overflow:"hidden" }}>
-      <div style={{ position:"absolute", width:380, height:380, borderRadius:"50%", background:"radial-gradient(circle,rgba(59,130,246,0.18),transparent 65%)", top:-120, left:"50%", transform:"translateX(-50%)", pointerEvents:"none" }}/>
+    <div style={{ background:"linear-gradient(135deg,#0D3B75,#0B1220)", color:"#fff", padding:"52px 24px", textAlign:"center", position:"relative", overflow:"hidden" }}>
+      <div style={{ position:"absolute", width:380, height:380, borderRadius:"50%", background:"radial-gradient(circle,rgba(var(--brand-rgb),0.18),transparent 65%)", top:-120, left:"50%", transform:"translateX(-50%)", pointerEvents:"none" }}/>
       <Reveal>
         <h2 style={{ margin:"0 0 10px", fontSize:26, fontWeight:800, position:"relative" }}>¿Listo para organizar tu negocio?</h2>
         <p style={{ margin:"0 0 24px", color:"#CBD5E1", fontSize:15, position:"relative" }}>Crea tu cuenta hoy y ten tu primera factura en 10 minutos.</p>
@@ -327,8 +343,18 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => (
     {/* Footer */}
     <div style={{ padding:"26px 20px", textAlign:"center", fontSize:12, color:"#94A3B8" }}>
       © {new Date().getFullYear()} CubaGest · Sistema de gestión empresarial
+      <div style={{ marginTop:8, display:"flex", gap:6, justifyContent:"center", flexWrap:"wrap" as any }}>
+        <button className="lnk" style={{ fontSize:12, color:"#94A3B8" }} onClick={()=>setLegal("terms")}>Términos y Condiciones</button>
+        <span>·</span>
+        <button className="lnk" style={{ fontSize:12, color:"#94A3B8" }} onClick={()=>setLegal("privacy")}>Política de Privacidad</button>
+      </div>
     </div>
+
+    {/* Modales legales (mismo contenido que dentro de la app) */}
+    {legal==="terms" && <LegalModal title="Términos y Condiciones" content={TERMS_MD} onClose={()=>setLegal(null)}/>}
+    {legal==="privacy" && <LegalModal title="Política de Privacidad" content={PRIVACY_POLICY_MD} onClose={()=>setLegal(null)}/>}
   </div>
-);
+  );
+};
 
 export default Landing;

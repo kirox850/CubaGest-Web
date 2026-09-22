@@ -133,11 +133,11 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
                     <div style={{ fontSize:12, color:"var(--muted)", marginTop:3 }}>
                       Por {c.closedBy?.name || "—"} · {fmtDate(c.periodStart)} → {fmtDate(c.periodEnd)}
                     </div>
-                    {locations.length > 1 && <div style={{ fontSize:12, color:"#3B82F6", marginTop:2, fontWeight:600 }}>{locationName(c.locationId)}</div>}
+                    {locations.length > 1 && <div style={{ fontSize:12, color:"var(--brand)", marginTop:2, fontWeight:600 }}>{locationName(c.locationId)}</div>}
                   </div>
                   <div style={{ display:"flex", gap:8, alignItems:"center" }}>
                     {hasShortage && <Badge label="⚠ Faltantes" color="#F97316"/>}
-                    <Badge label={`${c.totalSales} ventas`} color="#3B82F6"/>
+                    <Badge label={`${c.totalSales} ventas`} color="var(--brand)"/>
                   </div>
                 </div>
                 <div style={{ display:"flex", gap:24, marginTop:12, flexWrap:"wrap" as const }}>
@@ -211,17 +211,17 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
             const typeLabel = r.type === "apertura" ? "Lectura de apertura" : "Lectura al cierre anterior";
             return (
               <div key={r.id}
-                style={{ border:isRec?"2px solid #3B82F6":"1px solid var(--line)", borderRadius:14, padding:16, background:isRec?"var(--input-bg)":"var(--card)", cursor:saving?"not-allowed":"pointer", opacity:saving?0.6:1 }}
+                style={{ border:isRec?"2px solid var(--brand)":"1px solid var(--line)", borderRadius:14, padding:16, background:isRec?"var(--input-bg)":"var(--card)", cursor:saving?"not-allowed":"pointer", opacity:saving?0.6:1 }}
                 onClick={() => !saving && selectReading(r)}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                   <div>
                     <div style={{ fontWeight:700, fontSize:14, color:"var(--ink)" }}>{typeLabel}</div>
                     <div style={{ fontSize:12, color:"var(--muted)", marginTop:3 }}>{fmtDate(r.createdAt)}</div>
-                    {locations.length > 1 && <div style={{ fontSize:12, color:"#3B82F6", marginTop:2, fontWeight:600 }}>{locationName(r.locationId)}</div>}
+                    {locations.length > 1 && <div style={{ fontSize:12, color:"var(--brand)", marginTop:2, fontWeight:600 }}>{locationName(r.locationId)}</div>}
                     {r.takenBy && <div style={{ fontSize:12, color:"var(--muted)", marginTop:2 }}>Por {r.takenBy.name}</div>}
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    {isRec && <Badge label="Recomendado" color="#3B82F6"/>}
+                    {isRec && <Badge label="Recomendado" color="var(--brand)"/>}
                   </div>
                 </div>
                 {!isRec && (
@@ -251,7 +251,7 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
           <div style={{ display:"flex", gap:12, background:"var(--input-bg)", borderRadius:12, padding:"10px 16px" }}>
             {[{ l:"Efectivo", v:preview.incomeEfectivo },{ l:"Transferencia", v:preview.incomeTransferencia }].map(s=>(
               <div key={s.l} style={{ textAlign:"center" as const }}>
-                <div style={{ fontSize:11, color:"#3B82F6", fontWeight:600 }}>{s.l}</div>
+                <div style={{ fontSize:11, color:"var(--brand)", fontWeight:600 }}>{s.l}</div>
                 <div style={{ fontSize:15, fontWeight:800, color:"var(--ink)" }}>{fmt(s.v)} CUP</div>
               </div>
             ))}
@@ -344,7 +344,7 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
           {[{ l:"Total ingresos", v:`${fmt(c.totalIncome)} CUP`, color:"#10B981" },
             { l:"Efectivo", v:`${fmt(c.incomeEfectivo)} CUP`, color:"var(--ink)" },
             { l:"Transferencia", v:`${fmt(c.incomeTransferencia)} CUP`, color:"var(--ink)" },
-            { l:"Ventas realizadas", v:String(c.totalSales), color:"#3B82F6" }].map(s=>(
+            { l:"Ventas realizadas", v:String(c.totalSales), color:"var(--brand)" }].map(s=>(
             <div key={s.l} style={{ background:"var(--card)", borderRadius:12, padding:"12px 16px", border:"1px solid var(--line)", boxShadow:"0 1px 4px rgba(15,23,42,0.05)" }}>
               <div style={{ fontSize:11, color:"var(--muted)", fontWeight:600, textTransform:"uppercase" as const }}>{s.l}</div>
               <div style={{ fontSize:18, fontWeight:800, color:s.color, marginTop:4 }}>{s.v}</div>

@@ -7,6 +7,20 @@
    (var(--card), var(--ink), var(--line)...). Se redefinen bajo .dark
    y todo — fondos, bordes, inputs, tablas, modales — cambia de tema. */
 :root {
+  /* ── Marca (Brand Kit oficial) ──
+     Color único del brand kit: #048afb. Los tonos derivados (dark/light/
+     tints) son variaciones del mismo para gradientes, bordes y fondos suaves.
+     En modo oscuro los tints se vuelven translúcidos para no deslumbrar. */
+  --brand: #048afb;
+  --brand-dark: #026ace;
+  --brand-light: #47a9ff;
+  --brand-tint: #eaf4fe;
+  --brand-tint-b: #b5dbfd;
+  /* Canales RGB para rgba(var(--brand-rgb), alpha) en estilos inline */
+  --brand-rgb: 4, 138, 251;
+  --brand-rgb-dark: 2, 106, 206;
+  --brand-rgb-light: 71, 169, 255;
+
   --bg: #f8fafc;
   --card: #ffffff;
   --ink: #1e293b;
@@ -16,6 +30,9 @@
   --input-border: #d8cfc4;
 }
 .dark {
+  --brand-tint: rgba(4, 138, 251, 0.14);
+  --brand-tint-b: rgba(4, 138, 251, 0.38);
+
   --bg: #0b1220;
   --card: #101a2c;
   --ink: #e2e8f0;
@@ -30,8 +47,8 @@
    se compilan referenciando DIRECTAMENTE las variables semánticas de
    arriba, así que los componentes de shadcn también siguen el tema. */
 @theme inline {
-  --color-brand: #3b82f6;
-  --color-brand-dark: #1e40af;
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
   --color-surface: var(--bg);
   --color-card: var(--card);
   --color-ink: var(--ink);

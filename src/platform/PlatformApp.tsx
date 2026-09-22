@@ -29,7 +29,7 @@ const pf = async (path: string, opts: { method?: string; body?: any } = {}) => {
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
   activa: { label: "Activa", color: "#10B981" },
-  trial: { label: "En prueba", color: "#3B82F6" },
+  trial: { label: "En prueba", color: "var(--brand)" },
   vencida: { label: "Vencida", color: "#F97316" },
   "pago fallido": { label: "Pago fallido", color: "#DC2626" },
   suspendida: { label: "Suspendida", color: "#64748B" },
@@ -166,7 +166,7 @@ function CompaniesList({ stats, onStats, onOpen }: { stats: any; onStats: (s: an
                 {c.users} usuarios · {c.salesTotal} ventas · alta {fmtDate(c.createdAt)} · última venta {fmtDate(c.lastSaleDate)}
               </div>
             </div>
-            <Badge label={c.plan} color="#3B82F6" />
+            <Badge label={c.plan} color="var(--brand)" />
             {statusBadge(c.effectiveStatus)}
           </button>
         ))}
@@ -199,13 +199,13 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <button onClick={onBack} style={{ background: "none", border: "none", color: "#3B82F6", cursor: "pointer", fontSize: 13, textAlign: "left", padding: 0, width: "fit-content" }}>← Volver a empresas</button>
+      <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--brand)", cursor: "pointer", fontSize: 13, textAlign: "left", padding: 0, width: "fit-content" }}>← Volver a empresas</button>
 
       <Card>
         <CardHeader>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <CardTitle style={{ fontSize: 20 }}>{co.name}</CardTitle>
-            <Badge label={co.plan} color="#3B82F6" />
+            <Badge label={co.plan} color="var(--brand)" />
             {statusBadge(status)}
           </div>
           <CardDescription>

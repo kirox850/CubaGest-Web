@@ -147,7 +147,7 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
                     </div>
                     {u.max && (
                       <div style={{ height:6, background:"var(--line)", borderRadius:99 }}>
-                        <div style={{ height:6, width:`${pct}%`, background: pct>=100?"#DC2626":pct>=80?"#F97316":"#3B82F6", borderRadius:99 }}/>
+                        <div style={{ height:6, width:`${pct}%`, background: pct>=100?"#DC2626":pct>=80?"#F97316":"var(--brand)", borderRadius:99 }}/>
                       </div>
                     )}
                   </div>
@@ -163,14 +163,14 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
             const isCurrent = p.key === effectivePlan;
             const isLoading = loading && selectedPlan === p.key;
             return (
-              <div key={p.key} style={{ border:`2px solid ${isCurrent?"#3B82F6":"var(--line)"}`, borderRadius:14, padding:16, position:"relative" as const, background:isCurrent?"var(--input-bg)":"var(--card)", display:"flex", flexDirection:"column", gap:8 }}>
+              <div key={p.key} style={{ border:`2px solid ${isCurrent?"var(--brand)":"var(--line)"}`, borderRadius:14, padding:16, position:"relative" as const, background:isCurrent?"var(--input-bg)":"var(--card)", display:"flex", flexDirection:"column", gap:8 }}>
                 {isCurrent && (
-                  <span style={{ position:"absolute" as const, top:-11, left:12, background:"#3B82F6", color:"#fff", fontSize:10, fontWeight:800, padding:"3px 10px", borderRadius:20 }}>
+                  <span style={{ position:"absolute" as const, top:-11, left:12, background:"var(--brand)", color:"#fff", fontSize:10, fontWeight:800, padding:"3px 10px", borderRadius:20 }}>
                     {isTrial && p.key === "empresarial" ? "PRUEBA GRATIS" : "PLAN ACTUAL"}
                   </span>
                 )}
                 <div style={{ fontWeight:800, fontSize:15, color:"var(--ink)" }}>{p.label}</div>
-                <div style={{ fontWeight:700, fontSize:18, color: p.priceUSD===0?"#10B981":"#3B82F6", marginBottom:4 }}>
+                <div style={{ fontWeight:700, fontSize:18, color: p.priceUSD===0?"#10B981":"var(--brand)", marginBottom:4 }}>
                   {p.priceUSD===0 ? "Gratis" : `$${p.priceUSD} USD`}
                   {p.priceUSD>0 && <span style={{ fontSize:12, fontWeight:400, color:"var(--muted)" }}>/mes</span>}
                 </div>

@@ -91,7 +91,7 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
                       <div style={{ width:36, height:36, borderRadius:50, background:ROLES[u.role]?.color||"#888", color:"#ffffff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700 }}>{u.name?.charAt(0)}</div>
                       <div>
                         <p style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--ink)" }}>{u.name}</p>
-                        {u.id===currentUser.id && <span style={{ fontSize:11, color:"#3B82F6", fontWeight:600 }}>← Sesión actual</span>}
+                        {u.id===currentUser.id && <span style={{ fontSize:11, color:"var(--brand)", fontWeight:600 }}>← Sesión actual</span>}
                       </div>
                     </div>
                   </td>

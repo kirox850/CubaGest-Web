@@ -320,7 +320,7 @@ export default function App() {
 
       {/* Top header — el paddingTop con safe-area baja el contenido por debajo
           de la barra de estado del iPhone (reloj/batería); en desktop env() = 0 */}
-      <div style={{ background:"#1E293B", padding:"0 16px", paddingTop:"env(safe-area-inset-top)", height:"calc(56px + env(safe-area-inset-top))", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, zIndex:10, boxShadow:"0 1px 8px rgba(0,0,0,0.12)" }}>
+      <div style={{ background:"#0B1220", padding:"0 16px", paddingTop:"env(safe-area-inset-top)", height:"calc(56px + env(safe-area-inset-top))", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, zIndex:10, boxShadow:"0 1px 8px rgba(0,0,0,0.12)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <BrandLogo size={32}/>
           <div style={{ color:"#ffffff", fontWeight:800, fontSize:15 }}>CubaGest</div>
@@ -376,8 +376,8 @@ export default function App() {
                     <Icon name="doc" size={16} color="#475569"/>Términos y Condiciones
                   </button>
                   <div style={{ height:1, background:"var(--line, #E2E8F0)", margin:"4px 0" }}/>
-                  <button onClick={()=>{handleLogout();setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"#3B82F6", fontSize:14, fontWeight:600 }}>
-                    <Icon name="logout" size={16} color="#3B82F6"/>Cerrar sesión
+                  <button onClick={()=>{handleLogout();setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--brand)", fontSize:14, fontWeight:600 }}>
+                    <Icon name="logout" size={16} color="var(--brand)"/>Cerrar sesión
                   </button>
                 </div>
               </div>
@@ -441,8 +441,8 @@ export default function App() {
           const on = activeModule===item.id;
           return (
             <button key={item.id} onClick={()=>{ setActiveModule(item.id); setProfileOpen(false); }}
-              style={{ display:"flex", alignItems:"center", gap:11, padding:"11px 14px", borderRadius:12, border:"none", cursor:"pointer", textAlign:"left" as any, fontSize:13.5, fontWeight:on?700:500, background:on?"rgba(59,130,246,0.10)":"transparent", color:on?"#3B82F6":"var(--muted, #64748B)", transition:"background 0.12s" }}>
-              <Icon name={item.icon} size={19} color={on?"#3B82F6":"#64748B"}/>
+              style={{ display:"flex", alignItems:"center", gap:11, padding:"11px 14px", borderRadius:12, border:"none", cursor:"pointer", textAlign:"left" as any, fontSize:13.5, fontWeight:on?700:500, background:on?"rgba(var(--brand-rgb),0.10)":"transparent", color:on?"var(--brand)":"var(--muted, #64748B)", transition:"background 0.12s" }}>
+              <Icon name={item.icon} size={19} color={on?"var(--brand)":"#64748B"}/>
               {item.label}
             </button>
           );
@@ -453,10 +453,10 @@ export default function App() {
           el padding-bottom del env(), el contenido respira con 96px arriba */}
       <div className="cg-bottomnav" style={{ position:"fixed" as any, bottom:0, left:0, right:0, background:"var(--card, #ffffff)", borderTop:"1px solid var(--line, #e8e0d8)", display:"flex", zIndex:100, paddingBottom:"max(env(safe-area-inset-bottom), 4px)" }}>
         {navItems.map(item=>(
-          <button key={item.id} onClick={()=>{ setActiveModule(item.id); setProfileOpen(false); }} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"8px 4px 6px", border:"none", cursor:"pointer", background:"none", color:activeModule===item.id?"#3B82F6":"var(--muted, #94A3B8)", gap:3, minWidth:0 }}>
-            <Icon name={item.icon} size={22} color={activeModule===item.id?"#3B82F6":"#64748B"}/>
+          <button key={item.id} onClick={()=>{ setActiveModule(item.id); setProfileOpen(false); }} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"8px 4px 6px", border:"none", cursor:"pointer", background:"none", color:activeModule===item.id?"var(--brand)":"var(--muted, #94A3B8)", gap:3, minWidth:0 }}>
+            <Icon name={item.icon} size={22} color={activeModule===item.id?"var(--brand)":"#64748B"}/>
             <span style={{ fontSize:10, fontWeight:activeModule===item.id?700:400, whiteSpace:"nowrap" as any, overflow:"hidden", textOverflow:"ellipsis", maxWidth:"100%" }}>{item.label}</span>
-            {activeModule===item.id && <div style={{ width:4, height:4, borderRadius:"50%", background:"#3B82F6", marginTop:2 }}/>}
+            {activeModule===item.id && <div style={{ width:4, height:4, borderRadius:"50%", background:"var(--brand)", marginTop:2 }}/>}
           </button>
         ))}
       </div>

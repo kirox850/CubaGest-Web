@@ -100,7 +100,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
           <p style={{ margin:0, fontSize:14, color:"var(--muted)" }}>
             {sales.filter(s=>s.status==="emitida").length} emitidas · ${fmt(sales.filter(s=>s.status==="emitida").reduce((a,s)=>a+Number(s.total),0))} CUP
             {offlineSales.filter(s=>s.status==="pending").length > 0 && <span style={{ marginLeft:8, background:"#F97316", color:"#ffffff", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700 }}>{offlineSales.filter(s=>s.status==="pending").length} offline</span>}
-            {offlineSales.filter(s=>s.status==="conflict").length > 0 && <span style={{ marginLeft:4, background:"#3B82F6", color:"#ffffff", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700 }}>{offlineSales.filter(s=>s.status==="conflict").length} conflicto</span>}
+            {offlineSales.filter(s=>s.status==="conflict").length > 0 && <span style={{ marginLeft:4, background:"var(--brand)", color:"#ffffff", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700 }}>{offlineSales.filter(s=>s.status==="conflict").length} conflicto</span>}
           </p>
         </div>
         <div style={{ display:"flex", gap:8 }}>
@@ -132,16 +132,16 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
                 <div key={s.localId} style={{ background:"var(--card)", borderRadius:12, padding:"12px 14px", border:`1px solid ${s.status==="conflict"?"rgba(220,38,38,0.35)":"rgba(249,115,22,0.35)"}` }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
                     <div>
-                      <span style={{ fontWeight:700, fontSize:13, fontFamily:"monospace", color:"#3B82F6" }}>{s.localId}</span>
+                      <span style={{ fontWeight:700, fontSize:13, fontFamily:"monospace", color:"var(--brand)" }}>{s.localId}</span>
                       <span style={{ fontSize:11, color:"var(--muted)", marginLeft:8 }}>{new Date(s.timestamp).toLocaleString("es-CU")}</span>
                     </div>
-                    <Badge label={s.status==="conflict"?"Conflicto":"Pendiente"} color={s.status==="conflict"?"#3B82F6":"#F97316"}/>
+                    <Badge label={s.status==="conflict"?"Conflicto":"Pendiente"} color={s.status==="conflict"?"var(--brand)":"#F97316"}/>
                   </div>
                   <div style={{ fontSize:12, color:"var(--ink)", marginBottom:4 }}>
                     {s.client} · <strong>${fmt(s.total)}</strong> · {s.items.map((i:any)=>`${i.qty}x ${i.name}`).join(", ")}
                   </div>
                   {s.status==="conflict" && (
-                    <div style={{ fontSize:11, color:"#3B82F6", marginBottom:8 }}>⚠ {s.conflictReason}</div>
+                    <div style={{ fontSize:11, color:"var(--brand)", marginBottom:8 }}>⚠ {s.conflictReason}</div>
                   )}
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap" as any, marginTop:6 }}>
                     {s.status==="conflict" && (
@@ -200,12 +200,12 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
             <tbody>
               {filtered.map(s=>(
                 <tr key={s.id} style={{ borderTop:"1px solid var(--line)", opacity:s.status==="anulada"?0.5:1 }}>
-                  <td style={{ padding:"11px 14px", fontSize:12, fontWeight:700, color:"#3B82F6", fontFamily:"monospace" }}>{s.invoiceNumber||s.id}</td>
+                  <td style={{ padding:"11px 14px", fontSize:12, fontWeight:700, color:"var(--brand)", fontFamily:"monospace" }}>{s.invoiceNumber||s.id}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, color:"var(--ink)" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13 }}>{s.clientName||s.client}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="#3B82F6"/></td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={s.status==="emitida"?"Emitida":"Anulada"} color={s.status==="emitida"?"#10B981":"#3B82F6"}/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="var(--brand)"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={s.status==="emitida"?"Emitida":"Anulada"} color={s.status==="emitida"?"#10B981":"var(--brand)"}/></td>
                   <td style={{ padding:"11px 14px" }}>
                     <button style={{ ...btn("ghost"), padding:"5px 10px", fontSize:12 }} onClick={()=>setViewInv(s)}>
                       <Icon name="eye" size={14}/>
@@ -225,7 +225,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
           <div className="cg-receipt-print-area" style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.9, background:"var(--input-bg)", padding:20, borderRadius:12, border:"1px solid var(--line)" }}>
             <div style={{ textAlign:"center", marginBottom:14 }}>
               <div style={{ fontWeight:800, fontSize:15, color:"var(--ink)" }}>{user?.company?.name || "Mi Negocio"}</div>
-              <div>FACTURA No. <strong style={{ color:"#3B82F6" }}>{viewInv.invoiceNumber||viewInv.id}</strong></div>
+              <div>FACTURA No. <strong style={{ color:"var(--brand)" }}>{viewInv.invoiceNumber||viewInv.id}</strong></div>
               {viewInv.status==="anulada" && <div style={{ color:"#DC2626", fontWeight:800 }}>⚠ ANULADA</div>}
             </div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>

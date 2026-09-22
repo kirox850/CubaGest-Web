@@ -287,9 +287,9 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
           onChange={e=>setSearch(e.target.value)}
           onKeyDown={e=>{ if (e.key==="Enter") { if (tryBarcodeSearch(search)) return; const one = avail.length===1 ? avail[0] : null; if (one) { addToCart(one); setSearch(""); } } }}/>
         <button onClick={startCamera} title="Escanear código de barras" style={{ position:"absolute", right:44, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", padding:4 }}>
-          <Icon name="auditoria" size={18} color="#3B82F6"/>
+          <Icon name="auditoria" size={18} color="var(--brand)"/>
         </button>
-        <button onClick={()=>{ if (tryBarcodeSearch(search)) return; const one = avail.length===1 ? avail[0] : null; if (one) { addToCart(one); setSearch(""); } }} title="Agregar coincidencia única" style={{ position:"absolute", right:6, top:"50%", transform:"translateY(-50%)", background:"#EFF6FF", border:"none", borderRadius:8, cursor:"pointer", padding:"4px 7px", color:"#3B82F6", fontWeight:800, fontSize:13 }}>+</button>
+        <button onClick={()=>{ if (tryBarcodeSearch(search)) return; const one = avail.length===1 ? avail[0] : null; if (one) { addToCart(one); setSearch(""); } }} title="Agregar coincidencia única" style={{ position:"absolute", right:6, top:"50%", transform:"translateY(-50%)", background:"var(--brand-tint)", border:"none", borderRadius:8, cursor:"pointer", padding:"4px 7px", color:"var(--brand)", fontWeight:800, fontSize:13 }}>+</button>
       </div>
 
       {cameraOpen && (
@@ -316,8 +316,8 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
                     <button onClick={()=>setQty(p, q-1)} disabled={q===0} style={{ width:28, height:28, background:"var(--input-bg)", border:"none", borderRadius:8, cursor:q===0?"default":"pointer", opacity:q===0?0.4:1, display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="minus" size={13}/></button>
-                    <span style={{ width:22, textAlign:"center", fontSize:14, fontWeight:700, color:q>0?"#3B82F6":"var(--ink)" }}>{q}</span>
-                    <button onClick={()=>setQty(p, q+1)} style={{ width:28, height:28, background:"#3B82F6", border:"none", borderRadius:8, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="plus" size={13} color="#ffffff"/></button>
+                    <span style={{ width:22, textAlign:"center", fontSize:14, fontWeight:700, color:q>0?"var(--brand)":"var(--ink)" }}>{q}</span>
+                    <button onClick={()=>setQty(p, q+1)} style={{ width:28, height:28, background:"var(--brand)", border:"none", borderRadius:8, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="plus" size={13} color="#ffffff"/></button>
                   </div>
                 </div>
               );
@@ -330,9 +330,9 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
       {/* Carrito fijo abajo */}
       <div style={{ flexShrink:0, background:"var(--card)", borderRadius:16, border:"1px solid var(--line)", padding:14, display:"flex", flexDirection:"column", gap:10 }}>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <Icon name="cart" size={18} color="#3B82F6"/>
+          <Icon name="cart" size={18} color="var(--brand)"/>
           <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:"var(--ink)" }}>Carrito</h3>
-          <span style={{ marginLeft:"auto", background:"#3B82F6", color:"#ffffff", borderRadius:20, padding:"1px 10px", fontSize:12, fontWeight:700 }}>{cart.length}</span>
+          <span style={{ marginLeft:"auto", background:"var(--brand)", color:"#ffffff", borderRadius:20, padding:"1px 10px", fontSize:12, fontWeight:700 }}>{cart.length}</span>
         </div>
 
         {cart.length>0 && (

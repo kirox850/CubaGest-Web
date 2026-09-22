@@ -19,8 +19,8 @@ export const WelcomeTour = ({ onDone }: { onDone: () => void }) => {
     <div style={{ position: "fixed", inset: 0, zIndex: 1500, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", padding: 20 }} onClick={last ? onDone : undefined}>
       <div style={{ background: "var(--card)", borderRadius: 18, padding: "22px 20px", maxWidth: 420, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.35)" }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-          <div style={{ width: 42, height: 42, borderRadius: 12, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Icon name={s.icon} size={20} color="#3B82F6" />
+          <div style={{ width: 42, height: 42, borderRadius: 12, background: "var(--brand-tint)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Icon name={s.icon} size={20} color="var(--brand)" />
           </div>
           <div style={{ fontWeight: 800, fontSize: 16, color: "var(--ink)" }}>{s.title}</div>
           <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>{step + 1}/{TOUR_STEPS.length}</span>

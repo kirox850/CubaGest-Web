@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 import { apiFetch } from "@/lib/api";
 import { fmt } from "@/lib/format";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { sel } from "@/components/shared/primitives";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { useOnlineStatus } from "@/hooks/useOnline";
 import { ROLES } from "@/config/constants";
@@ -45,7 +45,7 @@ const SalesAreaChart = ({ analytics, fallback, range, onRange, cur, onCur }: {
   const rangeLabel = RANGE_OPTIONS.find((r) => r.value === range)?.label || "";
 
   const chartConfig: ChartConfig = {
-    total: { label: cur === "all" ? "Todas las monedas" : cur, color: "#3B82F6" },
+    total: { label: cur === "all" ? "Todas las monedas" : cur, color: "var(--brand)" },
   };
   const chartId = `sales-${cur}`.replace(/[^a-zA-Z0-9-]/g, "");
   const gradId = `fill-${chartId}`;
@@ -60,25 +60,17 @@ const SalesAreaChart = ({ analytics, fallback, range, onRange, cur, onCur }: {
           </p>
         </div>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          {/* Selects NATIVOS del sistema (igual que POS/Inventario): en iOS
+              abren el picker liquid-glass del SO, en Android el suyo. */}
           {currencies.length > 1 && (
-            <Select value={cur} onValueChange={onCur}>
-              <SelectTrigger className="w-[160px]" aria-label="Moneda">
-                <SelectValue placeholder="Moneda" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las monedas</SelectItem>
-                {currencies.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <select style={{ ...sel, width: "auto" }} aria-label="Moneda" value={cur} onChange={e => onCur(e.target.value)}>
+              <option value="all">Todas las monedas</option>
+              {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
           )}
-          <Select value={range} onValueChange={onRange}>
-            <SelectTrigger className="w-[160px]" aria-label="Rango">
-              <SelectValue placeholder={rangeLabel} />
-            </SelectTrigger>
-            <SelectContent>
-              {RANGE_OPTIONS.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <select style={{ ...sel, width: "auto" }} aria-label="Rango" value={range} onChange={e => onRange(e.target.value)}>
+            {RANGE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
         </div>
       </div>
 
@@ -128,7 +120,7 @@ const SalesAreaChart = ({ analytics, fallback, range, onRange, cur, onCur }: {
         <div style={{ display:"flex", alignItems:"flex-end", gap:8, height:90 }}>
           {fallback.map((d) => (
             <div key={d.date} style={{ flex:1, textAlign:"center" }} title={`${d.date}: ${fmt(d.total)}`}>
-              <div style={{ height:Math.max(4, (d.total / Math.max(1, ...fallback.map((x) => x.total))) * 70), background:"#3B82F6", borderRadius:4, margin:"0 auto", width:"60%" }} />
+              <div style={{ height:Math.max(4, (d.total / Math.max(1, ...fallback.map((x) => x.total))) * 70), background:"var(--brand)", borderRadius:4, margin:"0 auto", width:"60%" }} />
               <div style={{ fontSize:9, color:"var(--muted)", marginTop:4 }}>{d.date.slice(5)}</div>
             </div>
           ))}
@@ -199,7 +191,7 @@ const Dashboard = ({ user }: { user: any }) => {
   }, [range]);
 
   if (loading) return <Spinner/>;
-  if (!summary && error) return <div style={{ color:"#3B82F6", padding:24 }}>Error: {error}</div>;
+  if (!summary && error) return <div style={{ color:"var(--brand)", padding:24 }}>Error: {error}</div>;
   if (!summary) return null;
 
   const byCurrency: Record<string, { revenue: number; expenses: number }> = summary?.byCurrency || {};
@@ -215,8 +207,8 @@ const Dashboard = ({ user }: { user: any }) => {
           <p style={{ margin:0, fontSize:12, fontWeight:600, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.5px" }}>{label}</p>
           <p style={{ margin:"6px 0 0", fontSize:24, fontWeight:800, color:color||"var(--ink)", letterSpacing:"-0.5px" }}>{value}</p>
         </div>
-        <div style={{ width:42, height:42, background:(color||"#3B82F6")+"15", borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          <Icon name={icon} size={20} color={color||"#3B82F6"}/>
+        <div style={{ width:42, height:42, background:(color||"var(--brand)")+"15", borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <Icon name={icon} size={20} color={color||"var(--brand)"}/>
         </div>
       </div>
       {sub && <p style={{ margin:0, fontSize:12, color:"var(--muted)" }}>{sub}</p>}
@@ -235,7 +227,7 @@ const Dashboard = ({ user }: { user: any }) => {
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:16 }}>
         <StatCard label="Ventas de Hoy" value={`${todayCount}`} sub={`${fmt(summary?.todaySalesTotal||0)} en el día`} color="#10B981" icon="pos"/>
-        <StatCard label="Facturas Emitidas" value={`${salesCount}`} sub="Histórico total" color="#3B82F6" icon="facturacion"/>
+        <StatCard label="Facturas Emitidas" value={`${salesCount}`} sub="Histórico total" color="var(--brand)" icon="facturacion"/>
         <StatCard label="Alertas de Stock" value={lowStockProducts.length} sub={lowStockProducts.length ? lowStockProducts.map((p:any)=>p.name).join(", ").slice(0,60) : "Todos los productos OK"} color={lowStockProducts.length?"#F97316":"#10B981"} icon="alert"/>
       </div>
 
@@ -248,7 +240,7 @@ const Dashboard = ({ user }: { user: any }) => {
               <div key={cur} style={{ background:"var(--card)", borderRadius:14, border:"1px solid var(--line)", padding:"14px 16px" }}>
                 <div style={{ fontSize:12, fontWeight:700, color:"var(--muted)", marginBottom:6 }}>{cur}</div>
                 <div style={{ fontSize:20, fontWeight:800, color:"#10B981" }}>{cur==="EUR"?"€":"$"}{fmt(v.revenue)}</div>
-                <div style={{ fontSize:12, color:"#3B82F6", marginTop:2 }}>Gastos: {cur==="EUR"?"€":"$"}{fmt(v.expenses)}</div>
+                <div style={{ fontSize:12, color:"var(--brand)", marginTop:2 }}>Gastos: {cur==="EUR"?"€":"$"}{fmt(v.expenses)}</div>
               </div>
             ))}
           </div>
@@ -284,7 +276,7 @@ const Dashboard = ({ user }: { user: any }) => {
             {(analytics.topProducts||[]).length===0 && <p style={{ fontSize:13, color:"var(--muted)", margin:0 }}>Sin datos aún.</p>}
             {(analytics.topProducts||[]).map((p:any, i:number) => (
               <div key={p.name} style={{ display:"flex", alignItems:"center", gap:10, padding:"5px 0" }}>
-                <span style={{ width:22, height:22, borderRadius:"50%", background:i===0?"#3B82F6":"var(--input-bg)", color:i===0?"#fff":"var(--ink)", fontSize:11, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{i+1}</span>
+                <span style={{ width:22, height:22, borderRadius:"50%", background:i===0?"var(--brand)":"var(--input-bg)", color:i===0?"#fff":"var(--ink)", fontSize:11, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{i+1}</span>
                 <span style={{ flex:1, fontSize:13, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</span>
                 <span style={{ fontSize:12, color:"var(--muted)" }}>{p.qty} u · {fmt(p.revenue)}</span>
               </div>

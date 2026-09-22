@@ -57,7 +57,7 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
       <title>Informe Fiscal CubaGest</title>
       <style>
         body{font-family:Arial,sans-serif;padding:40px;color:#1a1410;max-width:600px;margin:0 auto}
-        h1{color:#8B1A1A;font-size:20px;margin-bottom:4px}
+        h1{color:#048afb;font-size:20px;margin-bottom:4px}
         .sub{color:#8a7060;font-size:13px;margin-bottom:32px}
         table{width:100%;border-collapse:collapse;margin-bottom:24px}
         th{text-align:left;font-size:11px;text-transform:uppercase;color:#8a7060;padding:8px 0;border-bottom:2px solid #e8e0d8}
@@ -85,7 +85,7 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
       </table>
       <p class="note">Este informe es generado automáticamente por CubaGest para uso interno.<br/>
       Los datos son orientativos. Consulte con su contador para la declaración oficial.</p>
-      <br/><button onclick="window.print()" style="background:#8B1A1A;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:14px">🖨 Imprimir / Guardar PDF</button>
+      <br/><button onclick="window.print()" style="background:#048afb;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:14px">🖨 Imprimir / Guardar PDF</button>
     </body></html>`);
     win.document.close();
   };
@@ -140,13 +140,13 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
             <tbody>
               {sales.filter(s=>s.status==="emitida").map(s=>(
                 <tr key={s.id} onClick={()=>setViewInv(s)} style={{ borderTop:"1px solid var(--line)", cursor:"pointer" }}>
-                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#3B82F6", fontFamily:"monospace" }}>{s.id}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"var(--brand)", fontFamily:"monospace" }}>{s.id}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, color:"var(--ink)" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13 }}>{s.client}</td>
                   <td style={{ padding:"11px 14px", fontSize:12, color:"var(--muted)", fontFamily:"monospace" }}>{s.clientNit || "—"}</td>
                   <td style={{ padding:"11px 14px", fontSize:12, color:"var(--muted)" }}>{s.clientPhone || "—"}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="#3B82F6"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===s.payMethod)?.label||s.payMethod} color="var(--brand)"/></td>
                 </tr>
               ))}
             </tbody>
@@ -168,8 +168,8 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
                   <td style={{ padding:"11px 14px", fontSize:13, color:"var(--ink)" }}>{(e.date||e.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600 }}>{e.concept}</td>
                   <td style={{ padding:"11px 14px" }}><Badge label={e.category} color="#5a3a1a"/></td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===e.method)?.label||e.method} color="#3B82F6"/></td>
-                  <td style={{ padding:"11px 14px", fontSize:14, fontWeight:700, color:"#3B82F6" }}>${fmt(e.amount)}</td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===e.method)?.label||e.method} color="var(--brand)"/></td>
+                  <td style={{ padding:"11px 14px", fontSize:14, fontWeight:700, color:"var(--brand)" }}>${fmt(e.amount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -189,13 +189,13 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
             <tbody>
               {sales.filter((s:any)=>s.status==="emitida").map((s:any)=>(
                 <tr key={s.id} onClick={()=>setViewInv(s)} style={{ borderTop:"1px solid var(--line)", cursor:"pointer" }}>
-                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"#3B82F6", fontFamily:"monospace" }}>{s.id}</td>
+                  <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"var(--brand)", fontFamily:"monospace" }}>{s.id}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, color:"var(--ink)" }}>{(s.date||s.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13 }}>{s.client}</td>
                   <td style={{ padding:"11px 14px", fontSize:12, color:"var(--muted)", fontFamily:"monospace" }}>{s.clientNit || "—"}</td>
                   <td style={{ padding:"11px 14px", fontSize:12, color:"var(--muted)" }}>{s.clientPhone || "—"}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>${fmt(s.total)}</td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find((p:any)=>p.id===s.payMethod)?.label||s.payMethod} color="#3B82F6"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find((p:any)=>p.id===s.payMethod)?.label||s.payMethod} color="var(--brand)"/></td>
                   <td style={{ padding:"11px 14px" }}><Badge label="Emitida" color="#10B981"/></td>
                 </tr>
               ))}
@@ -211,7 +211,7 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
           <div className="cg-receipt-print-area" style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.9, background:"var(--input-bg)", padding:20, borderRadius:12, border:"1px solid var(--line)" }}>
             <div style={{ textAlign:"center", marginBottom:14 }}>
               <div style={{ fontWeight:800, fontSize:15, color:"var(--ink)" }}>{user?.company?.name || "Mi Negocio"}</div>
-              <div>FACTURA No. <strong style={{ color:"#3B82F6", fontSize:15 }}>{viewInv.invoiceNumber||viewInv.id}</strong></div>
+              <div>FACTURA No. <strong style={{ color:"var(--brand)", fontSize:15 }}>{viewInv.invoiceNumber||viewInv.id}</strong></div>
               {viewInv.status==="anulada" && <div style={{ color:"#DC2626", fontWeight:800 }}>⚠ ANULADA</div>}
             </div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
