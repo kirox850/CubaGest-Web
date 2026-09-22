@@ -75,7 +75,7 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
 
   // Datos calculados UNA vez por render del informe (la capa se monta solo
   // cuando showInforme=true, así los números no se recalculan en cada tick).
-  const informe = showInforme ? buildInforme() : null;
+  const informe = showInforme ? exportarInforme() : null;
 
   const addExpense = async()=>{
     if (!form.concept||!form.amount) return showToast("Complete los campos requeridos","error");
