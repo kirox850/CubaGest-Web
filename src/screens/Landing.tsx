@@ -84,6 +84,40 @@ const CtaButton = ({ onClick, children, big = false, variant = "primary" }: {
   </button>
 );
 
+export const PHONE_SCREENSHOT_URL = "/brand/app-screenshot.png";
+
+const IPhoneMockup = () => {
+  const [screenshotMissing, setScreenshotMissing] = useState(false);
+
+  return (
+    <div className="landing-iphone-stage">
+      <div className="landing-iphone" aria-label="Vista de CubaGest en un iPhone">
+        <span className="landing-iphone__side-button landing-iphone__side-button--silent" aria-hidden="true" />
+        <span className="landing-iphone__side-button landing-iphone__side-button--volume-one" aria-hidden="true" />
+        <span className="landing-iphone__side-button landing-iphone__side-button--volume-two" aria-hidden="true" />
+        <span className="landing-iphone__side-button landing-iphone__side-button--power" aria-hidden="true" />
+        <div className="landing-iphone__screen">
+          <div className="landing-iphone__dynamic-island" aria-hidden="true" />
+          {screenshotMissing ? (
+            <div className="landing-iphone-placeholder">
+              <BrandLogo size={42} />
+              <strong>Agrega tu captura de la app</strong>
+              <span>public/brand/app-screenshot.png</span>
+            </div>
+          ) : (
+            <img
+              src={PHONE_SCREENSHOT_URL}
+              alt="CubaGest en uso desde un iPhone"
+              onError={() => setScreenshotMissing(true)}
+            />
+          )}
+        </div>
+      </div>
+      <div className="landing-iphone__shadow" aria-hidden="true" />
+    </div>
+  );
+};
+
 const Landing = ({ onEnter }: { onEnter: () => void }) => {
   const [legal, setLegal] = useState<null | "privacy" | "terms">(null);
   const [contactOpen, setContactOpen] = useState(false);
@@ -153,26 +187,8 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
               </div>
             </div>
 
-            <div className="landing-hero__visual" aria-label="Vista de la experiencia CubaGest" style={{ display: "none" }}>
-              <div className="landing-product-frame">
-                <div className="landing-product-frame__bar" aria-hidden="true" style={{ display: "none" }}>
-                  <span />
-                  <span />
-                  <span />
-                  <small>cubagest.app</small>
-                </div>
-                <div className="landing-product-frame__image" style={{ display: "none" }}>
-                  <img src="/brand/login-splash.jpg" alt="CubaGest para ventas, inventario y facturación" style={{ display: "none" }} />
-                </div>
-              </div>
-              <div className="landing-product-note landing-product-note--offline" style={{ display: "none" }}>
-                <span className="landing-product-note__icon"><Icon name="check" size={16} color="currentColor" /></span>
-                <span><strong>Offline-first</strong><small>La venta no se detiene</small></span>
-              </div>
-              <div className="landing-product-note landing-product-note--sync" style={{ display: "none" }}>
-                <span className="landing-product-note__icon"><Icon name="refresh" size={16} color="currentColor" /></span>
-                <span><strong>Sincronización automática</strong><small>Cuando vuelve la conexión</small></span>
-              </div>
+            <div className="landing-hero__visual" aria-label="Vista de la experiencia CubaGest">
+              <IPhoneMockup />
             </div>
           </div>
         </section>
