@@ -3,3 +3,4 @@ tempo/node_modules/
 tempo/dist/
 node_modules/
 .tempo/
+dist/
