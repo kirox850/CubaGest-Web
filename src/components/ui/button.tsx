@@ -12,13 +12,14 @@ const buttonVariants = cva(
       variant: {
         default: "bg-brand text-white shadow-sm hover:bg-brand/90",
         secondary:
-          "border border-line bg-slate-200 text-ink hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600",
+          "border border-input-border bg-input-bg text-ink hover:bg-brand/10",
         ghost: "text-brand hover:bg-brand/10",
         danger:
           "border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 dark:border-red-900 dark:bg-red-950 dark:text-red-400",
-        destructive: "bg-red-600 text-white shadow-sm hover:bg-red-700",
+        destructive:
+          "border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 dark:border-red-900 dark:bg-red-950 dark:text-red-400",
         outline:
-          "border border-line bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800",
+          "border border-input-border bg-transparent text-ink hover:bg-brand/10",
       },
       size: {
         default: "h-9 px-4 py-2",

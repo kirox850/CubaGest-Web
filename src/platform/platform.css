@@ -1,0 +1,205 @@
+.platform-shell {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+}
+
+.platform-login {
+  min-height: 100vh;
+  background: linear-gradient(160deg, #06172c 0%, #0b3b75 62%, #06172c 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.platform-login__card {
+  width: 100%;
+  max-width: 400px;
+  background: linear-gradient(180deg, #fefeff 0%, #f3f7ff 100%);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 24px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 12px 28px rgba(15, 23, 42, 0.09),
+    0 32px 72px rgba(var(--brand-rgb), 0.18),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.95);
+  overflow: hidden;
+}
+
+.platform-login__content {
+  padding: 32px 36px 30px;
+}
+
+.platform-header {
+  min-height: calc(56px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 16px 0;
+  background: #0b1220;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.12);
+}
+
+.platform-header__left,
+.platform-header__brand,
+.platform-header__nav,
+.platform-header__actions {
+  display: flex;
+  align-items: center;
+}
+
+.platform-header__left { gap: 18px; min-width: 0; }
+.platform-header__brand { gap: 10px; flex-shrink: 0; }
+.platform-header__nav { gap: 2px; overflow-x: auto; }
+.platform-header__actions { gap: 8px; flex-shrink: 0; }
+
+.platform-header__nav-button,
+.platform-header__action-button {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: #fff;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.platform-header__nav-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.platform-header__nav-button:hover,
+.platform-header__nav-button.is-active {
+  background: rgba(var(--brand-rgb), 0.18);
+}
+
+.platform-header__nav-button.is-active { font-weight: 700; }
+
+.platform-header__action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 10px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+}
+
+.platform-header__action-button:hover { background: rgba(255, 255, 255, 0.16); }
+.platform-header__email { color: rgba(255, 255, 255, 0.78); font-size: 12px; }
+
+.platform-content {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+}
+
+.platform-stack { display: flex; flex-direction: column; gap: 16px; }
+
+.platform-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.platform-stat-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 1px 5px rgba(15, 23, 42, 0.05);
+}
+
+.platform-stat-card__label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.platform-stat-card__value {
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.platform-company-list,
+.platform-audit-list {
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 1px 5px rgba(15, 23, 42, 0.05);
+}
+
+.platform-company-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.platform-company-row:first-child { border-top: none; }
+.platform-company-row:hover { background: var(--brand-tint); }
+.platform-company-row__main { flex: 1; min-width: 0; }
+.platform-company-row__name { color: var(--ink); font-size: 14px; font-weight: 700; }
+.platform-company-row__meta { margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+.platform-section-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.platform-detail-meta {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.platform-audit-row {
+  padding: 14px 16px;
+  border-top: 1px solid var(--line);
+}
+
+.platform-audit-row:first-child { border-top: none; }
+
+@media (max-width: 760px) {
+  .platform-header { align-items: flex-start; flex-wrap: wrap; padding-bottom: 8px; }
+  .platform-header__left { width: 100%; overflow: hidden; }
+  .platform-header__nav { flex: 1; }
+  .platform-header__actions { margin-left: auto; }
+  .platform-header__email { display: none; }
+  .platform-content { padding-top: 16px; }
+  .platform-login__content { padding: 28px 22px 24px; }
+}
