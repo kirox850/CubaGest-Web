@@ -111,6 +111,37 @@
 
 .platform-stack { display: flex; flex-direction: column; gap: 16px; }
 
+.platform-company-detail { gap: 20px; }
+
+.platform-detail-card {
+  overflow: hidden;
+}
+
+.platform-detail-card__header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px !important;
+}
+
+.platform-detail-card__content {
+  padding: 0 20px 20px !important;
+}
+
+.platform-detail-card__content .platform-button-group {
+  gap: 10px;
+}
+
+.platform-select-trigger {
+  min-height: 42px !important;
+  padding: 10px 14px !important;
+}
+
+.platform-note-input {
+  min-height: 88px !important;
+  padding: 12px 14px !important;
+}
+
 .platform-search {
   min-height: 42px;
   padding: 10px 16px !important;
@@ -189,6 +220,10 @@
 }
 
 .platform-detail-meta {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--input-bg);
   color: var(--muted);
   font-size: 13px;
   line-height: 1.6;

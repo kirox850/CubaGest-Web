@@ -260,11 +260,11 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const status = !co.active ? "suspendida" : co.subscriptionStatus === "trial" ? "trial" : co.subscriptionStatus;
 
   return (
-    <div className="platform-stack">
+    <div className="platform-stack platform-company-detail">
       <button onClick={onBack} style={{ ...btn("ghost"), padding: "2px 0", fontSize: 13, width: "fit-content" }}><Icon name="arrow_left" size={15}/>Volver a empresas</button>
 
-      <Card>
-        <CardHeader>
+      <Card className="platform-detail-card platform-company-summary">
+        <CardHeader className="platform-detail-card__header">
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <CardTitle style={{ fontSize: 20 }}>{co.name}</CardTitle>
             <Badge label={co.plan} color="var(--brand)" />
@@ -275,7 +275,7 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
             {co.qvapayAuthorized ? " · QvaPay autorizado" : " · QvaPay NO autorizado"}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="platform-detail-card__content">
           <div className="platform-detail-meta">
             Plan vence: <strong style={{ color: "var(--ink)" }}>{fmtDate(co.planExpiry)}</strong> · Último pago: {fmtDate(co.lastPaymentDate)} · Próximo: {fmtDate(co.nextPaymentDate)} · Intentos fallidos: {co.failedAttempts}
           </div>
@@ -284,12 +284,12 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
 
       <div className="platform-action-grid">
         {/* ── Planes ── */}
-        <Card className="platform-action-card">
-          <CardHeader>
+        <Card className="platform-detail-card platform-action-card">
+          <CardHeader className="platform-detail-card__header">
             <CardTitle style={{ fontSize: 15 }}>Plan y extensión</CardTitle>
             <CardDescription>Actualiza el plan o regala meses adicionales.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="platform-detail-card__content">
             <div className="platform-button-group">
               {(["free", "pro", "empresarial"] as const).map((p) => (
                 <Button key={p} className="platform-control-button" variant={co.plan === p ? "default" : "outline"} size="sm"
@@ -308,7 +308,7 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
                   act(() => pf(`/companies/${id}/plan`, { method: "POST", body: { plan: co.plan, months: Number(months) } }), "Extensión aplicada.");
                 }
               }}>
-                <SelectTrigger style={{ width: "100%" }}><SelectValue placeholder="Regalar +meses" /></SelectTrigger>
+                <SelectTrigger className="platform-select-trigger" style={{ width: "100%" }}><SelectValue placeholder="Regalar +meses" /></SelectTrigger>
                 <SelectContent>
                   {["1", "3", "6", "12"].map((m) => <SelectItem key={m} value={m}>+{m} meses</SelectItem>)}
                 </SelectContent>
@@ -318,12 +318,12 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
         </Card>
 
         {/* ── Pago manual ── */}
-        <Card className="platform-action-card">
-          <CardHeader>
+        <Card className="platform-detail-card platform-action-card">
+          <CardHeader className="platform-detail-card__header">
             <CardTitle style={{ fontSize: 15 }}>Pago manual</CardTitle>
             <CardDescription>Registra meses pagados cuando QvaPay no pudo completar el cobro.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="platform-detail-card__content">
             <div className="platform-button-group">
               {[1, 3, 6, 12].map((m) => (
                 <Button key={m} className="platform-control-button" variant="outline" size="sm"
@@ -340,12 +340,12 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
         </Card>
 
         {/* ── Suspensión ── */}
-        <Card className="platform-action-card">
-          <CardHeader>
+        <Card className="platform-detail-card platform-action-card">
+          <CardHeader className="platform-detail-card__header">
             <CardTitle style={{ fontSize: 15 }}>Estado de la cuenta</CardTitle>
             <CardDescription>Controla si la empresa puede acceder al sistema.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="platform-detail-card__content">
             <div className="platform-button-group">
             {co.active ? (
               <Button className="platform-control-button" variant="destructive" size="sm" onClick={async () => {
@@ -369,12 +369,12 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
         </Card>
 
         {/* ── Impersonar ── */}
-        <Card className="platform-action-card">
-          <CardHeader>
+        <Card className="platform-detail-card platform-action-card">
+          <CardHeader className="platform-detail-card__header">
             <CardTitle style={{ fontSize: 15 }}>Soporte</CardTitle>
             <CardDescription>Abre una sesión auditada como administrador de esta empresa.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="platform-detail-card__content">
             <Button className="platform-control-button" variant="outline" size="sm" onClick={async () => {
               if (!(await showConfirm(`Vas a entrar a la app como administrador de ${co.name}. Esta acción queda registrada en la auditoría. ¿Continuar?`))) return;
               try {
@@ -396,13 +396,13 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
         </Card>
 
         {/* ── Notas internas ── */}
-        <Card className="platform-action-card">
-          <CardHeader>
+        <Card className="platform-detail-card platform-action-card">
+          <CardHeader className="platform-detail-card__header">
             <CardTitle style={{ fontSize: 15 }}>Notas internas</CardTitle>
             <CardDescription>Información privada que nunca verá el cliente.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Textarea value={notes} onChange={(e: any) => { setNotes(e.target.value); setSavedNotes(false); }} placeholder="Ej: cliente conflictivo, pidió factura especial..." rows={3} />
+          <CardContent className="platform-detail-card__content">
+            <Textarea className="platform-note-input" value={notes} onChange={(e: any) => { setNotes(e.target.value); setSavedNotes(false); }} placeholder="Ej: cliente conflictivo, pidió factura especial..." rows={3} />
             <div className="platform-note-actions">
               <Button className="platform-control-button" size="sm" onClick={async () => {
                 if (await showConfirm("¿Guardar las notas internas?")) {
@@ -417,9 +417,9 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
       </div>
 
       {/* ── Usuarios ── */}
-      <Card>
-        <CardHeader><CardTitle style={{ fontSize: 15 }}>Usuarios</CardTitle></CardHeader>
-        <CardContent style={{ paddingTop: 0 }}>
+      <Card className="platform-detail-card">
+        <CardHeader className="platform-detail-card__header"><CardTitle style={{ fontSize: 15 }}>Usuarios</CardTitle></CardHeader>
+        <CardContent className="platform-detail-card__content">
           {data.users.map((u: any) => (
             <div key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderTop: "1px solid var(--line)" }}>
               <div>
