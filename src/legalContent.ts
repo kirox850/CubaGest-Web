@@ -101,7 +101,7 @@ Podemos actualizar esta Política de Privacidad ocasionalmente. Publicaremos cua
 
 Si tienes preguntas sobre esta Política de Privacidad o sobre cómo tratamos tus datos, escríbenos a:
 
-📧 **cubagest@gmail.com**
+**cubagest@gmail.com**
 `;
 
 export const TERMS_MD = `# Términos y Condiciones de CubaGest
@@ -201,5 +201,5 @@ Podemos actualizar estos Términos ocasionalmente. Publicaremos la nueva versió
 
 Para dudas sobre estos Términos y Condiciones, escríbenos a:
 
-📧 **cubagest@gmail.com**
+**cubagest@gmail.com**
 `;

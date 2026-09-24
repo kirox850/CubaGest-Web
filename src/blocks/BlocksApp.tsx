@@ -3,6 +3,7 @@
 // #/blocks/login, #/blocks/signup. Aislado de la app normal.
 import * as React from "react";
 import "./blocks.css";
+import Icon from "@/components/shared/Icon";
 
 import Dashboard01Page from "./blocks/dashboard-01/page";
 import Sidebar01Page from "./blocks/sidebar-01/page";
@@ -171,7 +172,7 @@ export default function BlocksApp() {
               cursor: "pointer",
             }}
           >
-            {dark ? "☀️ Claro" : "🌙 Oscuro"}
+            <Icon name={dark ? "sun" : "moon"} size={15}/>{dark ? "Claro" : "Oscuro"}
           </button>
         </div>
 

@@ -204,7 +204,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
                   <td style={{ padding:"11px 14px", fontSize:13, color:"var(--ink)" }}>${fmt(p.cost)}</td>
                   <td style={{ padding:"11px 14px" }}>
                     <span style={{ fontWeight:700, color:p.stock<=p.minStock?"#F97316":"#10B981", fontSize:14 }}>{p.stock}</span>
-                    {p.stock<=p.minStock && <span style={{ marginLeft:6, fontSize:10, color:"#F97316" }}>⚠ BAJO</span>}
+                    {p.stock<=p.minStock && <span style={{ marginLeft:6, fontSize:10, color:"#F97316", display:"inline-flex", alignItems:"center", gap:3 }}><Icon name="alert" size={11}/>BAJO</span>}
                   </td>
                   <td style={{ padding:"11px 14px" }}><Badge label={p.active?"Activo":"Inactivo"} color={p.active?"#10B981":"#888"}/></td>
                   <td style={{ padding:"11px 14px" }}>

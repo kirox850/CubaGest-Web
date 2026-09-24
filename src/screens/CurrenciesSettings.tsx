@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/api";
+import Icon from "@/components/shared/Icon";
 import { Field, Modal, btn, inp } from "@/components/shared/primitives";
 
 // ─── MONEDAS Y TASAS (config de empresa — solo admin) ──────────────────────
@@ -114,7 +115,7 @@ const CurrenciesSettings = ({ showToast, onClose }: { showToast: (m:string,t:str
             {ratesUpdatedAt && <div style={{ marginTop:4, fontSize:11, opacity:0.8 }}>Actualizado: {new Date(ratesUpdatedAt).toLocaleString()}</div>}
             <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:10 }}>
               <button onClick={testRates} disabled={testing} style={{ ...btn("secondary"), fontSize:12, opacity:testing?0.6:1 }}>
-                {testing ? "Consultando..." : "🔄 Probar ahora"}
+                {testing ? "Consultando..." : <><Icon name="refresh" size={14}/>Probar ahora</>}
               </button>
               <span style={{ fontSize:11, color:"var(--muted)" }}>Consulta fresca a elToque (ignora la caché)</span>
             </div>

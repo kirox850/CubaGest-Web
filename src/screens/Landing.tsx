@@ -47,8 +47,50 @@ const FAQ_ITEMS = [
   { question: "¿Puedo trabajar con varias ubicaciones?", answer: "Sí. El inventario y las operaciones pueden organizarse por almacén, tienda o caja." },
 ];
 
+const useLandingReveal = () => {
+  useEffect(() => {
+    const page = document.querySelector<HTMLElement>(".landing-page");
+    if (!page) return;
+
+    const elements = Array.from(page.querySelectorAll<HTMLElement>("[data-reveal]"));
+    if (!elements.length) return;
+
+    const reveal = (element: HTMLElement) => element.classList.add("is-visible");
+    const canvasPreview = new URLSearchParams(window.location.search).get("tempoCanvas") === "1";
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (canvasPreview || reducedMotion || !("IntersectionObserver" in window)) {
+      elements.forEach(reveal);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          reveal(entry.target as HTMLElement);
+          observer.unobserve(entry.target);
+        });
+      },
+      { rootMargin: "0px 0px -10% 0px", threshold: 0.08 },
+    );
+
+    elements.forEach((element, index) => {
+      element.style.setProperty("--reveal-delay", `${Math.min(index * 35, 140)}ms`);
+      observer.observe(element);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+};
+
 export const LOGO_URL = "/brand/logo.png";
 
+/**
+ * Shared CubaGest brand mark used by landing and app surfaces.
+ * The canvas for this component is at tempo/designs/canvases/home/index.canvas.tsx.
+ * If you adjust this component in any way, ensure the canvas and its asset declaration stay consistent.
+ */
 export const BrandLogo = ({ size = 34 }: { size?: number }) => {
   const [failed, setFailed] = useState(false);
 
@@ -86,7 +128,12 @@ const CtaButton = ({ onClick, children, big = false, variant = "primary" }: {
 
 export const PHONE_SCREENSHOT_URL = "/brand/app-screenshot.png";
 
-const IPhoneMockup = () => {
+/**
+ * Product mockup for marketing surfaces that presents an app screenshot in a phone frame.
+ * The canvas for this component is at tempo/designs/canvases/home/index.canvas.tsx.
+ * If you adjust this component in any way, ensure the canvas and its asset declaration stay consistent.
+ */
+export const IPhoneMockup = () => {
   const [screenshotMissing, setScreenshotMissing] = useState(false);
 
   return (
@@ -122,6 +169,8 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
   const [legal, setLegal] = useState<null | "privacy" | "terms">(null);
   const [contactOpen, setContactOpen] = useState(false);
   const contactCloseRef = useRef<HTMLButtonElement>(null);
+
+  useLandingReveal();
 
   const goId = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -194,7 +243,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
         </section>
 
         <section className="landing-trust" aria-label="Características de CubaGest">
-          <div className="landing-container landing-trust__inner">
+          <div className="landing-container landing-trust__inner" data-reveal>
             <span className="landing-trust__intro">Hecha para la forma real de trabajar de los comercios cubanos</span>
             <span><Icon name="check" size={16} color="currentColor" /> Funciona sin VPN</span>
             <span><Icon name="check" size={16} color="currentColor" /> Diseñada para conectividad intermitente</span>
@@ -204,7 +253,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
 
         <section id="producto" className="landing-section landing-section--soft">
           <div className="landing-container">
-            <div className="landing-section-heading">
+            <div className="landing-section-heading" data-reveal>
               <span className="landing-eyebrow">Una operación más clara</span>
               <h2>Todo lo importante de tu negocio, en el mismo lugar.</h2>
               <p>Menos cuadernos, menos suposiciones y más control sobre cada venta.</p>
@@ -212,7 +261,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
 
             <div className="landing-outcomes">
               {LANDING_FEATURES.slice(0, 3).map((feature, index) => (
-                <article key={feature.title} className={`landing-outcome landing-outcome--${index + 1}`}>
+                <article key={feature.title} className={`landing-outcome landing-outcome--${index + 1}`} data-reveal>
                   <div className="landing-icon-box"><Icon name={feature.icon} size={22} color="currentColor" /></div>
                   <span className="landing-card-eyebrow">{feature.eyebrow}</span>
                   <h3>{feature.title}</h3>
@@ -226,7 +275,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
 
         <section id="como-funciona" className="landing-section landing-section--white">
           <div className="landing-container">
-            <div className="landing-section-heading landing-section-heading--compact">
+            <div className="landing-section-heading landing-section-heading--compact" data-reveal>
               <span className="landing-eyebrow">Empieza en minutos</span>
               <h2>De tu primera cuenta a tu primera factura.</h2>
               <p>Un flujo simple para que puedas concentrarte en atender a tus clientes.</p>
@@ -238,7 +287,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
                 { number: "02", title: "Agrega tus productos", text: "Carga precios y existencias por ubicación, sin complicaciones." },
                 { number: "03", title: "Vende y crece", text: "Cobra, factura y entiende tus números con o sin conexión." },
               ].map((step) => (
-                <article key={step.number} className="landing-step">
+                <article key={step.number} className="landing-step" data-reveal>
                   <span className="landing-step__number">{step.number}</span>
                   <h3>{step.title}</h3>
                   <p>{step.text}</p>
@@ -250,13 +299,13 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
 
         <section className="landing-section landing-section--soft landing-capabilities">
           <div className="landing-container">
-            <div className="landing-section-heading landing-section-heading--compact">
+            <div className="landing-section-heading landing-section-heading--compact" data-reveal>
               <span className="landing-eyebrow">Más control, menos trabajo manual</span>
               <h2>Las herramientas que tu equipo necesita para avanzar.</h2>
             </div>
             <div className="landing-capability-grid">
               {LANDING_FEATURES.slice(3).map((feature) => (
-                <article key={feature.title} className="landing-capability">
+                <article key={feature.title} className="landing-capability" data-reveal>
                   <div className="landing-capability__icon"><Icon name={feature.icon} size={20} color="currentColor" /></div>
                   <div><span className="landing-card-eyebrow">{feature.eyebrow}</span><h3>{feature.title}</h3><p>{feature.text}</p></div>
                 </article>
@@ -267,7 +316,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
 
         <section id="precios" className="landing-section landing-section--white">
           <div className="landing-container">
-            <div className="landing-section-heading">
+            <div className="landing-section-heading" data-reveal>
               <span className="landing-eyebrow">Precios simples</span>
               <h2>Empieza gratis. Crece cuando estés listo.</h2>
               <p>Sin contratos largos, sin cargos sorpresa. Todos los precios están en USD.</p>
@@ -275,7 +324,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
 
             <div className="landing-plans">
               {LANDING_PLANS.map((plan) => (
-                <article key={plan.key} className={`landing-plan${plan.key === "pro" ? " landing-plan--featured" : ""}`}>
+                <article key={plan.key} className={`landing-plan${plan.key === "pro" ? " landing-plan--featured" : ""}`} data-reveal>
                   {plan.key === "pro" && <span className="landing-plan__badge">{plan.tag}</span>}
                   <div className="landing-plan__header">
                     <div><h3>{plan.label}</h3><span>{plan.key === "pro" ? "Para negocios en movimiento" : plan.tag}</span></div>
@@ -294,7 +343,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
         </section>
 
         <section id="preguntas" className="landing-section landing-section--soft landing-faq">
-          <div className="landing-container landing-faq__inner">
+          <div className="landing-container landing-faq__inner" data-reveal>
             <div className="landing-section-heading landing-section-heading--left">
               <span className="landing-eyebrow">Preguntas frecuentes</span>
               <h2>Antes de empezar, aclaremos lo importante.</h2>
@@ -314,7 +363,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
 
         <section className="landing-final-cta">
           <div className="landing-final-cta__orb" aria-hidden="true" />
-          <div className="landing-container landing-final-cta__inner">
+          <div className="landing-container landing-final-cta__inner" data-reveal>
             <div><span className="landing-eyebrow landing-eyebrow--hero">Tu negocio merece más claridad</span><h2>Empieza a trabajar con más control hoy.</h2></div>
             <div className="landing-final-cta__action"><p>30 días del plan completo. Sin tarjeta. Sin complicaciones.</p><CtaButton onClick={onEnter} big variant="light">Crear mi negocio gratis <span aria-hidden="true">↗</span></CtaButton></div>
           </div>
@@ -322,7 +371,7 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
       </main>
 
       <footer className="landing-footer">
-        <div className="landing-container landing-footer__inner">
+        <div className="landing-container landing-footer__inner" data-reveal>
           <div className="landing-footer__brand"><BrandLogo size={34} /><div><strong>CubaGest</strong><span>Sistema de gestión para negocios cubanos.</span></div></div>
           <div className="landing-footer__links">
             <button type="button" onClick={() => setContactOpen(true)}>Contáctenos</button>

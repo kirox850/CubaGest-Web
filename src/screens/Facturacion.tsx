@@ -118,10 +118,10 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
       {offlineSales.filter(s=>s.status==="pending"||s.status==="conflict").length > 0 && (
         <div style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.30)", borderRadius:16, padding:16 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-            <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:"#C2410C" }}>⚡ Ventas offline</h3>
+            <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:"#C2410C", display:"inline-flex", alignItems:"center", gap:6 }}><Icon name="zap" size={15}/>Ventas offline</h3>
             <div style={{ display:"flex", gap:8 }}>
               <button style={{ ...btn("secondary"), fontSize:12, padding:"4px 10px", opacity: syncing?0.7:1 }} disabled={syncing} onClick={onManualSync}>
-                {syncing ? "Sincronizando..." : "🔄 Sincronizar ahora"}
+                {syncing ? "Sincronizando..." : <><Icon name="refresh" size={14}/>Sincronizar ahora</>}
               </button>
               <button style={{ ...btn("ghost"), fontSize:12, padding:"4px 10px" }} onClick={()=>setShowOffline(v=>!v)}>{showOffline?"Ocultar":"Mostrar"}</button>
             </div>
@@ -141,7 +141,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
                     {s.client} · <strong>${fmt(s.total)}</strong> · {s.items.map((i:any)=>`${i.qty}x ${i.name}`).join(", ")}
                   </div>
                   {s.status==="conflict" && (
-                    <div style={{ fontSize:11, color:"var(--brand)", marginBottom:8 }}>⚠ {s.conflictReason}</div>
+                    <div style={{ fontSize:11, color:"var(--brand)", marginBottom:8, display:"inline-flex", alignItems:"center", gap:5 }}><Icon name="alert" size={13}/><span>{s.conflictReason}</span></div>
                   )}
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap" as any, marginTop:6 }}>
                     {s.status==="conflict" && (
@@ -165,7 +165,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
                         load();
                         if(onSyncRefresh) onSyncRefresh();
                       }}>
-                      🗑 Descartar
+                      <><Icon name="trash" size={13}/>Descartar</>
                     </button>
                     <button style={{ ...btn("secondary"), fontSize:11, padding:"5px 10px" }}
                       onClick={()=>{
@@ -174,7 +174,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
                         if (s.conflictReason) lines.push("", "Error: " + s.conflictReason);
                         showAlert(lines.join("\n"));
                       }}>
-                      👁 Ver detalle
+                      <><Icon name="eye" size={13}/>Ver detalle</>
                     </button>
                   </div>
                 </div>
@@ -226,7 +226,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
             <div style={{ textAlign:"center", marginBottom:14 }}>
               <div style={{ fontWeight:800, fontSize:15, color:"var(--ink)" }}>{user?.company?.name || "Mi Negocio"}</div>
               <div>FACTURA No. <strong style={{ color:"var(--brand)" }}>{viewInv.invoiceNumber||viewInv.id}</strong></div>
-              {viewInv.status==="anulada" && <div style={{ color:"#DC2626", fontWeight:800 }}>⚠ ANULADA</div>}
+              {viewInv.status==="anulada" && <div style={{ color:"#DC2626", fontWeight:800, display:"inline-flex", alignItems:"center", gap:5 }}><Icon name="alert" size={14}/>ANULADA</div>}
             </div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
             <div>Fecha: {(viewInv.date||viewInv.createdAt||"").split("T")[0]}</div>
@@ -262,7 +262,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
         <Modal title="Editar datos de factura" onClose={()=>setEditModal(false)} width={440}>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.30)", borderRadius:12, padding:12, fontSize:12, color:"#C2410C" }}>
-              ⚠ Solo se pueden editar los datos del cliente y método de pago. Los productos y totales no cambian.
+              <span style={{ display:"inline-flex", alignItems:"flex-start", gap:6 }}><Icon name="alert" size={14}/><span>Solo se pueden editar los datos del cliente y método de pago. Los productos y totales no cambian.</span></span>
             </div>
             <Field label="Nombre del cliente"><input style={inp} value={editForm.clientName} onChange={e=>setEditForm((f:any)=>({...f,clientName:e.target.value}))}/></Field>
             <Field label="Carnet"><input style={inp} value={editForm.clientNit} onChange={e=>setEditForm((f:any)=>({...f,clientNit:e.target.value}))} maxLength={11}/></Field>

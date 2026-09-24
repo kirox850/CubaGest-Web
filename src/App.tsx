@@ -405,7 +405,7 @@ export default function App() {
                     <Icon name="dashboard" size={16} color="#475569"/>Ver tour de bienvenida
                   </button>
                   <button onClick={()=>setDarkMode(v=>!v)} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
-                    <span style={{ fontSize:16 }}>{darkMode?"☀️":"🌙"}</span>{darkMode?"Modo claro":"Modo oscuro"}
+                    <Icon name={darkMode ? "sun" : "moon"} size={16} color="#475569"/>{darkMode?"Modo claro":"Modo oscuro"}
                   </button>
                   <div style={{ height:1, background:"var(--line, #E2E8F0)", margin:"4px 0" }}/>
                   <button onClick={()=>{setLegalDoc("privacy");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
@@ -435,9 +435,11 @@ export default function App() {
         return (
           <div style={{ background: urgent ? "#C2410C" : "#1D4ED8", color:"#fff", padding:"7px 16px", fontSize:12, fontWeight:600, textAlign:"center" as const, flexShrink:0, cursor:"pointer" }}
             onClick={() => setPlanOpen(true)}>
-            {urgent ? "⚠ " : "🎁 "}
-            Período de prueba gratis — {daysLeft} día{daysLeft !== 1 ? "s" : ""} restante{daysLeft !== 1 ? "s" : ""}
-            {urgent ? " · Toca aquí para ver planes" : " · Plan Empresarial completo"}
+            <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
+              <Icon name={urgent ? "alert" : "gift"} size={14} color="currentColor"/>
+              <span>Período de prueba gratis — {daysLeft} día{daysLeft !== 1 ? "s" : ""} restante{daysLeft !== 1 ? "s" : ""}
+                {urgent ? " · Toca aquí para ver planes" : " · Plan Empresarial completo"}</span>
+            </span>
           </div>
         );
       })()}

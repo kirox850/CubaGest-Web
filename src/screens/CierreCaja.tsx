@@ -136,7 +136,7 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
                     {locations.length > 1 && <div style={{ fontSize:12, color:"var(--brand)", marginTop:2, fontWeight:600 }}>{locationName(c.locationId)}</div>}
                   </div>
                   <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                    {hasShortage && <Badge label="⚠ Faltantes" color="#F97316"/>}
+                    {hasShortage && <Badge label={<><Icon name="alert" size={12}/>Faltantes</>} color="#F97316"/>}
                     <Badge label={`${c.totalSales} ventas`} color="var(--brand)"/>
                   </div>
                 </div>
@@ -225,8 +225,8 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
                   </div>
                 </div>
                 {!isRec && (
-                  <div style={{ marginTop:8, fontSize:11, color:"#F97316", fontWeight:600 }}>
-                    ⚠ Usar esta lectura excluirá las ventas entre esta fecha y la más reciente
+                  <div style={{ marginTop:8, fontSize:11, color:"#F97316", fontWeight:600, display:"inline-flex", alignItems:"flex-start", gap:5 }}>
+                    <Icon name="alert" size={13}/><span>Usar esta lectura excluirá las ventas entre esta fecha y la más reciente</span>
                   </div>
                 )}
               </div>
@@ -302,8 +302,8 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         </div>
 
         {itemsWithShortage.length > 0 && (
-          <div style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.30)", borderRadius:12, padding:12, marginTop:12, fontSize:13, color:"#C2410C", fontWeight:600 }}>
-            ⚠ Se registrarán faltantes en {itemsWithShortage.length} producto(s). Estos quedarán en el historial.
+          <div style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.30)", borderRadius:12, padding:12, marginTop:12, fontSize:13, color:"#C2410C", fontWeight:600, display:"inline-flex", alignItems:"flex-start", gap:6 }}>
+            <Icon name="alert" size={14}/><span>Se registrarán faltantes en {itemsWithShortage.length} producto(s). Estos quedarán en el historial.</span>
           </div>
         )}
 
@@ -358,8 +358,8 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         </div>
 
         {hasShortage && (
-          <div style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.30)", borderRadius:10, padding:10, marginBottom:12, fontSize:13, color:"#C2410C", fontWeight:600 }}>
-            ⚠ Este cierre registra faltantes de inventario
+          <div style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.30)", borderRadius:10, padding:10, marginBottom:12, fontSize:13, color:"#C2410C", fontWeight:600, display:"inline-flex", alignItems:"flex-start", gap:6 }}>
+            <Icon name="alert" size={14}/><span>Este cierre registra faltantes de inventario</span>
           </div>
         )}
 

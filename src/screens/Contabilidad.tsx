@@ -129,7 +129,7 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
             Los datos son orientativos. Consulte con su contador para la declaración oficial.
           </p>
           <button onClick={()=>window.print()} style={{ background:"var(--brand)", color:"#fff", border:"none", padding:"10px 20px", borderRadius:10, cursor:"pointer", fontSize:14, fontWeight:600, marginTop:14 }}>
-            🖨 Imprimir / Guardar PDF
+            <><Icon name="print" size={15}/>Imprimir / Guardar PDF</>
           </button>
         </div>
       </div>
@@ -239,7 +239,7 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
             <div style={{ textAlign:"center", marginBottom:14 }}>
               <div style={{ fontWeight:800, fontSize:15, color:"var(--ink)" }}>{user?.company?.name || "Mi Negocio"}</div>
               <div>FACTURA No. <strong style={{ color:"var(--brand)", fontSize:15 }}>{viewInv.invoiceNumber||viewInv.id}</strong></div>
-              {viewInv.status==="anulada" && <div style={{ color:"#DC2626", fontWeight:800 }}>⚠ ANULADA</div>}
+              {viewInv.status==="anulada" && <div style={{ color:"#DC2626", fontWeight:800, display:"inline-flex", alignItems:"center", gap:5 }}><Icon name="alert" size={14}/>ANULADA</div>}
             </div>
             <hr style={{ border:"none", borderTop:"1px dashed #ccc", margin:"8px 0" }}/>
             <div>Fecha: {(viewInv.date||viewInv.createdAt||"").split("T")[0]}</div>

@@ -275,8 +275,8 @@ const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => voi
                   {regError}
                 </div>
               )}
-              <div style={{ background:"rgba(var(--brand-rgb),0.10)", border:"1px solid rgba(var(--brand-rgb),0.25)", borderRadius:10, padding:"10px 14px", fontSize:12.5, color:"var(--ink)" }}>
-                🎁 Comienzas con <strong>30 días gratis</strong> del plan Empresarial completo.
+              <div style={{ background:"rgba(var(--brand-rgb),0.10)", border:"1px solid rgba(var(--brand-rgb),0.25)", borderRadius:10, padding:"10px 14px", fontSize:12.5, color:"var(--ink)", display:"flex", alignItems:"center", gap:8 }}>
+                <Icon name="gift" size={16} color="var(--brand)"/><span>Comienzas con <strong>30 días gratis</strong> del plan Empresarial completo.</span>
               </div>
               <button style={{ ...btn("primary"), justifyContent:"center", padding:"12px", fontSize:15, opacity:regLoading?0.7:1 }} onClick={handleRegister} disabled={regLoading}>
                 {regLoading ? "Creando cuenta..." : "Crear cuenta y entrar"}
