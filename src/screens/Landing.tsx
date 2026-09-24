@@ -126,7 +126,15 @@ const CtaButton = ({ onClick, children, big = false, variant = "primary" }: {
   </button>
 );
 
-export const PHONE_SCREENSHOT_URL = "/brand/app-screenshot.png";
+export const PHONE_SCREENSHOT_URLS = [
+  "/brand/foto1.jpg",
+  "/brand/foto2.jpg",
+  "/brand/foto3.jpg",
+  "/brand/foto4.jpg",
+  "/brand/foto5.jpg",
+] as const;
+
+export const PHONE_SCREENSHOT_URL = PHONE_SCREENSHOT_URLS[0];
 
 /**
  * Product mockup for marketing surfaces that presents an app screenshot in a phone frame.
@@ -134,7 +142,18 @@ export const PHONE_SCREENSHOT_URL = "/brand/app-screenshot.png";
  * If you adjust this component in any way, ensure the canvas and its asset declaration stay consistent.
  */
 export const IPhoneMockup = () => {
-  const [screenshotMissing, setScreenshotMissing] = useState(false);
+  const [activeScreenshot, setActiveScreenshot] = useState(0);
+  const [failedScreenshots, setFailedScreenshots] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setActiveScreenshot((current) => (current + 1) % PHONE_SCREENSHOT_URLS.length);
+    }, 6000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const hasAvailableScreenshot = PHONE_SCREENSHOT_URLS.some((_, index) => !failedScreenshots[index]);
 
   return (
     <div className="landing-iphone-stage">
@@ -145,18 +164,23 @@ export const IPhoneMockup = () => {
         <span className="landing-iphone__side-button landing-iphone__side-button--power" aria-hidden="true" />
         <div className="landing-iphone__screen">
           <div className="landing-iphone__dynamic-island" aria-hidden="true" />
-          {screenshotMissing ? (
+          {!hasAvailableScreenshot ? (
             <div className="landing-iphone-placeholder">
               <BrandLogo size={42} />
               <strong>Agrega tu captura de la app</strong>
-              <span>public/brand/app-screenshot.png</span>
+              <span>public/brand/foto1.jpg</span>
             </div>
           ) : (
-            <img
-              src={PHONE_SCREENSHOT_URL}
-              alt="CubaGest en uso desde un iPhone"
-              onError={() => setScreenshotMissing(true)}
-            />
+            PHONE_SCREENSHOT_URLS.map((url, index) => failedScreenshots[index] ? null : (
+              <img
+                key={url}
+                src={url}
+                alt={index === activeScreenshot ? "CubaGest en uso desde un iPhone" : ""}
+                aria-hidden={index === activeScreenshot ? undefined : true}
+                className={index === activeScreenshot ? "is-active" : undefined}
+                onError={() => setFailedScreenshots((current) => ({ ...current, [index]: true }))}
+              />
+            ))
           )}
         </div>
       </div>
