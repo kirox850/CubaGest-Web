@@ -25,17 +25,20 @@ Tamaños recomendados (opcionales, si también quieres actualizar el set PWA):
 
 Nota: el favicon ya lo tienes custom (public/favicon.ico) — ese no se toca.
 
-CAPTURA DE LA APP PARA EL IPHONE DE LA LANDING
-==============================================
+CAPTURAS DE LA APP PARA EL IPHONE DE LA LANDING
+===============================================
 
-La landing tiene un mockup de iPhone preparado para mostrar una captura real
-de la app. Para reemplazar el estado de ejemplo:
+La landing muestra cinco capturas verticales dentro del mockup de iPhone.
+El componente las rota automáticamente cada 6 segundos con una transición
+suave de fade.
 
-1. Exporta una captura vertical de la app en PNG.
-2. Nómbrala exactamente:  app-screenshot.png
-3. Colócala en esta carpeta, es decir en:
-       public/brand/app-screenshot.png
+Nombres reservados para el set:
+       public/brand/foto1.jpg
+       public/brand/foto2.jpg
+       public/brand/foto3.jpg
+       public/brand/foto4.jpg
+       public/brand/foto5.jpg
 
-La captura aparecerá automáticamente dentro del iPhone de la landing.
-Recomendado: una pantalla de POS o Dashboard en formato vertical, con una
-relación aproximada de 9:19.5 y una resolución mínima de 900×1950 px.
+Recomendado: capturas de POS, Dashboard o flujos principales en formato
+vertical, con una relación aproximada de 9:19.5 y una resolución mínima de
+900×1950 px.
