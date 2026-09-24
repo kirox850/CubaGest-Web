@@ -111,6 +111,13 @@
 
 .platform-stack { display: flex; flex-direction: column; gap: 16px; }
 
+.platform-search {
+  min-height: 42px;
+  padding: 10px 16px !important;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
 .platform-stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -187,6 +194,52 @@
   line-height: 1.6;
 }
 
+.platform-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.platform-action-card {
+  min-width: 0;
+}
+
+.platform-action-card__description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.platform-button-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.platform-control-button {
+  min-height: 38px;
+  padding: 9px 16px !important;
+  border-radius: 12px !important;
+  font-size: 13px !important;
+}
+
+.platform-support-note {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.platform-note-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 .platform-audit-row {
   padding: 14px 16px;
   border-top: 1px solid var(--line);
@@ -202,4 +255,5 @@
   .platform-header__email { display: none; }
   .platform-content { padding-top: 16px; }
   .platform-login__content { padding: 28px 22px 24px; }
+  .platform-action-grid { grid-template-columns: 1fr; }
 }

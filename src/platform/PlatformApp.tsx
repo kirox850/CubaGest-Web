@@ -217,7 +217,7 @@ function CompaniesList({ stats, onStats, onOpen }: { stats: any; onStats: (s: an
         </div>
       )}
 
-      <Input placeholder="Buscar por nombre o NIT..." value={q} onChange={(e: any) => setQ(e.target.value)} />
+      <Input className="platform-search" placeholder="Buscar por nombre o NIT..." value={q} onChange={(e: any) => setQ(e.target.value)} />
 
       <div className="platform-company-list">
         {(filtered).map((c, i) => (
@@ -275,17 +275,24 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
             {co.qvapayAuthorized ? " · QvaPay autorizado" : " · QvaPay NO autorizado"}
           </CardDescription>
         </CardHeader>
-        <CardContent style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <CardContent>
           <div className="platform-detail-meta">
             Plan vence: <strong style={{ color: "var(--ink)" }}>{fmtDate(co.planExpiry)}</strong> · Último pago: {fmtDate(co.lastPaymentDate)} · Próximo: {fmtDate(co.nextPaymentDate)} · Intentos fallidos: {co.failedAttempts}
           </div>
+        </CardContent>
+      </Card>
 
-          {/* ── Planes ── */}
-          <div>
-            <h4 className="platform-section-label">Cambiar plan / regalar extensión</h4>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+      <div className="platform-action-grid">
+        {/* ── Planes ── */}
+        <Card className="platform-action-card">
+          <CardHeader>
+            <CardTitle style={{ fontSize: 15 }}>Plan y extensión</CardTitle>
+            <CardDescription>Actualiza el plan o regala meses adicionales.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="platform-button-group">
               {(["free", "pro", "empresarial"] as const).map((p) => (
-                <Button key={p} variant={co.plan === p ? "default" : "outline"} size="sm"
+                <Button key={p} className="platform-control-button" variant={co.plan === p ? "default" : "outline"} size="sm"
                   onClick={async () => {
                     if (await showConfirm(`¿Poner ${co.name} en plan ${p}?`)) {
                       act(() => pf(`/companies/${id}/plan`, { method: "POST", body: { plan: p } }), `Plan cambiado a ${p}.`);
@@ -294,25 +301,32 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
                   {p}
                 </Button>
               ))}
+            </div>
+            <div style={{ marginTop: 12 }}>
               <Select onValueChange={async (months: string) => {
                 if (await showConfirm(`¿Añadir ${months} meses al plan actual de ${co.name}?`)) {
                   act(() => pf(`/companies/${id}/plan`, { method: "POST", body: { plan: co.plan, months: Number(months) } }), "Extensión aplicada.");
                 }
               }}>
-                <SelectTrigger style={{ width: 170 }}><SelectValue placeholder="Regalar +meses" /></SelectTrigger>
+                <SelectTrigger style={{ width: "100%" }}><SelectValue placeholder="Regalar +meses" /></SelectTrigger>
                 <SelectContent>
                   {["1", "3", "6", "12"].map((m) => <SelectItem key={m} value={m}>+{m} meses</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          {/* ── Pago manual ── */}
-          <div>
-            <h4 className="platform-section-label">Marcar pago recibido (QvaPay falló / pago por WhatsApp)</h4>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {/* ── Pago manual ── */}
+        <Card className="platform-action-card">
+          <CardHeader>
+            <CardTitle style={{ fontSize: 15 }}>Pago manual</CardTitle>
+            <CardDescription>Registra meses pagados cuando QvaPay no pudo completar el cobro.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="platform-button-group">
               {[1, 3, 6, 12].map((m) => (
-                <Button key={m} variant="outline" size="sm"
+                <Button key={m} className="platform-control-button" variant="outline" size="sm"
                   onClick={async () => {
                     if (await showConfirm(`¿Registrar ${m} mes(es) pagado(s) para ${co.name}? Extiende desde la fecha de vencimiento actual.`)) {
                       act(() => pf(`/companies/${id}/payment`, { method: "POST", body: { months: m } }), "Pago registrado y plan activado.");
@@ -322,13 +336,19 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
                 </Button>
               ))}
             </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          {/* ── Suspensión ── */}
-          <div>
-            <h4 className="platform-section-label">Estado de la cuenta</h4>
+        {/* ── Suspensión ── */}
+        <Card className="platform-action-card">
+          <CardHeader>
+            <CardTitle style={{ fontSize: 15 }}>Estado de la cuenta</CardTitle>
+            <CardDescription>Controla si la empresa puede acceder al sistema.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="platform-button-group">
             {co.active ? (
-              <Button variant="destructive" size="sm" onClick={async () => {
+              <Button className="platform-control-button" variant="destructive" size="sm" onClick={async () => {
                 if (await showConfirm(`¿SUSPENDER ${co.name}? Todos sus usuarios perderán acceso al iniciar sesión o renovar. Se puede revertir.`)) {
                   act(() => pf(`/companies/${id}/status`, { method: "POST", body: { active: false } }), "Empresa suspendida.");
                 }
@@ -336,7 +356,7 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
                 Suspender empresa
               </Button>
             ) : (
-              <Button variant="default" size="sm" onClick={async () => {
+              <Button className="platform-control-button" variant="default" size="sm" onClick={async () => {
                 if (await showConfirm(`¿Reactivar ${co.name}?`)) {
                   act(() => pf(`/companies/${id}/status`, { method: "POST", body: { active: true } }), "Empresa reactivada.");
                 }
@@ -344,12 +364,18 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
                 Reactivar empresa
               </Button>
             )}
-          </div>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* ── Impersonar ── */}
-          <div>
-            <h4 className="platform-section-label">Soporte</h4>
-            <Button variant="outline" size="sm" onClick={async () => {
+        {/* ── Impersonar ── */}
+        <Card className="platform-action-card">
+          <CardHeader>
+            <CardTitle style={{ fontSize: 15 }}>Soporte</CardTitle>
+            <CardDescription>Abre una sesión auditada como administrador de esta empresa.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="platform-control-button" variant="outline" size="sm" onClick={async () => {
               if (!(await showConfirm(`Vas a entrar a la app como administrador de ${co.name}. Esta acción queda registrada en la auditoría. ¿Continuar?`))) return;
               try {
                 const r = await pf(`/companies/${id}/impersonate`, { method: "POST" });
@@ -363,17 +389,22 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
                 }
               } catch (e: any) { showAlert(`Error: ${e.message}`); }
             }}>
-              Entrar como su admin
+              <Icon name="usuarios" size={14}/>Entrar como su admin
             </Button>
-            <span style={{ fontSize: 11, color: "var(--muted)", marginLeft: 8 }}>sesión de soporte de 2h, auditada</span>
-          </div>
+            <span className="platform-support-note">Sesión de soporte de 2 horas, auditada.</span>
+          </CardContent>
+        </Card>
 
-          {/* ── Notas internas ── */}
-          <div>
-            <h4 className="platform-section-label">Notas internas (nunca las ve el cliente)</h4>
+        {/* ── Notas internas ── */}
+        <Card className="platform-action-card">
+          <CardHeader>
+            <CardTitle style={{ fontSize: 15 }}>Notas internas</CardTitle>
+            <CardDescription>Información privada que nunca verá el cliente.</CardDescription>
+          </CardHeader>
+          <CardContent>
             <Textarea value={notes} onChange={(e: any) => { setNotes(e.target.value); setSavedNotes(false); }} placeholder="Ej: cliente conflictivo, pidió factura especial..." rows={3} />
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-              <Button size="sm" onClick={async () => {
+            <div className="platform-note-actions">
+              <Button className="platform-control-button" size="sm" onClick={async () => {
                 if (await showConfirm("¿Guardar las notas internas?")) {
                   await act(() => pf(`/companies/${id}/notes`, { method: "PUT", body: { notes } }), "Notas guardadas.");
                   setSavedNotes(true);
@@ -381,9 +412,9 @@ function CompanyDetail({ id, onBack }: { id: string; onBack: () => void }) {
               }}>Guardar notas</Button>
               {savedNotes && <span style={{ fontSize: 12, color: "#10B981" }}>Guardado</span>}
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* ── Usuarios ── */}
       <Card>
