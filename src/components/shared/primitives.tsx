@@ -67,8 +67,8 @@ export const OfflineBanner = ({ online, syncing, pending, conflicts }: { online:
 };
 
 // ─── UI ATOMS ─────────────────────────────────────────────────────────────────
-export const Badge = ({ label, color = "var(--brand)", bg }: { label: string; color?: string; bg?: string }) => (
-  <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, color, background: bg || color + "20", letterSpacing: "0.3px" }}>{label}</span>
+export const Badge = ({ label, color = "var(--brand)", bg }: { label: ReactNode; color?: string; bg?: string }) => (
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, color, background: bg || color + "20", letterSpacing: "0.3px" }}>{label}</span>
 );
 
 export const Field = ({ label, children, required }: { label: string; children: ReactNode; required?: boolean }) => (

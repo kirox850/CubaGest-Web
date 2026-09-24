@@ -425,7 +425,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
       {lastReceipt && (
         <Modal title="Factura Emitida" onClose={()=>setLastReceipt(null)} width={420}>
           <div className="cg-receipt-print-area" style={{ fontFamily:"monospace", fontSize:12, lineHeight:1.8, background:"var(--input-bg)", padding:20, borderRadius:12, border:"1px solid var(--line)" }}>
-            {lastReceipt.isOffline && <div style={{ background:"rgba(201,162,39,0.15)", color:"#856404", padding:"6px 10px", borderRadius:8, marginBottom:10, fontSize:11, textAlign:"center" as any }}>⚡ GUARDADA OFFLINE — se sincronizará al recuperar conexión</div>}
+            {lastReceipt.isOffline && <div style={{ background:"rgba(201,162,39,0.15)", color:"#856404", padding:"6px 10px", borderRadius:8, marginBottom:10, fontSize:11, textAlign:"center" as any, display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}><Icon name="zap" size={13}/>GUARDADA OFFLINE — se sincronizará al recuperar conexión</div>}
             <div style={{ textAlign:"center", marginBottom:12 }}>
               <div style={{ fontWeight:800, fontSize:16, color:"var(--ink)" }}>{companyName}</div>
               <div style={{ fontWeight:700, fontSize:13, color:"var(--muted)" }}>FACTURA</div>

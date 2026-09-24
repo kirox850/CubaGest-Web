@@ -222,7 +222,7 @@ const Dashboard = ({ user }: { user: any }) => {
       <div>
         <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"var(--ink)" }}>Panel Principal</h2>
         <p style={{ margin:0, fontSize:14, color:"var(--muted)" }}>Bienvenido, {user.name} · {ROLES[user.role]?.label}</p>
-        {error && <p style={{ margin:"4px 0 0", fontSize:12, color:"#F97316" }}>⚡ {error}</p>}
+        {error && <p style={{ margin:"4px 0 0", fontSize:12, color:"#F97316", display:"inline-flex", alignItems:"center", gap:5 }}><Icon name="zap" size={13}/><span>{error}</span></p>}
       </div>
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:16 }}>
@@ -287,7 +287,7 @@ const Dashboard = ({ user }: { user: any }) => {
           <div style={{ background:"var(--card)", borderRadius:16, border:"1px solid var(--line)", padding:20 }}>
             <h3 style={{ margin:"0 0 10px", fontSize:15, fontWeight:800, color:"var(--ink)" }}>Sin ventas hace 30 días</h3>
             {(analytics.deadProducts||[]).length===0 ? (
-              <p style={{ fontSize:13, color:"#10B981", margin:0 }}>✅ Todo tu inventario se ha movido recientemente.</p>
+              <p style={{ fontSize:13, color:"#10B981", margin:0, display:"inline-flex", alignItems:"center", gap:5 }}><Icon name="check" size={14}/><span>Todo tu inventario se ha movido recientemente.</span></p>
             ) : (
               <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
                 {analytics.deadProducts.slice(0,12).map((p:any) => (

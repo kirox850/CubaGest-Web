@@ -111,7 +111,7 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
                     <div style={{ display:"flex", gap:6 }}>
                       <button style={{ ...btn("ghost"), padding:"5px 9px" }} onClick={()=>openEdit(u)}><Icon name="edit" size={14}/></button>
                       <button style={{ ...btn("ghost"), padding:"5px 9px", fontSize:11 }} onClick={()=>resendLink(u)} disabled={resendingId===u.id} title={u.pending?"Reenviar link de activación":"Mandar link para restablecer contraseña"}>
-                        {resendingId===u.id ? "..." : "🔗"}
+                        {resendingId===u.id ? "..." : <Icon name="link" size={14}/>}
                       </button>
                       {u.id!==currentUser.id && <button style={{ ...btn("danger"), padding:"5px 9px" }} onClick={()=>deleteUser(u.id)}><Icon name="trash" size={14}/></button>}
                     </div>
@@ -126,9 +126,9 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
       <div style={{ background:"var(--input-bg)", borderRadius:16, border:"1px solid var(--line)", padding:20 }}>
         <h3 style={{ margin:"0 0 14px", fontSize:14, fontWeight:700, color:"var(--ink)" }}>Política de seguridad</h3>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:12 }}>
-          {[["🔐","Cada quien elige su propia contraseña — admin nunca la ve"],["📋","Registro de auditoría por usuario"],["⏱","Sesión con token JWT expirable"],["🔒","Acceso restringido por rol"],["📊","Registro de auditoría por acceso"],["🛡","Comunicación cifrada HTTPS"]].map(([icon,text])=>(
+          {[["lock","Cada quien elige su propia contraseña — admin nunca la ve"],["clipboard","Registro de auditoría por usuario"],["clock","Sesión con token JWT expirable"],["lock","Acceso restringido por rol"],["trend_up","Registro de auditoría por acceso"],["shield","Comunicación cifrada HTTPS"]].map(([icon,text])=>(
             <div key={text as string} style={{ display:"flex", gap:10, alignItems:"flex-start", fontSize:13, color:"var(--ink)" }}>
-              <span style={{ fontSize:16 }}>{icon}</span>{text as string}
+              <Icon name={icon as string} size={16} color="var(--brand)"/><span>{text as string}</span>
             </div>
           ))}
         </div>
@@ -169,7 +169,7 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
               </div>
             ) : (
               <div style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.30)", borderRadius:12, padding:12, fontSize:13, color:"#C2410C" }}>
-                ⚠ El correo no se pudo enviar (revisa que Resend esté configurado). Comparte este link a mano — por WhatsApp, por ejemplo.
+                <span style={{ display:"inline-flex", alignItems:"flex-start", gap:6 }}><Icon name="alert" size={14}/><span>El correo no se pudo enviar (revisa que Resend esté configurado). Comparte este link a mano — por WhatsApp, por ejemplo.</span></span>
               </div>
             )}
             <div style={{ background:"var(--input-bg)", borderRadius:10, padding:"10px 12px", fontSize:12, wordBreak:"break-all" as any, color:"var(--ink)", fontFamily:"monospace" }}>

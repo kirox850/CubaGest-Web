@@ -74,9 +74,9 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
     const email   = user?.email || "";
     const msg = encodeURIComponent(
       `Hola, quiero activar el plan *${p?.label}* de CubaGest.\n\n` +
-      `🏢 Empresa: ${company}\n` +
-      `📧 Correo: ${email}\n` +
-      `💳 Plan: ${p?.label} — $${priceUSD} USD/mes\n\n` +
+      `Empresa: ${company}\n` +
+      `Correo: ${email}\n` +
+      `Plan: ${p?.label} — $${priceUSD} USD/mes\n\n` +
       `Por favor indícame cómo proceder con el pago.`
     );
     window.open(`https://wa.me/5354801057?text=${msg}`, "_blank");
@@ -89,7 +89,7 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
         {/* Programa de referidos */}
         {referralData?.referralCode && (
           <div style={{ background:"rgba(16,185,129,0.10)", border:"1px solid rgba(16,185,129,0.35)", borderRadius:12, padding:"12px 14px" }}>
-            <div style={{ fontWeight:800, fontSize:13, color:"#166534", marginBottom:4 }}>🎁 Invita y gana planes</div>
+            <div style={{ fontWeight:800, fontSize:13, color:"#166534", marginBottom:4, display:"inline-flex", alignItems:"center", gap:6 }}><Icon name="gift" size={15}/>Invita y gana planes</div>
             <div style={{ fontSize:12, color:"#166534", marginBottom:8 }}>
               Comparte tu código: cuando otro negocio se registre con él y contrate un plan pago, <strong>tú recibes ese mismo plan gratis 30 días</strong>. Cada referido que pague suma un bono.
             </div>
@@ -106,8 +106,8 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
         {/* Banner trial */}
         {isTrial && daysLeft !== null && (
           <div style={{ background: daysLeft <= 7 ? "rgba(249,115,22,0.10)" : "var(--input-bg)", border:`1px solid ${daysLeft <= 7 ? "rgba(249,115,22,0.35)" : "var(--line)"}`, borderRadius:12, padding:14 }}>
-            <div style={{ fontWeight:700, fontSize:14, color: daysLeft <= 7 ? "#C2410C" : "#1E40AF" }}>
-              {daysLeft <= 7 ? "⚠ " : "🎁 "}Período de prueba — {daysLeft} día{daysLeft !== 1 ? "s" : ""} restante{daysLeft !== 1 ? "s" : ""}
+            <div style={{ fontWeight:700, fontSize:14, color: daysLeft <= 7 ? "#C2410C" : "#1E40AF", display:"inline-flex", alignItems:"center", gap:6 }}>
+              <Icon name={daysLeft <= 7 ? "alert" : "gift"} size={15}/><span>Período de prueba — {daysLeft} día{daysLeft !== 1 ? "s" : ""} restante{daysLeft !== 1 ? "s" : ""}</span>
             </div>
             <div style={{ fontSize:12, color:"var(--muted)", marginTop:4 }}>
               Estás usando el plan Empresarial gratis. Al vencer pasarás automáticamente al plan Free.
@@ -118,7 +118,7 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
         {/* Banner pago fallido */}
         {isFailed && (
           <div style={{ background:"rgba(220,38,38,0.08)", border:"1px solid rgba(220,38,38,0.30)", borderRadius:12, padding:14 }}>
-            <div style={{ fontWeight:700, fontSize:14, color:"#DC2626" }}>⚠ Pago fallido</div>
+            <div style={{ fontWeight:700, fontSize:14, color:"#DC2626", display:"inline-flex", alignItems:"center", gap:6 }}><Icon name="alert" size={15}/>Pago fallido</div>
             <div style={{ fontSize:12, color:"var(--muted)", marginTop:4 }}>
               No pudimos cobrar tu suscripción. Asegúrate de tener saldo en QvaPay o contacta por WhatsApp para pagar manualmente.
             </div>
@@ -189,12 +189,12 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
                       style={{ background:"#1E293B", color:"#fff", border:"none", borderRadius:10, padding:"8px 10px", fontSize:12, fontWeight:700, cursor:loading?"not-allowed":"pointer", opacity:loading?0.6:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
                       onClick={() => handleQvaPay(p.key)}
                       disabled={loading}>
-                      {isLoading ? "Conectando..." : "💳 Pagar con QvaPay"}
+                      {isLoading ? "Conectando..." : <><Icon name="credit_card" size={14}/>Pagar con QvaPay</>}
                     </button>
                     <button
                       style={{ background:"#25D366", color:"#fff", border:"none", borderRadius:10, padding:"8px 10px", fontSize:12, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
                       onClick={() => handleWhatsApp(p.key, p.priceUSD)}>
-                      💬 Pagar por WhatsApp
+                      <><Icon name="message" size={14}/>Pagar por WhatsApp</>
                     </button>
                   </div>
                 )}
