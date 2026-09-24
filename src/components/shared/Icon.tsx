@@ -1,4 +1,9 @@
 // ─── ICONS ────────────────────────────────────────────────────────────────────
+/**
+ * Shared icon vocabulary for CubaGest product and marketing surfaces.
+ * The canvas for this component is at tempo/designs/canvases/home/index.canvas.tsx.
+ * If you adjust this component in any way, ensure the canvas and its asset declaration stay consistent.
+ */
 const Icon = ({ name, size = 18, color = "currentColor" }: { name: string; size?: number; color?: string }) => {
   const icons: Record<string, JSX.Element> = {
     dashboard:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
