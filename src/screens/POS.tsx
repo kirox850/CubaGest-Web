@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, isTransportError } from "@/lib/api";
 import { fmt } from "@/lib/format";
 import { useOnlineStatus } from "@/hooks/useOnline";
 import { PAY_METHODS, CURRENCY_SYMBOLS } from "@/config/constants";
-import { cacheProducts, getOfflineProducts, saveSaleOffline } from "@/offlineDB";
+import {
+  cacheProducts, getOfflineProducts, saveSaleOffline,
+  getLastLocationId, setLastLocationId, newClientSaleId,
+} from "@/offlineDB";
 import Icon from "@/components/shared/Icon";
 import { Modal, Field, Spinner, btn, inp, sel } from "@/components/shared/primitives";
 
@@ -64,6 +67,15 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
   const [myLocationId, setMyLocationId] = useState<string>("");
   const [myLocationName, setMyLocationName] = useState<string>("");
+
+  // Espacio de nombres de los datos locales de ESTA cuenta en ESTA ubicación.
+  // El catálogo y el stock cacheados nunca se mezclan con los de otra cuenta ni
+  // con los de otra caja/almacén del mismo negocio.
+  const account = { companyId: user?.company?.id || "", userId: user?.id || "" };
+  const scopeOf = (locationId: string) => ({ ...account, locationId });
+  // Última ubicación conocida de esta cuenta. Nunca lanza: un fallo del
+  // almacenamiento local no debe tumbar la pantalla ni el cobro.
+  const lastKnownLocation = () => getLastLocationId(account).catch(() => undefined);
   // El recibo es LA FACTURA del negocio del cliente, no de CubaGest (el
   // branding propio va solo en un pie discreto). El carnet del comprador
   // aparece solo cuando se capturó (transferencias).
@@ -98,35 +110,67 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   const change = Number(cashGiven) - total;
 
   useEffect(()=>{
-    if (online) {
-      apiFetch("/locations")
-        .then(async (locs: any[]) => {
-          const own = user.role === "almacenista" ? locs.find((l:any)=>l.type==="almacen")
-            : locs.find((l:any)=>l.ownerUserId===user.id);
-          if (!own) { setProducts([]); setLoading(false); return; }
-          setMyLocationId(own.id);
-          setMyLocationName(own.name);
-          const { items } = await apiFetch(`/locations/${own.id}/stock`);
-          await cacheProducts(items);
-          setProducts(items.filter((p:any)=>p.active && p.stock>0));
-          setLoading(false);
-        })
-        .catch(async (e: any) => {
-          // Antes esto siempre decía "Sin conexión", aunque la causa real
-          // fuera otra (ej. permisos) — ahora distinguimos.
-          if (e?.message === "Sesión expirada") return; // ya se maneja aparte
-          const msg = online ? (e?.message || "Error al cargar productos") : "Sin conexión — cargando productos offline";
-          showToast(msg, "warning");
-          const cached = await getOfflineProducts();
-          setProducts(cached.filter(p=>p.localStock>0));
-          setLoading(false);
-        });
-    } else {
-      getOfflineProducts().then(cached => {
-        setProducts(cached.filter(p=>p.localStock>0));
-        setLoading(false);
-      });
-    }
+    let cancelled = false;
+
+    // El stock que se muestra y se puede cobrar es el LOCAL: el último stock
+    // del servidor menos las ventas de este dispositivo que siguen pendientes.
+    // Así, sin conexión o nada más volver de la conexión, nunca se ofrece
+    // mercancía que ya se vendió.
+    const applyStock = (list: any[]) =>
+      list.map(p => ({ ...p, stock: p.stock !== undefined && p.localStock !== undefined ? p.localStock : p.stock }))
+          .filter(p => p.stock > 0);
+
+    // Catálogo local de ESTA cuenta en ESTA ubicación.
+    const loadFromCache = async (locationId: string) => {
+      const cached = locationId ? await getOfflineProducts(scopeOf(locationId)) : [];
+      if (cancelled) return;
+      setProducts(applyStock(cached as any[]));
+      setLoading(false);
+    };
+
+    const load = async () => {
+      if (!account.companyId || !account.userId) { setProducts([]); setLoading(false); return; }
+
+      if (!online) {
+        // Sin conexión no se puede llamar a /locations, pero esta cuenta ya
+        // sabe desde cuál ubicación vende: se recuerda la última.
+        const lastLoc = await lastKnownLocation();
+        if (lastLoc) setMyLocationId(lastLoc);
+        await loadFromCache(lastLoc || "");
+        return;
+      }
+
+      try {
+        const locs: any[] = await apiFetch("/locations");
+        const own = user.role === "almacenista" ? locs.find((l:any)=>l.type==="almacen")
+          : locs.find((l:any)=>l.ownerUserId===user.id);
+        if (!own) { setProducts([]); setLoading(false); return; }
+        if (cancelled) return;
+        setMyLocationId(own.id);
+        setMyLocationName(own.name);
+        // Se recuerda la ubicación para poder seguir vendiendo sin conexión.
+        setLastLocationId(account, own.id).catch(() => {});
+        const { items } = await apiFetch(`/locations/${own.id}/stock`);
+        await cacheProducts(scopeOf(own.id), items);
+        if (cancelled) return;
+        await loadFromCache(own.id);
+      } catch (e: any) {
+        if (cancelled) return;
+        // Antes esto siempre decía "Sin conexión", aunque la causa real
+        // fuera otra (ej. permisos) — ahora distinguimos.
+        if (e?.kind === "auth") return; // ya se maneja aparte
+        const msg = online ? (e?.message || "Error al cargar productos") : "Sin conexión — cargando productos offline";
+        showToast(msg, "warning");
+        const lastLoc = await lastKnownLocation();
+        if (lastLoc) setMyLocationId(lastLoc);
+        await loadFromCache(lastLoc || "");
+      }
+    };
+
+    // El .catch evita que un fallo puntual del almacenamiento local quede como
+    // una promesa rechazada sin manejar (la pantalla se quedaría cargando).
+    load().catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   },[online]);
 
   const q = search.trim().toLowerCase();
@@ -231,46 +275,108 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
       return showToast("Complete nombre, carnet y teléfono del cliente para transferencia","error");
     }
     setProcessing(true);
-    try {
-      const saleData = {
-        clientName: needsTransferData ? clientName : "Consumidor Final",
-        clientNit: needsTransferData ? clientNit : "00000000000",
-        clientPhone: needsTransferData ? clientPhone : undefined,
-        items: cart.map(i=>({ productId:i.id, name:i.name, qty:i.qty, price:i.price, total:i.price*i.qty, discountId: online && i.discountId ? i.discountId : undefined })),
-        payMethod,
-        subtotal,
-        total,
-        discountId: online && saleDiscountId ? saleDiscountId : undefined,
-        currency: saleCurrency,
-      };
+    // Identidad de la venta: un UUID del dispositivo, el MISMO en cada
+    // reintento. Es lo que permite que el servidor devuelva la factura
+    // original en vez de crear una segunda si se repite el envío.
+    const clientSaleId = newClientSaleId();
+    // Ubicación inmutable de la venta. Sin ella no se puede descontar el stock
+    // ni sincronizar más adelante. Si la pantalla aún no la conoce (la primera
+    // vez que se entra ya sin conexión), se recupera la última de la cuenta.
+    // Se lee con .catch para que un fallo del almacenamiento local no deje el
+    // botón "Cobrar" colgado sin poder terminar.
+    const locationId = myLocationId || (await lastKnownLocation()) || "";
+    // El carrito tal como se cobraría. Si la venta acaba guardada en el
+    // dispositivo, se guarda EXACTAMENTE lo mismo que se iba a cobrar.
+    const saleItems = cart.map(i=>({
+      productId: i.id, name: i.name, qty: i.qty, price: i.price, total: i.price*i.qty,
+    }));
+    const saleData = {
+      clientSaleId,
+      locationId: locationId || undefined,
+      clientName: needsTransferData ? clientName : "Consumidor Final",
+      clientNit: needsTransferData ? clientNit : "00000000000",
+      clientPhone: needsTransferData ? clientPhone : undefined,
+      items: online ? saleItems.map((it, n) => (cart[n].discountId ? { ...it, discountId: cart[n].discountId } : it)) : saleItems,
+      payMethod,
+      subtotal,
+      total,
+      discountId: online && saleDiscountId ? saleDiscountId : undefined,
+      currency: saleCurrency,
+    };
+    const hasDiscount = !!saleDiscountId || cart.some(i => !!i.discountId);
 
+    const clearForm = () => {
+      setCart([]);
+      setSearch(""); setCashGiven(""); setSaleDiscountId("");
+      setClientName(""); setClientNit(""); setClientPhone("");
+    };
+
+    // Captura local: no necesita servidor. Se guarda con su locationId y su
+    // clientSaleId para que la sincronización posterior sea idempotente, y
+    // descuenta el stock de esta ubicación en el dispositivo.
+    const captureOffline = async () => {
+      const offlineSale = await saveSaleOffline(account, { ...saleData, locationId, items: saleItems });
+      setLastReceipt({ ...offlineSale, id: offlineSale.localId, isOffline: true });
+      clearForm();
+      // Refrescar la lista es cosmético: si falla, la venta YA quedó guardada y
+      // no se debe reportar un error que haga creer que se perdió.
+      try {
+        const cached = await getOfflineProducts(scopeOf(locationId));
+        setProducts(cached.map(p => ({ ...p, stock: p.localStock })).filter(p => p.stock > 0));
+      } catch { /* se corrige en la próxima carga de la pantalla */ }
+      return offlineSale;
+    };
+
+    try {
       if (!online) {
-        // Guardar offline
-        const offlineSale = await saveSaleOffline(saleData);
-        setLastReceipt({ ...offlineSale, id: offlineSale.localId, isOffline: true });
-        setCart([]);
-        setSearch(""); setCashGiven(""); setSaleDiscountId("");
-        setClientName(""); setClientNit(""); setClientPhone("");
-        // Actualizar lista con stock local
-        const cached = await getOfflineProducts();
-        setProducts(cached.filter(p=>p.localStock>0));
+        const offlineSale = await captureOffline();
         showToast(`Factura ${offlineSale.localId} guardada offline`,"info");
-      } else {
-        // Online normal
-        const invoice = await apiFetch("/sales", { method:"POST", body: saleData });
-        // Actualizar cache de productos con el stock de MI ubicación
-        if (myLocationId) {
-          const { items } = await apiFetch(`/locations/${myLocationId}/stock`);
-          await cacheProducts(items);
-          setProducts(items.filter((p:any)=>p.active&&p.stock>0));
-        }
-        setLastReceipt(invoice);
-        setCart([]);
-        setSearch(""); setCashGiven(""); setSaleDiscountId("");
-        setClientName(""); setClientNit(""); setClientPhone("");
-        showToast(`Factura ${invoice.id} emitida correctamente`,"success");
+        return;
       }
-    } catch(e:any) { showToast(e.message,"error"); }
+
+      // Online normal
+      const invoice = await apiFetch("/sales", { method:"POST", body: saleData, timeoutMs: 15000 });
+
+      // A partir de aquí la factura YA existe en el servidor: cualquier fallo
+      // posterior es solo de refresco de la lista y NUNCA debe entrar en la
+      // captura offline (crearía una venta duplicada en la cola).
+      setLastReceipt(invoice);
+      clearForm();
+      showToast(`Factura ${invoice.id} emitida correctamente`,"success");
+
+      if (locationId) {
+        try {
+          const { items } = await apiFetch(`/locations/${locationId}/stock`);
+          await cacheProducts(scopeOf(locationId), items);
+          const cached = await getOfflineProducts(scopeOf(locationId));
+          setProducts(cached.map(p => ({ ...p, stock: p.localStock })).filter(p => p.stock > 0));
+        } catch { /* la factura está emitida; el stock se refresca en la próxima carga */ }
+      }
+      return;
+    } catch(e:any) {
+      // El navegador puede decir "online" mientras el servidor no responde
+      // (API caída, proxy colgado, datos móviles). Si el fallo es de red o de
+      // tiempo de espera, la venta se guarda en el dispositivo para que el
+      // cajero no pierda la operación. Si el servidor SÍ respondió —error de
+      // validación o de permisos— no se encola nada: se muestra el error.
+      if (isTransportError(e)) {
+        if (hasDiscount) {
+          // Un descuento se recalcula en el servidor: encolar la venta cambiaría
+          // el total de la factura. Se avisa para que el cajero la cobre cuando
+          // vuelva la conexión (el carrito sigue intacto).
+          showToast("Sin respuesta del servidor y la venta lleva descuento: no se puede guardar pendiente. Inténtalo de nuevo con conexión.","warning");
+          return;
+        }
+        if (locationId) {
+          try {
+            const offlineSale = await captureOffline();
+            showToast(`Sin respuesta del servidor — factura ${offlineSale.localId} guardada offline`,"warning");
+            return;
+          } catch { /* si tampoco se pudo guardar local, se muestra el error */ }
+        }
+      }
+      showToast(e.message,"error");
+    }
     finally { setProcessing(false); }
   };
 

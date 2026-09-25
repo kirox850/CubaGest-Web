@@ -32,7 +32,7 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 
-    <!-- Registrar Service Worker -->
+    <!-- Registrar Service Worker (solo cachea el app shell estático; nunca /api) -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -56,14 +56,6 @@
               });
             })
             .catch(err => console.warn('[CubaGest] SW error:', err));
-
-          // Escuchar mensajes del SW
-          navigator.serviceWorker.addEventListener('message', event => {
-            if (event.data?.type === 'SYNC_REQUESTED') {
-              // Disparar sync en la app
-              window.dispatchEvent(new CustomEvent('sw-sync-requested'));
-            }
-          });
         });
       }
     </script>

@@ -34,6 +34,11 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
 
   const invOnline = useOnlineStatus();
 
+  // Datos locales de ESTA cuenta en la ubicación seleccionada: el inventario
+  // cacheado de otra caja o de otra cuenta nunca se mezcla con este.
+  const account = { companyId: user?.company?.id || "", userId: user?.id || "" };
+  const scope = { ...account, locationId };
+
   const loadLocations = useCallback(async () => {
     try {
       const list = await apiFetch("/locations");
@@ -60,15 +65,15 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
       if (invOnline) {
         const { location, items } = await apiFetch(`/locations/${locationId}/stock`);
         setLocationInfo(location);
-        await cacheProducts(items);
+        await cacheProducts(scope, items);
         setProducts(items);
       } else {
-        const cached = await getOfflineProducts();
+        const cached = await getOfflineProducts(scope);
         setProducts(cached as any[]);
         showToast("Mostrando inventario offline","info");
       }
     } catch(e:any) {
-      const cached = await getOfflineProducts();
+      const cached = await getOfflineProducts(scope);
       if (cached.length > 0) {
         setProducts(cached as any[]);
         showToast("Sin conexión — inventario cacheado","warning");
@@ -76,7 +81,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         showToast(e.message,"error");
       }
     } finally { setLoading(false); }
-  }, [invOnline, locationId]);
+  }, [invOnline, locationId, account.companyId, account.userId]);
 
   useEffect(() => { load(); }, [load]);
 

@@ -39,11 +39,16 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
   const [showOffline, setShowOffline] = useState(true);
   const facOnline = useOnlineStatus();
 
+  // La cola offline pertenece a ESTA cuenta: nunca se listan ni se reintentan
+  // ventas guardadas por otro usuario en este mismo dispositivo.
+  const account = { companyId: user?.company?.id || "", userId: user?.id || "" };
+  const scopeOfSale = (s: OfflineSale) => ({ ...account, locationId: s.locationId });
+
   const load = useCallback(async()=>{
     try {
       setLoading(true);
-      // Cargar facturas offline siempre
-      const offline = await getAllOfflineSales();
+      // Cargar facturas offline siempre (no requiere servidor)
+      const offline = account.companyId && account.userId ? await getAllOfflineSales(account) : [];
       setOfflineSales(offline);
       // Cargar del servidor si hay conexión
       if (facOnline) {
@@ -52,7 +57,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
       }
     } catch(e:any) { showToast(e.message,"error"); }
     finally { setLoading(false); }
-  },[facOnline]);
+  },[facOnline, account.companyId, account.userId]);
   useEffect(()=>{ load(); },[load]);
 
   const filtered = sales.filter(s=>
@@ -138,7 +143,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
                     <Badge label={s.status==="conflict"?"Conflicto":"Pendiente"} color={s.status==="conflict"?"var(--brand)":"#F97316"}/>
                   </div>
                   <div style={{ fontSize:12, color:"var(--ink)", marginBottom:4 }}>
-                    {s.client} · <strong>${fmt(s.total)}</strong> · {s.items.map((i:any)=>`${i.qty}x ${i.name}`).join(", ")}
+                    {s.clientName || s.client || "Consumidor Final"} · <strong>${fmt(s.total)}</strong> · {s.items.map((i:any)=>`${i.qty}x ${i.name}`).join(", ")}
                   </div>
                   {s.status==="conflict" && (
                     <div style={{ fontSize:11, color:"var(--brand)", marginBottom:8, display:"inline-flex", alignItems:"center", gap:5 }}><Icon name="alert" size={13}/><span>{s.conflictReason}</span></div>
@@ -148,8 +153,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
                       <button style={{ ...btn("primary"), fontSize:11, padding:"5px 10px" }}
                         onClick={async()=>{
                           // Reintentar manualmente
-                          const { updateSaleStatus: upd } = await import("@/offlineDB");
-                          await upd(s.localId, "pending");
+                          await updateSaleStatus(account, s.localId, "pending");
                           load();
                           if(onSyncRefresh) onSyncRefresh();
                         }}>
@@ -159,9 +163,10 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
                     <button style={{ ...btn("danger"), fontSize:11, padding:"5px 10px" }}
                       onClick={async()=>{
                         if(!(await showConfirm(`¿Descartar la venta ${s.localId}? El stock local ya fue restaurado.`))) return;
-                        const { updateSaleStatus: upd, restoreLocalStock: rls } = await import("@/offlineDB");
-                        if(s.status==="pending") await rls(s.items);
-                        await upd(s.localId, "synced"); // marcar como procesada para ocultarla
+                        // Descartar es una acción explícita del usuario: aquí sí
+                        // se devuelve el stock local que la venta tenía descontado.
+                        if(s.status==="pending") await restoreLocalStock(scopeOfSale(s), s.items);
+                        await updateSaleStatus(account, s.localId, "synced"); // marcar como procesada para ocultarla
                         load();
                         if(onSyncRefresh) onSyncRefresh();
                       }}>
@@ -169,7 +174,7 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
                     </button>
                     <button style={{ ...btn("secondary"), fontSize:11, padding:"5px 10px" }}
                       onClick={()=>{
-                        const lines = ["Venta: " + s.localId, "Cliente: " + s.client, "Total: $" + fmt(s.total), "Productos:"];
+                        const lines = ["Venta: " + s.localId, "Cliente: " + (s.clientName || s.client), "Total: $" + fmt(s.total), "Productos:"];
                         s.items.forEach((i:any) => lines.push("  - " + i.qty + "x " + i.name + " @ $" + fmt(i.price)));
                         if (s.conflictReason) lines.push("", "Error: " + s.conflictReason);
                         showAlert(lines.join("\n"));

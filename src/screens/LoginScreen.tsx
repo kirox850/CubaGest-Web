@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { apiFetch, saveToken } from "@/lib/api";
+import { apiFetch, saveToken, saveRefreshToken } from "@/lib/api";
 import { Field, btn, inp } from "@/components/shared/primitives";
 import Icon from "@/components/shared/Icon";
 import { BrandLogo } from "@/screens/Landing";
@@ -101,7 +101,7 @@ const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => voi
       });
       const token = res.accessToken || res.token;
       if (!token) throw new Error("No se recibió token del servidor");
-      if (res.refreshToken) localStorage.setItem("cubagest_refresh_token", res.refreshToken);
+      if (res.refreshToken) saveRefreshToken(res.refreshToken);
       saveToken(token);
       onLogin(res.user);
     } catch (err: any) {
@@ -119,7 +119,7 @@ const LoginScreen = ({ onLogin, onBackToLanding }: { onLogin: (user: any) => voi
       const res = await apiFetch("/auth/login", { method:"POST", body:{ email, password }, auth:false });
       const token = res.accessToken || res.token;
       if (!token) throw new Error("No se recibió token del servidor");
-      if (res.refreshToken) localStorage.setItem("cubagest_refresh_token", res.refreshToken);
+      if (res.refreshToken) saveRefreshToken(res.refreshToken);
       saveToken(token);
       onLogin(res.user);
     } catch (err: any) {

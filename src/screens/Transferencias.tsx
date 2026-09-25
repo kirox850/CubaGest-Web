@@ -40,8 +40,15 @@ const Transferencias = ({ user, showToast }: { user: any; showToast: (m:string,t
   const pending = transfers.filter(t => t.status === "pendiente");
   const visible = tab === "pendientes" ? pending : transfers;
   const locationName = (id:string) => allLocations.find((l:any)=>l.id===id)?.name || "—";
-  const canResolve = (t:any) => t.toLocationId === myLocation?.id;
-  const canCancel = (t:any) => t.status === "pendiente" && (isAdmin || t.requestedById === user.id) && !canResolve(t);
+  // El backend es la autoridad: cada envío llega con canResolve/canCancel ya
+  // resueltos por la regla real (solo el dueño del destino aprueba; admin no).
+  // El cálculo local es solo el respaldo para respuestas viejas sin esas
+  // banderas, para no mostrar un botón que el servidor va a rechazar.
+  const canResolve = (t:any) =>
+    typeof t.canResolve === "boolean" ? t.canResolve : t.toLocationId === myLocation?.id;
+  const canCancel = (t:any) =>
+    t.status === "pendiente" &&
+    (typeof t.canCancel === "boolean" ? t.canCancel : (isAdmin || t.requestedById === user.id) && !canResolve(t));
 
   const loadProductsFor = async (locationId: string) => {
     if (!locationId) { setMyProducts([]); return; }

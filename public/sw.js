@@ -1,18 +1,19 @@
 // ─── CUBAGEST SERVICE WORKER ──────────────────────────────────────────────────
-// v3: ya no depende de /asset-manifest.json (eso es un patrón de Create React
-// App; este proyecto usa Vite, que no genera ese archivo, así que el intento
-// de precache de los bundles con hash siempre fallaba en silencio).
+// v6: el service worker cachea SOLO el "app shell" estático. Nunca intercepta ni
+// cachea /api/*.
 //
-// Estrategia:
-//  - Precache solo del "app shell" mínimo que sí existe siempre con nombre fijo.
-//  - Los archivos JS/CSS con hash (que cambian en cada build) se cachean
-//    automáticamente la primera vez que se piden (runtime caching), con
-//    estrategia "red primero, caché de respaldo" — así cada actualización se
-//    detecta sola, sin depender de ningún manifest.
-//  - Las peticiones a un origen distinto (la API del backend) nunca se
-//    interceptan ni cachean, sin depender de un nombre de dominio fijo.
+// Por qué: en este despliegue /api/* vive en el MISMO origen (functions/ hace
+// de proxy hacia el backend real), así que cualquier regla de caché por origen
+// acababa guardando respuestas de la API en el dispositivo: datos de otra
+// cuenta, ventas, tokens y facturas, servidos sin red y sin control de versión.
+// Las respuestas de la API las maneja el código (IndexedDB con namespace por
+// cuenta + caché explícita de catálogo/stock), no el service worker.
+//
+// Tampoco hay Background Sync aquí: el navegador no lo ejecuta sin página
+// abierta, así que no se registra ni se anuncia. La sincronización la dispara la
+// app (arranque, foreground, reconexión y el botón manual).
 
-const CACHE = 'cubagest-v5'; // v5: rebrand (iconos/favicons Brand Kit) + selects nativos + login 3D
+const CACHE = 'cubagest-v6';
 const APP_SHELL = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', event => {
@@ -26,38 +27,62 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
+      // Al subir de versión se borra TODO lo anterior: así desaparecen de un
+      // plumazo las respuestas de /api que hubiera cacheado la v5.
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
+const isApiPath = (pathname) => pathname === '/api' || pathname.startsWith('/api/');
+
 self.addEventListener('fetch', event => {
-  // Solo interceptar GET.
-  if (event.request.method !== 'GET') return;
+  const req = event.request;
+  // Solo interceptar GET; POST/PUT/DELETE van directos a la red.
+  if (req.method !== 'GET') return;
 
-  const url = new URL(event.request.url);
+  let url;
+  try { url = new URL(req.url); } catch { return; }
 
-  // Cualquier petición a otro origen (p. ej. la API del backend en Railway,
-  // QvaPay, etc.) va siempre directo a la red, sin caché. Esto ya no depende
-  // de reconocer un nombre de dominio concreto.
+  // 1) Cualquier origen distinto (otra API, QvaPay, etc.) va siempre directo a
+  //    la red, sin caché.
   if (url.origin !== self.location.origin) return;
 
+  // 2) /api/* JAMÁS se intercepta ni se cachea, aunque esté en este mismo
+  //    origen. Sin respondWith() la petición sigue su curso normal.
+  if (isApiPath(url.pathname)) return;
+
+  // 3) Navegaciones: red primero (para recoger despliegues nuevos al instante)
+  //    y, si no hay red, el app shell cacheado.
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req)
+        .then(res => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then(c => c.put('/index.html', copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => caches.match('/index.html').then(cached => cached || caches.match('/')))
+    );
+    return;
+  }
+
+  // 4) Assets estáticos del mismo origen (JS/CSS con hash, imágenes, fuentes):
+  //    red primero con respuesta inmediata desde caché y actualización por
+  //    detrás ("stale-while-revalidate"). Cada build cambia los hashes, así que
+  //    no hace falta ningún manifest.
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      // Siempre se intenta la red primero, para que las actualizaciones
-      // (incluidos los bundles con hash nuevo tras un build) se detecten
-      // de inmediato en cuanto hay conexión.
-      const networkFetch = fetch(event.request)
+    caches.match(req).then(cached => {
+      const networkFetch = fetch(req)
         .then(response => {
-          if (response.ok) {
-            caches.open(CACHE).then(cache => cache.put(event.request, response.clone()));
+          if (response && response.ok) {
+            caches.open(CACHE).then(cache => cache.put(req, response.clone())).catch(() => {});
           }
           return response;
         })
         .catch(() => cached); // Sin red: usar lo cacheado, si existe.
-
-      // Si ya hay algo cacheado, se devuelve al instante mientras la red
-      // actualiza en segundo plano; si no hay nada cacheado, se espera la red.
       return cached || networkFetch;
     })
   );
