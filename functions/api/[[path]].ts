@@ -42,6 +42,19 @@ export const onRequest = async (context: { request: Request }) => {
   if (contentType) headers.set("content-type", contentType);
   const accept = context.request.headers.get("accept");
   if (accept) headers.set("accept", accept);
+  // IP real del cliente. Sin esto el backend no encontraba
+  // `cf-connecting-ip` y guardaba en cada audit log y cada rate limit la IP
+  // del edge de Cloudflare, no la del cliente: todos los usuarios de Cuba
+  // iban a parecer el mismo "cliente" y los audit logs no servían para nada.
+  //
+  // Este header lo pone Cloudflare en la petición que llega a Pages, no el
+  // navegador (no se puede falsear desde el cliente). El único caso donde
+  // un valor no confiable llegaría es alguien llamando al Worker
+  // directamente por workers.dev y poniendo su propio header — desde Cuba
+  // ese dominio está bloqueado, y aun así lo único que podría falsear es
+  // la IP de SU PROPIA petición en SU propio audit log.
+  const clientIp = context.request.headers.get("cf-connecting-ip");
+  if (clientIp) headers.set("cf-connecting-ip", clientIp);
 
   const init: RequestInit = {
     method,
