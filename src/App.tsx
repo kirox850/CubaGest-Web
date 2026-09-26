@@ -30,6 +30,7 @@ import Transferencias from "@/screens/Transferencias";
 import Usuarios from "@/screens/Usuarios";
 import Auditoria from "@/screens/Auditoria";
 import PlanModal from "@/screens/PlanModal";
+import NotificationsBell from "@/components/shared/NotificationsBell";
 import DiscountsAdmin from "@/screens/DiscountsAdmin";
 import CurrenciesSettings from "@/screens/CurrenciesSettings";
 
@@ -430,7 +431,13 @@ export default function App() {
           <BrandLogo size={32}/>
           <div style={{ color:"#ffffff", fontWeight:800, fontSize:15 }}>CubaGest</div>
         </div>
-        {/* Profile button */}
+        {/* Campanita de avisos + botón de perfil */}
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          {/* El header es oscuro: el icono va en blanco explícito, porque el
+              color por defecto (currentColor) saldría invisible sobre #0B1220. */}
+          <div style={{ ["--ink" as any]: "#ffffff" }}>
+            <NotificationsBell onNavigate={(path) => { const target = path.split("?")[0].replace(/^\//, ""); if (target) setActiveModule(target as any); }}/>
+          </div>
         <div style={{ position:"relative" as any }}>
           <button onClick={()=>setProfileOpen(v=>!v)} style={{ width:36, height:36, borderRadius:"50%", background:ROLES[user.role]?.color||"#888", color:"#ffffff", border:"none", cursor:"pointer", fontSize:14, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>
             {user.name?.charAt(0)}
@@ -488,6 +495,7 @@ export default function App() {
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
 

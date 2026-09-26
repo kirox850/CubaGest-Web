@@ -13,7 +13,7 @@
 // abierta, así que no se registra ni se anuncia. La sincronización la dispara la
 // app (arranque, foreground, reconexión y el botón manual).
 
-const CACHE = 'cubagest-v6';
+const CACHE = 'cubagest-v7';
 const APP_SHELL = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', event => {
@@ -90,4 +90,65 @@ self.addEventListener('fetch', event => {
 
 self.addEventListener('message', event => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
+
+// ─── AVISOS (push) ──────────────────────────────────────────────────────────
+// El service worker es lo que permite que el aviso aparezca con la pestaña
+// cerrada. Reglas:
+//
+//  1) Nunca se cachea nada de /api. Un aviso se pinta desde el payload del
+//     evento push, no desde una petición: así no hay forma de que un token o
+//     una factura acabe en una caché.
+//  2) Al hacer clic se abre la pantalla indicada en `link` y se cierra la
+//     notificación, en lugar de abrir una ventana nueva sin contexto.
+//  3) Si la app ya está abierta en una pestaña, se le avisa por postMessage
+//     para que actualice la lista sin recargar (el usuario podría estar
+//     cobrando en ese momento).
+
+self.addEventListener('push', event => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    // Payload ilegible: se muestra algo genérico en vez de nada, porque un
+    // aviso en blanco parece un fallo de la app.
+    data = { title: 'CubaGest', body: 'Tienes un aviso nuevo' };
+  }
+
+  const title = data.title || 'CubaGest';
+  const options = {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    // Mismo grupo para los avisos de CubaGest: en el panel de notificaciones
+    // de Android se agrupan en vez de llenar la pantalla de tarjetas sueltas.
+    tag: data.id ? 'cubagest-' + data.id : 'cubagest',
+    renotify: false,
+    data: { link: data.link || '/', kind: data.kind || '', id: data.id || '' },
+    // Un aviso de faltante en la caja o de un envío esperando aprobación no
+    // puede esperar a que la persona abra la app: vibrate + sonido.
+    requireInteraction: data.kind === 'closing.shortage' || data.kind === 'transfer.created',
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const link = (event.notification.data && event.notification.data.link) || '/';
+
+  event.waitUntil((async () => {
+    const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    // Si ya hay una pestaña abierta, se le pasa el aviso y se trae al frente
+    // en vez de abrir otra: dos pestañas de la misma app confunden.
+    for (const client of clientList) {
+      if (new URL(client.url).origin === self.location.origin) {
+        client.postMessage({ type: 'PUSH_RECEIVED', data: event.notification.data });
+        if (client.focus) return client.focus();
+        return;
+      }
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(link);
+  })());
 });

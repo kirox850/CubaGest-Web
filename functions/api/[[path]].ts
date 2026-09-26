@@ -72,7 +72,41 @@ export const onRequest = async (context: { request: Request }) => {
     init.duplex = "half";
   }
 
-  const backendResponse = await fetch(targetUrl, init);
+  // Límite de tiempo. Sin esto, si el backend se queda colgado (una consulta
+  // lenta, unWorker occupé) esta función se queda esperando hasta que Cloudflare
+  // la mate, y el usuario ve la pantalla cargando indefinidamente. Fallar a los
+  // 20 s con un 504 es mucho mejor que colgar: el cliente recibe un error
+  // claro y su app entra en modo sin conexión.
+  //
+  // 20 s, no 30: el POS avisa al cajero y guarda la venta localmente cuando la
+  // red falla, así que cortar antes es mejor que dejarlo pensando.
+  const timeoutMs = 20000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  init.signal = controller.signal;
+
+  let backendResponse: Response;
+  try {
+    backendResponse = await fetch(targetUrl, init);
+  } catch (err: any) {
+    const agotado = err?.name === "AbortError" || /abort/i.test(err?.message || "");
+    console.error(
+      agotado
+        ? `Proxy: ${method} ${targetPath} pasó de ${timeoutMs / 1000}s sin respuesta`
+        : `Proxy: ${method} ${targetPath} falló al contactar el backend: ${err?.message || err}`
+    );
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: agotado
+          ? "El servidor tardó demasiado en responder. Revisa tu conexión."
+          : "No se pudo contactar el servidor.",
+      }),
+      { status: agotado ? 504 : 502, headers: { "Content-Type": "application/json" } },
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 
   return new Response(backendResponse.body, {
     status: backendResponse.status,
