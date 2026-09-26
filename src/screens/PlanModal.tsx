@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/api";
 import Icon from "@/components/shared/Icon";
 import { Modal, btn } from "@/components/shared/primitives";
-import { showAlert } from "@/components/shared/dialogs";
+import { showAlert, showConfirm } from "@/components/shared/dialogs";
 
 // ─── PLAN Y SUSCRIPCIÓN (modal desde el perfil) ────────────────────────────────
 const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
@@ -46,6 +46,7 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
   const subStatus     = planInfo?.subscriptionStatus || user?.company?.subscriptionStatus;
   const isTrial       = subStatus === "trial";
   const isFailed      = subStatus === "failed";
+  const isCancelled   = subStatus === "cancelled";
   const planExpiry    = user?.company?.planExpiry;
   const daysLeft      = planExpiry ? Math.max(0, Math.ceil((new Date(planExpiry).getTime() - Date.now()) / 86400000)) : null;
 
@@ -69,6 +70,26 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
       if (data?.url) window.location.href = data.url;
     } catch(e: any) { showAlert("Error al conectar con QvaPay: " + e.message); }
     finally { setLoading(false); setSelectedPlan(null); }
+  };
+
+  // Cancelar la suscripción. Antes esto NO existía: el texto de abajo decía
+  // "escríbenos y desactivamos la renovación", o sea que para cancelar había
+  // que escribir un correo. Ahora hay un botón, que es lo que la app promete.
+  const handleCancel = async () => {
+    const ok = await showConfirm(
+      "¿Cancelar tu suscripción?\n\nNo se te cobra nada más. Conservas el plan hasta que termine el periodo que ya pagaste y después vuelves a Free automáticamente."
+    );
+    if (!ok) return;
+    try {
+      setLoading(true);
+      await apiFetch("/subscription/cancel", { method: "POST" });
+      showAlert("Suscripción cancelada. No se realizará ningún cobro más.");
+      apiFetch("/subscription").then(setPlanInfo).catch(() => {});
+    } catch (e:any) {
+      showAlert("No se pudo cancelar: " + (e.message || "inténtalo de nuevo"));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleWhatsApp = (planKey: string, priceUSD: number) => {
@@ -116,6 +137,30 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
               Estás usando el plan Empresarial gratis. Al vencer pasarás automáticamente al plan Free.
             </div>
           </div>
+        )}
+
+        {/* Banner cancelado */}
+        {isCancelled && (
+          <div style={{ background:"var(--input-bg)", border:"1px solid var(--line)", borderRadius:12, padding:14 }}>
+            <div style={{ fontWeight:700, fontSize:14, color:"var(--ink)", display:"inline-flex", alignItems:"center", gap:6 }}>
+              <Icon name="check" size={15}/>Suscripción cancelada
+            </div>
+            <div style={{ fontSize:12, color:"var(--muted)", marginTop:4 }}>
+              No se realizará ningún cobro más. {daysLeft !== null && daysLeft > 0
+                ? `Conservas el plan ${daysLeft} día${daysLeft !== 1 ? "s" : ""} más y después vuelves a Free.`
+                : "Tu plan volverá a Free al terminar el periodo actual."}
+            </div>
+          </div>
+        )}
+
+        {/* Botón de cancelar: solo para admins con un plan de pago activo */}
+        {!isCancelled && user?.role === "admin" && (effectivePlan === "pro" || effectivePlan === "empresarial") && (
+          <button
+            style={{ ...btn("secondary"), fontSize:12, color:"#DC2626", borderColor:"rgba(220,38,38,0.30)" }}
+            onClick={handleCancel}
+            disabled={loading}>
+            Cancelar suscripción
+          </button>
         )}
 
         {/* Banner pago fallido */}
@@ -207,7 +252,7 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
         </div>
 
         <div style={{ fontSize:12, color:"var(--muted)", textAlign:"center" as const }}>
-          Los pagos por QvaPay se renuevan automáticamente cada 30 días. Si no quieres renovar, escríbenos antes de la fecha del próximo cobro y desactivamos la renovación.
+          Los pagos por QvaPay se renuevan automáticamente cada 30 días. Si no quieres renovar, usa el botón "Cancelar suscripción": no se te cobra más y conservas lo que ya pagaste hasta que termine el periodo.
         </div>
 
         <button style={{ ...btn("secondary"), fontSize:14 }} onClick={onClose}>Cerrar</button>
