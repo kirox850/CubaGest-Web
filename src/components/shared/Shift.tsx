@@ -18,6 +18,8 @@ export type ShiftInfo = {
   locationName: string;
   startedAt: string;
   openingReadingId?: string | null;
+  /** Con cuánto dinero arrancó la caja, por moneda. */
+  baseCash?: Record<string, number>;
 };
 
 export type AssignedCaja = { id: string; name: string };
@@ -62,8 +64,8 @@ export function useShift(user: any) {
     } catch { /* almacenamiento lleno: no es motivo para romper nada */ }
   };
 
-  const abrirTurno = useCallback(async (locationId: string) => {
-    const r = await apiFetch("/shift/start", { method: "POST", body: { locationId } });
+  const abrirTurno = useCallback(async (locationId: string, baseCash?: Record<string, number>) => {
+    const r = await apiFetch("/shift/start", { method: "POST", body: { locationId, baseCash } });
     const nuevo: ShiftInfo = r?.shift;
     if (nuevo) { setShift(nuevo); recordar(nuevo, cajas); }
     return nuevo;
@@ -97,13 +99,22 @@ export const AbrirTurno = ({
 }) => {
   const [eligiendo, setEligiendo] = useState(false);
   const [offline, setOffline] = useState(false);
+  // El dinero con el que abre la caja, por moneda. Se pregunta porque es el
+  // dato del que depende toda la conciliación: sin él, cualquier faltante es
+  // imposible de atribuir.
+  const [monedas, setMonedas] = useState<{ cur: string; valor: string }[]>([{ cur: "CUP", valor: "" }]);
 
   if (!abierta) return null;
 
   const empezar = async (locationId: string) => {
     try {
       setEligiendo(true);
-      const r = await apiFetch("/shift/start", { method: "POST", body: { locationId } });
+      const baseCash: Record<string, number> = {};
+      for (const m of monedas) {
+        const n = Number(m.valor);
+        if (Number.isFinite(n) && n > 0) baseCash[m.cur] = n;
+      }
+      const r = await apiFetch("/shift/start", { method: "POST", body: { locationId, baseCash } });
       onListo(r?.shift);
     } catch (e: any) {
       showToast(e.message || "No se pudo abrir el turno", "error");
@@ -128,7 +139,9 @@ export const AbrirTurno = ({
               Pídele al administrador de tu negocio que te asigne una caja desde
               Configuración. Te puede asignar varias si rotas entre varios mostradores.
             </div>
-          ) : cajas.map((c) => (
+          ) : (
+            <>
+            {cajas.map((c) => (
             <button key={c.id} onClick={() => empezar(c.id)} disabled={eligiendo}
               style={{ ...btn("secondary"), display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", textAlign: "left" as const, opacity: eligiendo ? 0.6 : 1 }}>
               <Icon name="pos" size={20} color="#64748B" />
@@ -136,6 +149,42 @@ export const AbrirTurno = ({
               <Icon name="check" size={16} color="var(--brand)" />
             </button>
           ))}
+
+          <div style={{ marginTop: 6, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", marginBottom: 3 }}>¿Con cuánto dinero abres la caja?</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5, marginBottom: 10 }}>
+              Es el fondo con el que sales hoy. Al final del turno se compara con lo
+              que haya y con lo que se vendió, para saber si falta algo.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {monedas.map((m, i) => (
+                <div key={i} style={{ display: "flex", gap: 8 }}>
+                  <input
+                    value={m.cur} onChange={e => setMonedas(monedas.map((x, j) => j === i ? { ...x, cur: e.target.value.toUpperCase().slice(0, 8) } : x))}
+                    style={{ ...inp, width: 92, textTransform: "uppercase" as any }}
+                    aria-label="Moneda"
+                  />
+                  <input
+                    type="number" inputMode="decimal" min={0} step="0.01"
+                    value={m.valor} placeholder="0"
+                    onChange={e => setMonedas(monedas.map((x, j) => j === i ? { ...x, valor: e.target.value } : x))}
+                    style={{ ...inp, flex: 1 }}
+                    aria-label="Cantidad"
+                  />
+                  {monedas.length > 1 && (
+                    <button onClick={() => setMonedas(monedas.filter((_, j) => j !== i))}
+                      style={{ ...btn("secondary"), padding: "0 12px" }} aria-label="Quitar moneda">−</button>
+                  )}
+                </div>
+              ))}
+              <button onClick={() => setMonedas([...monedas, { cur: "", valor: "" }])}
+                style={{ ...btn("ghost"), fontSize: 12, alignSelf: "flex-start" }}>
+                <Icon name="plus" size={13} />Añadir otra moneda
+              </button>
+            </div>
+          </div>
+            </>
+          )}
 
           {offline && (
             <div style={{ fontSize: 12, color: "#C2410C" }}>

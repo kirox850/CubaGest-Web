@@ -252,7 +252,17 @@ export default function App() {
         await updateClosingStatus(c.key, 'syncing');
         await apiFetch("/closing/confirm", {
           method: "POST",
-          body: { initialReadingId: c.initialReadingId, items: c.items, notes: c.notes ?? undefined },
+          // countedCash y countedAt viajan del móvil: sin ellos, un cierre
+          // hecho sin conexión llegaría sin el dinero contado y sin la hora
+          // real del conteo, y el descuadre se mediría contra el momento en
+          // que volvió la conexión en vez de cuando se contó.
+          body: {
+            initialReadingId: c.initialReadingId,
+            items: c.items,
+            notes: c.notes ?? undefined,
+            countedCash: c.countedCash ?? {},
+            countedAt: new Date(c.timestamp).toISOString(),
+          },
         });
         await updateClosingStatus(c.key, 'synced');
         enviados++;

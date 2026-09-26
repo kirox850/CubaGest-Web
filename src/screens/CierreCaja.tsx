@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
+import { DineroCierre, ExplicarDescuadre } from "@/components/shared/DineroCierre";
+import { MovimientosDinero } from "@/screens/MovimientosDinero";
 import { useOnlineStatus } from "@/hooks/useOnline";
 import { useLocations, useReadings } from "@/hooks/useLocations";
 import {
@@ -11,7 +13,7 @@ import { Badge, Field, Modal, Spinner, btn, inp, sel } from "@/components/shared
 
 // ─── CIERRE DE CAJA ───────────────────────────────────────────────────────────
 const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: string) => void }) => {
-  const [view, setView]               = useState<"list"|"selectReading"|"validate"|"detail">("list");
+  const [view, setView]               = useState<"list"|"selectReading"|"validate"|"detail"|"dinero">("list");
   const [closings, setClosings]       = useState<any[]>([]);
   const [pendientes, setPendientes]   = useState<PendingClosing[]>([]);
   const [readingLocationId, setReadingLocationId] = useState("");
@@ -19,13 +21,16 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
   // Ubicaciones y lecturas se resuelven con red O desde la copia local. Sin red
   // esto no se puede hacer un cierre, y antes fallaba justo ahí.
   const online = useOnlineStatus();
-  const { locations } = useLocations(user);
+  const { locations, locationId } = useLocations(user);
   const { readings } = useReadings(user);
   const account = { companyId: user?.company?.id || "", userId: user?.id || "" };
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
   const [selectedReading, setSelectedReading] = useState<any>(null);
   const [preview, setPreview]         = useState<any>(null);
+  // El dinero contado en la caja, por moneda. Se pide al confirmar, porque es
+  // un dato del cajero: el servidor solo puede saber cuánto DEBERÍA haber.
+  const [contado, setContado]         = useState<Record<string, number>>({});
   const [validatedItems, setValidatedItems]   = useState<Record<string, number>>({});
   const [detailClosing, setDetailClosing]     = useState<any>(null);
   const [confirmReading, setConfirmReading]   = useState(false);
@@ -118,6 +123,13 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
     finally { setSaving(false); }
   };
 
+  // Tras explicar un descuadre, el cierre cambia de estado en el servidor: sin
+  // recargar, la pantalla seguiría diciendo "pendiente" de algo ya resuelto.
+  const reloadDetail = async (id: string) => {
+    try { setDetailClosing(await apiFetch(`/closing/${id}`)); } catch { /* se queda lo que hay */ }
+    loadClosings();
+  };
+
   const confirmClosing = async () => {
     try {
       setSaving(true);
@@ -131,21 +143,38 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         await saveClosingOffline(account, {
           initialReadingId: selectedReading.id,
           items,
+          countedCash: contado,
           notes,
           locationId: selectedReading.locationId ?? null,
           locationName: loc?.name ?? null,
+          // La HORA del conteo, no la de la subida: de esto depende que la
+          // ventana para explicar un descuadre no empiece a contar cuando
+          // por fin volvió internet.
           timestamp: Date.now(),
         });
         showToast("Cierre guardado en el móvil. Se enviará solo cuando vuelva el internet.", "success");
-        setView("list"); setPreview(null); setNotes("");
+        setView("list"); setPreview(null); setNotes(""); setContado({});
         setValidatedItems({});
         loadClosings();
         return;
       }
 
-      await apiFetch("/closing/confirm", { method: "POST", body: { initialReadingId: selectedReading.id, items, notes } });
-      showToast("Cierre registrado correctamente", "success");
-      setView("list"); setPreview(null); setNotes(""); loadClosings();
+      await apiFetch("/closing/confirm", {
+        method: "POST",
+        body: {
+          initialReadingId: selectedReading.id, items, notes,
+          countedCash: contado,
+          countedAt: new Date().toISOString(),
+        },
+      });
+      const descuadra = Object.keys(preview?.cash?.esperado || {})
+        .some((k) => Math.abs((Number(contado[k] || 0)) - (preview.cash.esperado[k] || 0)) > 0.005);
+      showToast(
+        descuadra ? "Cierre registrado. Queda pendiente por el descuadre de dinero."
+                  : "Cierre registrado correctamente",
+        descuadra ? "warning" : "success",
+      );
+      setView("list"); setPreview(null); setNotes(""); setContado({}); loadClosings();
     } catch (e: any) { showToast(e.message, "error"); }
     finally { setSaving(false); }
   };
@@ -168,6 +197,30 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
   const td  = (highlight?: boolean) => ({ padding:"10px 12px", borderBottom:"1px solid var(--input-bg)", background: highlight ? "rgba(249,115,22,0.08)" : "var(--card)" });
 
   // ── Lista ───────────────────────────────────────────────────────────────────
+  if (view === "dinero") {
+    // La caja activa es la del turno del cajero, o la que tenga seleccionada.
+    const loc = locations.find((l: any) => l.id === locationId);
+    return (
+      <div style={{ maxWidth:900, margin:"0 auto" }}>
+        <button style={{ ...btn("ghost"), marginBottom:14, paddingLeft:0 }} onClick={() => setView("list")}>
+          ← Volver a cierres
+        </button>
+        {loc ? (
+          <MovimientosDinero
+            user={user}
+            showToast={showToast}
+            locationId={loc.id}
+            locationName={loc.name}
+          />
+        ) : (
+          <div style={{ padding:22, borderRadius:12, background:"var(--input-bg)", textAlign:"center", fontSize:13, color:"var(--muted)" }}>
+            No hay ninguna caja a la que mirar el dinero.
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (view === "list") return (
     <div style={{ maxWidth:900, margin:"0 auto" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20, flexWrap:"wrap" as const, gap:12 }}>
@@ -175,7 +228,10 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
           <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"var(--ink)" }}>Cierre de Caja</h2>
           <p style={{ margin:0, fontSize:13, color:"var(--muted)" }}>Conciliación de ventas, stock e ingresos</p>
         </div>
-        <div style={{ display:"flex", gap:10 }}>
+        <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+          <button style={{ ...btn("secondary"), fontSize:13 }} onClick={() => setView("dinero")}>
+            <Icon name="facturacion" size={15}/>Entradas y salidas
+          </button>
           {isAdmin && (
             <button style={{ ...btn("secondary"), fontSize:13 }} onClick={() => setConfirmReading(true)}>
               <Icon name="refresh" size={15}/>Lectura de apertura
@@ -442,6 +498,10 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
   if (view === "detail" && detailClosing) {
     const c = detailClosing;
     const hasShortage = c.items?.some((i: any) => i.shortage > 0.001);
+    const provisional = c.status === "provisional";
+    const hasta = c.provisionalUntil ? new Date(c.provisionalUntil) : null;
+    const horasRestantes = hasta
+      ? Math.max(0, Math.ceil((hasta.getTime() - Date.now()) / 3_600_000)) : null;
     return (
       <div style={{ maxWidth:900, margin:"0 auto" }}>
         <button style={{ ...btn("ghost"), marginBottom:16, paddingLeft:0 }} onClick={() => setView("list")}>← Volver a cierres</button>
@@ -469,6 +529,50 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
           Período: {fmtDate(c.periodStart)} → {fmtDate(c.periodEnd)}
           {c.notes && <span> · <em>{c.notes}</em></span>}
         </div>
+
+        {/* ── El dinero ── */}
+        {(c.countedCash && Object.keys(c.countedCash).length > 0) || (c.expectedCash && Object.keys(c.expectedCash).length > 0) ? (
+          <div style={{ background:"var(--card)", border:"1px solid var(--line)", borderRadius:14, padding:"14px 16px", marginBottom:18 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, gap:10, flexWrap:"wrap" }}>
+              <span style={{ fontSize:13, fontWeight:800, color:"var(--ink)" }}>Dinero en la caja</span>
+              {c.status === "cerrado"   && <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:999, background:"rgba(5,150,105,0.12)", color:"#047857" }}>Cuadró</span>}
+              {provisional               && <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:999, background:"rgba(217,119,6,0.14)", color:"#92400E" }}>Pendiente de explicación</span>}
+              {c.status === "resuelto"  && <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:999, background:"rgba(5,150,105,0.12)", color:"#047857" }}>Explicado</span>}
+            </div>
+            {Object.keys({ ...(c.expectedCash || {}), ...(c.countedCash || {}) }).map((k) => {
+              const e = c.expectedCash?.[k] || 0;
+              const ct = c.countedCash?.[k] || 0;
+              const d = Math.round((ct - e) * 100) / 100;
+              return (
+                <div key={k} style={{ display:"grid", gridTemplateColumns:"auto 1fr 1fr 1fr", gap:10, alignItems:"baseline", padding:"5px 0", borderBottom:"1px solid var(--line)", fontSize:13 }}>
+                  <span style={{ fontWeight:700, color:"var(--ink)" }}>{k}</span>
+                  <span style={{ color:"var(--muted)", textAlign:"right" as const }}>Debía: <strong style={{ color:"var(--ink)" }}>{fmt(e)}</strong></span>
+                  <span style={{ color:"var(--muted)", textAlign:"right" as const }}>Contado: <strong style={{ color:"var(--ink)" }}>{fmt(ct)}</strong></span>
+                  <span style={{ textAlign:"right" as const, fontWeight:800, color: Math.abs(d) > 0.005 ? (d < 0 ? "#B91C1C" : "#047857") : "var(--muted)" }}>
+                    {Math.abs(d) > 0.005 ? (d < 0 ? `−${fmt(Math.abs(d))}` : `+${fmt(Math.abs(d))}`) : "—"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {provisional && (
+          <div style={{ background:"rgba(217,119,6,0.07)", border:"1px solid rgba(217,119,6,0.30)", borderRadius:14, padding:"14px 16px", marginBottom:18 }}>
+            <div style={{ fontSize:13.5, fontWeight:800, color:"#92400E", marginBottom:3 }}>Este cierre no cuadró el dinero</div>
+            <div style={{ fontSize:12.5, color:"#B45309", lineHeight:1.55, marginBottom:12 }}>
+              Queda pendiente hasta que alguien explique el descuadre.
+              {horasRestantes !== null && horasRestantes > 0
+                ? ` Tienes ${horasRestantes} hora${horasRestantes === 1 ? "" : "s"} para hacerlo.`
+                : " Ya se venció la ventana y se cerró con el descuadre tal cual."}
+            </div>
+            <ExplicarDescuadre
+              closing={c}
+              showToast={showToast}
+              onResuelto={() => reloadDetail(c.id)}
+            />
+          </div>
+        )}
 
         {hasShortage && (
           <div style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.30)", borderRadius:10, padding:10, marginBottom:12, fontSize:13, color:"#C2410C", fontWeight:600, display:"inline-flex", alignItems:"flex-start", gap:6 }}>

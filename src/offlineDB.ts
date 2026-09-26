@@ -645,6 +645,10 @@ export interface PendingClosing {
   account: string;
   initialReadingId: string;
   items: { productId: string; stockValidated: number }[];
+  /** El efectivo contado, por moneda. Sin conexión el servidor no puede
+   *  saberlo (solo sabe cuánto debería haber), así que si no viaja aquí el
+   *  cierre de un cajero sin internet llega sin su dinero. */
+  countedCash?: Record<string, number>;
   notes?: string | null;
   locationId?: string | null;
   locationName?: string | null;
