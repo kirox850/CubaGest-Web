@@ -25,7 +25,7 @@ const DB_NAME = 'cubagest_offline_v2';
 // a la cuenta que entre ahora (mismo criterio que en la app móvil).
 const LEGACY_DB_NAME = 'cubagest_offline';
 const LEGACY_PURGE_FLAG = 'cubagest_offline_legacy_purged';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'conflict';
 
@@ -178,6 +178,27 @@ function openDB(): Promise<IDBDatabase> {
 
       // Metadatos locales (contadores, marcas de tiempo, última ubicación).
       db.createObjectStore('app_meta', { keyPath: 'key' });
+
+      // v2 ── Lo que hacía falta para que el modo sin conexión sirviera de algo:
+
+      // Ubicaciones de la empresa. Sin esto, al arrancar sin red no se sabe
+      // en qué caja/almacén se está, y como el namespace del stock incluye la
+      // ubicación, no se puede ni leer el catálogo cacheado.
+      const ls = db.createObjectStore('locations', { keyPath: 'key' });
+      ls.createIndex('account', 'account');
+
+      // Lecturas de apertura pendientes de cerrar. Son la "base" del conteo, y
+      // viven en el servidor; sin copia local el cierre no se puede empezar
+      // sin conexión.
+      const rs = db.createObjectStore('readings', { keyPath: 'key' });
+      rs.createIndex('account', 'account');
+
+      // Cierres contados sin conexión, a la espera de enviarse. El conteo lo
+      // hace la persona en el momento; los faltantes los calcula el servidor al
+      // enviarse (ver notes en la cola).
+      const cs = db.createObjectStore('closings_queue', { keyPath: 'key' });
+      cs.createIndex('account', 'account');
+      cs.createIndex('by_time', ['account', 'timestamp']);
     };
 
     req.onsuccess = () => {
@@ -532,5 +553,140 @@ export async function saveSyncLog(account: OfflineAccount, log: Omit<SyncLog, 'i
   const fullLog: SyncLog = { ...log, id: `${accountKey(account)}::sync-${Date.now()}`, account: accountKey(account) };
   const t = tx(db, ['sync_log'], 'readwrite');
   t.objectStore('sync_log').put(fullLog);
+  await txDone(t);
+}
+
+
+// ── Ubicaciones (v2) ─────────────────────────────────────────────────────────
+// Sin esto el modo sin conexión no arranca: cada pantalla necesita saber en qué
+// ubicación está, y esa información venía de /locations (que sin red no existe).
+// Además el namespace del stock incluye la ubicación, así que sin ella tampoco
+// se podría ni leer el catálogo cacheado.
+
+export interface OfflineLocation {
+  id: string;
+  name: string;
+  type: string;
+  active?: boolean;
+}
+
+const locKey = (a: OfflineAccount, id: string) => `${accountKey(a)}::${seg(id)}`;
+
+export async function cacheLocations(account: OfflineAccount, locations: OfflineLocation[]): Promise<void> {
+  const db = await openDB();
+  const t = tx(db, ['locations'], 'readwrite');
+  const store = t.objectStore('locations');
+  // Reemplazo completo: si una ubicación se desactivó en el servidor, aquí ya no
+  // debe aparecer (si no, el POS sin conexión ofrecería una caja que ya no existe).
+  const old = await reqToPromise(store.index('account').getAllKeys(IDBKeyRange.only(accountKey(account))));
+  for (const k of (old ?? [])) store.delete(k);
+  for (const l of locations) {
+    store.put({ key: locKey(account, l.id), account: accountKey(account), id: l.id, name: l.name, type: l.type, active: l.active });
+  }
+  await txDone(t);
+}
+
+export async function getOfflineLocations(account: OfflineAccount): Promise<OfflineLocation[]> {
+  const db = await openDB();
+  const rows = await reqToPromise(
+    tx(db, ['locations']).objectStore('locations').index('account').getAll(IDBKeyRange.only(accountKey(account)))
+  ) as any[];
+  return (rows ?? []).map(({ key, account: _a, ...rest }) => rest);
+}
+
+// ── Lecturas de apertura (v2) ────────────────────────────────────────────────
+
+export interface OfflineReading {
+  id: string;
+  locationId: string;
+  date: string;
+  notes?: string | null;
+  itemCount?: number;
+}
+
+/** Copia local de las lecturas que aún no se han cerrado. */
+export async function cacheReadings(account: OfflineAccount, readings: OfflineReading[]): Promise<void> {
+  const db = await openDB();
+  const t = tx(db, ['readings'], 'readwrite');
+  const store = t.objectStore('readings');
+  const old = await reqToPromise(store.index('account').getAllKeys(IDBKeyRange.only(accountKey(account))));
+  for (const k of (old ?? [])) store.delete(k);
+  for (const r of readings) {
+    store.put({ key: `${accountKey(account)}::${seg(r.id)}`, account: accountKey(account), ...r });
+  }
+  await txDone(t);
+}
+
+export async function getOfflineReadings(account: OfflineAccount): Promise<OfflineReading[]> {
+  const db = await openDB();
+  const rows = await reqToPromise(
+    tx(db, ['readings']).objectStore('readings').index('account').getAll(IDBKeyRange.only(accountKey(account)))
+  ) as any[];
+  return (rows ?? []).map(({ key, account: _a, ...rest }) => rest);
+}
+
+// ── Cola de cierres sin conexión (v2) ───────────────────────────────────────
+//
+// El conteo se hace aquí y ahora, en la bodega, sin red. Lo que se guarda es el
+// CONTEO (stockValidado de cada producto) más de qué lectura salió.
+//
+// Lo que NO se calcula aquí son los faltantes: eso lo hace el servidor al
+// enviarse, porque necesita las ventas reales del periodo, y el móvil no las
+// tiene todas (las que ya se sincronizaron no están en el dispositivo).
+// Calcularlo en local daría faltantes inventados y descuentes de stock
+// equivocados, que es peor que no cerrar.
+//
+// El reintento es seguro: el servidor rechaza con 409 una lectura ya cerrada,
+// así que si el primer envío sí entró pero se perdió la respuesta, el segundo
+// no duplica nada.
+
+export interface PendingClosing {
+  key: string;
+  account: string;
+  initialReadingId: string;
+  items: { productId: string; stockValidated: number }[];
+  /** El efectivo contado, por moneda. Sin conexión el servidor no puede
+   *  saberlo (solo sabe cuánto debería haber), así que si no viaja aquí el
+   *  cierre de un cajero sin internet llega sin su dinero. */
+  countedCash?: Record<string, number>;
+  notes?: string | null;
+  locationId?: string | null;
+  locationName?: string | null;
+  timestamp: number;
+  status: 'pending' | 'syncing' | 'synced' | 'conflict';
+  error?: string;
+}
+
+export async function saveClosingOffline(
+  account: OfflineAccount,
+  input: Omit<PendingClosing, 'key' | 'account' | 'status'> & { status?: 'pending' }
+): Promise<PendingClosing> {
+  const db = await openDB();
+  const row: PendingClosing = {
+    ...input,
+    key: `${accountKey(account)}::${input.timestamp}::${input.initialReadingId.slice(0, 8)}`,
+    account: accountKey(account),
+    status: input.status ?? 'pending',
+  };
+  const t = tx(db, ['closings_queue'], 'readwrite');
+  t.objectStore('closings_queue').put(row);
+  await txDone(t);
+  return row;
+}
+
+export async function getPendingClosings(account: OfflineAccount): Promise<PendingClosing[]> {
+  const db = await openDB();
+  const rows = await reqToPromise(
+    tx(db, ['closings_queue']).objectStore('closings_queue').index('account').getAll(IDBKeyRange.only(accountKey(account)))
+  ) as PendingClosing[];
+  return (rows ?? []).filter((r) => r.status !== 'synced').sort((a, b) => a.timestamp - b.timestamp);
+}
+
+export async function updateClosingStatus(key: string, status: PendingClosing['status'], error?: string): Promise<void> {
+  const db = await openDB();
+  const t = tx(db, ['closings_queue'], 'readwrite');
+  const store = t.objectStore('closings_queue');
+  const row = await reqToPromise(store.get(key)) as PendingClosing | undefined;
+  if (row) store.put({ ...row, status, error });
   await txDone(t);
 }

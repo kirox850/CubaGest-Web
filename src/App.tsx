@@ -2,12 +2,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   cacheProducts, getPendingSales, getAllOfflineSales, updateSaleStatus,
+  getPendingClosings, updateClosingStatus,
   saveSyncLog, restoreLocalStock, resetStuckSyncingSales, setSaleLocationOnce,
   getLastLocationId, type OfflineAccount, type OfflineSale,
 } from "@/offlineDB";
 import { PRIVACY_POLICY_MD, TERMS_MD } from "@/legalContent";
 import { apiFetch, getToken, saveToken, logout, ApiError } from "@/lib/api";
-import { useOnlineStatus } from "@/hooks/useOnline";
+import { useOnlineStatus, usePendingClosingsCount } from "@/hooks/useOnline";
 import { ROLES } from "@/config/constants";
 
 import Icon from "@/components/shared/Icon";
@@ -30,6 +31,7 @@ import Transferencias from "@/screens/Transferencias";
 import Usuarios from "@/screens/Usuarios";
 import Auditoria from "@/screens/Auditoria";
 import PlanModal from "@/screens/PlanModal";
+import Configuracion from "@/screens/Configuracion";
 import NotificationsBell from "@/components/shared/NotificationsBell";
 import DiscountsAdmin from "@/screens/DiscountsAdmin";
 import CurrenciesSettings from "@/screens/CurrenciesSettings";
@@ -94,6 +96,8 @@ export default function App() {
   const [toast, setToast]           = useState<any>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [configTab, setConfigTab] = useState<"caja"|"monedas"|"descuentos"|"usuarios"|"auditoria"|"plan">("caja");
   const [discountsOpen, setDiscountsOpen] = useState(false);
   const [currenciesOpen, setCurrenciesOpen] = useState(false);
   // Tour de bienvenida: se muestra UNA sola vez (bandera persistente).
@@ -152,6 +156,7 @@ export default function App() {
     ? { companyId: user.company?.id || user.companyId || "", userId: user.id || "" }
     : null;
   const hasAccount = !!(account?.companyId && account?.userId);
+  const pendingClosings = usePendingClosingsCount(account);
 
   // Al abrir la app, recuperamos cualquier venta offline que haya quedado
   // "colgada" en estado 'syncing' por un cierre/recarga anterior en medio
@@ -231,6 +236,47 @@ export default function App() {
   // PENDIENTES: no relee el catálogo entero ni hace lecturas de relleno.
   // manual=true muestra mensajes también cuando no hay nada que sincronizar o
   // ya hay una sincronización en curso, para dar feedback claro al usuario.
+  /**
+   * Envía los cierres que se contaron sin conexión.
+   *
+   * El reintento es seguro: si el cierre ya se había registrado y solo se perdió
+   * la respuesta, el servidor responde 409 (lectura ya cerrada) y se marca como
+   * enviado igual, porque el cierre SÍ está. Nunca duplica un cierre.
+   */
+  const syncClosingsOffline = async (acc: { companyId: string; userId: string }): Promise<number> => {
+    const pendientes = await getPendingClosings(acc);
+    if (pendientes.length === 0) return 0;
+    let enviados = 0;
+    for (const c of pendientes) {
+      try {
+        await updateClosingStatus(c.key, 'syncing');
+        await apiFetch("/closing/confirm", {
+          method: "POST",
+          // countedCash y countedAt viajan del móvil: sin ellos, un cierre
+          // hecho sin conexión llegaría sin el dinero contado y sin la hora
+          // real del conteo, y el descuadre se mediría contra el momento en
+          // que volvió la conexión en vez de cuando se contó.
+          body: {
+            initialReadingId: c.initialReadingId,
+            items: c.items,
+            notes: c.notes ?? undefined,
+            countedCash: c.countedCash ?? {},
+            countedAt: new Date(c.timestamp).toISOString(),
+          },
+        });
+        await updateClosingStatus(c.key, 'synced');
+        enviados++;
+      } catch (e: any) {
+        // 409 = la lectura ya estaba cerrada: el trabajo está hecho, solo se
+        // perdió la respuesta la primera vez. No se reintenta para siempre.
+        const yaHecho = e?.status === 409;
+        await updateClosingStatus(c.key, yaHecho ? 'synced' : 'pending', yaHecho ? undefined : (e?.message || "sin respuesta"));
+        if (yaHecho) enviados++;
+      }
+    }
+    return enviados;
+  };
+
   const runSync = async (manual = false) => {
     if (!hasAccount) return;
     if (syncRef.current) {
@@ -238,9 +284,11 @@ export default function App() {
       return;
     }
     const acc = account!;
+
     const pending = await getPendingSales(acc);
     if (pending.length === 0) {
       if (manual) showToast("No hay ventas pendientes por sincronizar","info");
+      await syncClosingsOffline(acc);
       return;
     }
 
@@ -350,6 +398,14 @@ export default function App() {
         await cacheProducts({ ...acc, locationId }, items);
       } catch { /* sin red otra vez: se reintenta en la próxima venta */ }
     }
+
+    // Los cierres van AL FINAL, y no por capricho: un cierre se calcula con las
+    // ventas que el servidor tenga en ese momento. Si se enviara antes, el
+    // cierre creería que no se vendió nada durante el turno, marcaría como
+    // faltante todo lo que el cajero vendió sin conexión, y al llegar las
+    // ventas después descontarían el stock otra vez encima del conteo.
+    const cerrados = await syncClosingsOffline(acc);
+    if (cerrados > 0) showToast(`${cerrados} cierre(s) sin conexión enviado(s) al servidor`,"success");
   };
 
   // Sincronizar al volver la conexión y en cada arranque/entrada de la app.
@@ -451,29 +507,14 @@ export default function App() {
                   <div style={{ marginTop:4 }}><Badge label={ROLES[user.role]?.label||user.role} color={ROLES[user.role]?.color||"#888"}/></div>
                 </div>
                 <div style={{ padding:8 }}>
-                  <button onClick={()=>{setPlanOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
-                    <Icon name="facturacion" size={16} color="#475569"/>Mi Plan
+                  {/* Antes aquí vivían cuatro entradas sueltas (Mi Plan,
+                      Usuarios, Auditoría y Monedas y Tasas) más el acceso por
+                      la barra lateral: la misma pantalla en dos sitios y
+                      distinto comportamiento. Ahora hay UNA y dentro están
+                      todas, como pestañas. */}
+                  <button onClick={()=>{setConfigOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
+                    <Icon name="settings" size={16} color="#475569"/>Configuración
                   </button>
-                  {["admin"].includes(user.role) && (
-                    <button onClick={()=>{openModule("usuarios");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
-                      <Icon name="usuarios" size={16} color="#475569"/>Usuarios
-                    </button>
-                  )}
-                  {perms.includes("auditoria") && (
-                    <button onClick={()=>{openModule("auditoria");setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
-                      <Icon name="auditoria" size={16} color="#475569"/>Auditoría
-                    </button>
-                  )}
-                  {user.role==="admin" && (
-                    <button onClick={()=>{setDiscountsOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
-                      <Icon name="facturacion" size={16} color="#475569"/>Descuentos
-                    </button>
-                  )}
-                  {user.role==="admin" && (
-                    <button onClick={()=>{setCurrenciesOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
-                      <Icon name="contabilidad" size={16} color="#475569"/>Monedas y Tasas
-                    </button>
-                  )}
                   <button onClick={()=>{setTourOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
                     <Icon name="dashboard" size={16} color="#475569"/>Ver tour de bienvenida
                   </button>
@@ -519,7 +560,7 @@ export default function App() {
       })()}
 
       {/* Offline banner */}
-      <OfflineBanner online={online} syncing={syncing} pending={pendingCount} conflicts={conflictCount}/>
+      <OfflineBanner online={online} syncing={syncing} pending={pendingCount} conflicts={conflictCount} pendingClosings={pendingClosings}/>
 
       {/* Reglas de visibilidad de la navegación. ¡Con !important! Los estilos
           inline de <nav> (display:flex) ganan por especificidad sobre esta hoja,
@@ -584,6 +625,17 @@ export default function App() {
 
 
       {planOpen && <PlanModal onClose={()=>setPlanOpen(false)} user={user}/>}
+
+      {/* El modal de Configuración, con pestañas laterales. */}
+      {configOpen && (
+        <Configuracion
+          user={user}
+          perms={perms}
+          showToast={showToast}
+          initialTab={configTab}
+          onClose={()=>setConfigOpen(false)}
+        />
+      )}
       {discountsOpen && <DiscountsAdmin showToast={showToast} onClose={()=>setDiscountsOpen(false)}/>}
       {currenciesOpen && <CurrenciesSettings showToast={showToast} onClose={()=>setCurrenciesOpen(false)}/>}
       {tourOpen && <WelcomeTour onDone={closeTour}/>}

@@ -6,7 +6,7 @@ import { Modal, Badge, Field, Spinner, btn, inp, sel } from "@/components/shared
 import { showConfirm } from "@/components/shared/dialogs";
 
 // ─── USUARIOS ─────────────────────────────────────────────────────────────────
-const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:string,t:string)=>void }) => {
+const Usuarios = ({ currentUser, showToast, embedded }: { currentUser: any; showToast: (m:string,t:string)=>void; embedded?: boolean }) => {
   const [users, setUsers]   = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal]   = useState(false);
@@ -69,8 +69,12 @@ const Usuarios = ({ currentUser, showToast }: { currentUser: any; showToast: (m:
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
-          <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"var(--ink)" }}>Usuarios y Roles</h2>
-          <p style={{ margin:0, fontSize:14, color:"var(--muted)" }}>{users.filter((u:any)=>u.active!==false).length} usuarios activos de {users.length} registrados</p>
+          {/* Dentro del modal de Configuración el título ya lo pone la cabecera
+              de la pestaña, así que aquí solo queda el dato útil. */}
+          {embedded
+            ? <p style={{ margin:0, fontSize:13, color:"var(--muted)" }}>{users.filter((u:any)=>u.active!==false).length} usuarios activos de {users.length} registrados</p>
+            : <><h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"var(--ink)" }}>Usuarios y Roles</h2>
+              <p style={{ margin:0, fontSize:14, color:"var(--muted)" }}>{users.filter((u:any)=>u.active!==false).length} usuarios activos de {users.length} registrados</p></>}
         </div>
         <button style={btn("primary")} onClick={openAdd}><Icon name="plus" size={16}/>Nuevo Usuario</button>
       </div>

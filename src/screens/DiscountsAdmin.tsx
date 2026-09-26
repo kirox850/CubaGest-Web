@@ -4,7 +4,7 @@ import Icon from "@/components/shared/Icon";
 import { Modal, Field, Spinner, btn, inp, sel } from "@/components/shared/primitives";
 
 // ─── DESCUENTOS (panel de administración) ─────────────────────────────────
-const DiscountsAdmin = ({ showToast, onClose }: { showToast: (m:string,t:string)=>void; onClose: () => void }) => {
+const DiscountsAdmin = ({ showToast, onClose, embedded }: { showToast: (m:string,t:string)=>void; onClose: () => void; embedded?: boolean }) => {
   const [list, setList]       = useState<any[]>([]);
   const [locs, setLocs]       = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,8 +68,7 @@ const DiscountsAdmin = ({ showToast, onClose }: { showToast: (m:string,t:string)
     } catch(e:any) { showToast(e.message, "error"); }
   };
 
-  return (
-    <Modal title="Descuentos" onClose={onClose} width={640}>
+  const contenido = (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <p style={{ margin:0, fontSize:13, color:"var(--muted)" }}>
           Los descuentos de tipo <strong>Venta</strong> se aplican al total en el POS; los de <strong>Producto</strong> se aplicarían por línea.
@@ -143,8 +142,9 @@ const DiscountsAdmin = ({ showToast, onClose }: { showToast: (m:string,t:string)
           </div>
         )}
       </div>
-    </Modal>
   );
+
+  return embedded ? contenido : <Modal title="Descuentos" onClose={onClose} width={640}>{contenido}</Modal>;
 };
 
 export default DiscountsAdmin;

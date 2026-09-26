@@ -4,7 +4,7 @@ import Icon from "@/components/shared/Icon";
 import { Field, Modal, btn, inp } from "@/components/shared/primitives";
 
 // ─── MONEDAS Y TASAS (config de empresa — solo admin) ──────────────────────
-const CurrenciesSettings = ({ showToast, onClose }: { showToast: (m:string,t:string)=>void; onClose: () => void }) => {
+const CurrenciesSettings = ({ showToast, onClose, embedded }: { showToast: (m:string,t:string)=>void; onClose: () => void; embedded?: boolean }) => {
   const [currencies, setCurrencies] = useState<string[]>(["CUP"]);
   const [rateMode, setRateMode]     = useState("manual");
   const [manualRates, setManualRates] = useState<Record<string,string>>({});
@@ -25,7 +25,7 @@ const CurrenciesSettings = ({ showToast, onClose }: { showToast: (m:string,t:str
       setRatesUpdatedAt(s?.ratesUpdatedAt || null);
       showToast(Object.keys(r).length > 0
         ? `Tasas obtenidas: ${Object.entries(r).map(([k,v])=>`${k}=${v}`).join(" · ")}`
-        : "No se pudieron obtener tasas — revisa el token de elToque (ver logs del Worker)",
+        : "No se pudieron obtener las tasas. Inténtalo de nuevo en un momento.",
         Object.keys(r).length > 0 ? "success" : "error");
     } catch(e:any) { showToast(e.message, "error"); }
     finally { setTesting(false); }
@@ -60,8 +60,10 @@ const CurrenciesSettings = ({ showToast, onClose }: { showToast: (m:string,t:str
     finally { setSaving(false); }
   };
 
-  return (
-    <Modal title="Monedas y Tasas de Cambio" onClose={onClose} width={520}>
+  // Un modal dentro de otro en el teléfono es un callejón sin salida: el de
+  // arriba tapa al de abajo y no hay forma de volver. Por eso, dentro de
+  // Configuración se renderiza el contenido pelado.
+  const contenido = (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <div>
           <Field label="Monedas que opera tu negocio" required>
@@ -117,24 +119,25 @@ const CurrenciesSettings = ({ showToast, onClose }: { showToast: (m:string,t:str
               <button onClick={testRates} disabled={testing} style={{ ...btn("secondary"), fontSize:12, opacity:testing?0.6:1 }}>
                 {testing ? "Consultando..." : <><Icon name="refresh" size={14}/>Probar ahora</>}
               </button>
-              <span style={{ fontSize:11, color:"var(--muted)" }}>Consulta fresca a elToque (ignora la caché)</span>
+              <span style={{ fontSize:11, color:"var(--muted)" }}>Busca las tasas más recientes de la fuente automática</span>
             </div>
-            <div style={{ marginTop:8, fontSize:11, color:"var(--muted)", lineHeight:1.5 }}>
-              Si no llegan tasas: la API de elToque exige un token por aplicación
-              (se solicita en tasas.eltoque.com/docs). Configúralo en el backend con
-              <code style={{ fontFamily:"monospace", background:"var(--line)", borderRadius:4, padding:"1px 5px", margin:"0 4px" }}>npx wrangler secret put ELTOQUE_API_TOKEN</code>
-              — sin token, el sistema intenta un raspado de la página pública como respaldo.
-            </div>
+            {Object.keys(rates).length === 0 && (
+              <div style={{ marginTop:8, fontSize:12, color:"var(--muted)", lineHeight:1.5 }}>
+                Si no se actualizan, escríbenos y lo revisamos. Mientras tanto puedes
+                escribirlas a mano con la opción de arriba.
+              </div>
+            )}
           </div>
         )}
 
         <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
-          <button style={btn("secondary")} onClick={onClose}>Cancelar</button>
+          {!embedded && <button style={btn("secondary")} onClick={onClose}>Cancelar</button>}
           <button style={{ ...btn("primary"), opacity:saving?0.6:1 }} onClick={save} disabled={saving}>{saving?"Guardando...":"Guardar"}</button>
         </div>
       </div>
-    </Modal>
   );
+
+  return embedded ? contenido : <Modal title="Monedas y Tasas de Cambio" onClose={onClose} width={520}>{contenido}</Modal>;
 };
 
 export default CurrenciesSettings;

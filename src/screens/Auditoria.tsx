@@ -62,7 +62,7 @@ const AUDIT_ENTITY_ICON: Record<string,string> = {
   expense: "contabilidad", cash_closing: "cierre", inventory_reading: "cierre",
 };
 
-const Auditoria = ({ showToast }: { showToast: (m:string,t:string)=>void }) => {
+const Auditoria = ({ showToast, embedded }: { showToast: (m:string,t:string)=>void; embedded?: boolean }) => {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterEntity, setFilterEntity] = useState("");
@@ -88,10 +88,11 @@ const Auditoria = ({ showToast }: { showToast: (m:string,t:string)=>void }) => {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-      <div>
+      {/* El título lo pone la cabecera de la pestaña cuando va embebida. */}
+      {!embedded && <div>
         <h2 style={{ margin:"0 0 4px", fontSize:22, fontWeight:800, color:"var(--ink)" }}>Auditoría</h2>
         <p style={{ margin:0, fontSize:14, color:"var(--muted)" }}>Registro de todo lo que ha pasado en el sistema — visible para todo el equipo</p>
-      </div>
+      </div>}
 
       <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
         <select style={{...sel, width:"auto"}} value={filterEntity} onChange={e=>setFilterEntity(e.target.value)}>

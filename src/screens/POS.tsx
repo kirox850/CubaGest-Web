@@ -9,6 +9,7 @@ import {
 } from "@/offlineDB";
 import Icon from "@/components/shared/Icon";
 import { Modal, Field, Spinner, btn, inp, sel } from "@/components/shared/primitives";
+import { useShift, AbrirTurno, ShiftBadge, ShiftInfo } from "@/components/shared/Shift";
 
 // ─── POS ──────────────────────────────────────────────────────────────────────
 // Impresión: al imprimir se oculta TODA la app y solo sale el recibo
@@ -67,6 +68,22 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
   const [myLocationId, setMyLocationId] = useState<string>("");
   const [myLocationName, setMyLocationName] = useState<string>("");
+
+  // El turno decide la caja. Ya no vale "la caja cuyo dueño soy", porque la
+  // caja es del negocio y la pueden llevar varios cajeros: lo que dice el turno
+  // abierto es con cuál estoy trabajando yo ahora mismo.
+  const { shift, cajas, cargando: cargandoTurno, abrirTurno } = useShift(user);
+  const [pidiendoTurno, setPidiendoTurno] = useState(false);
+  useEffect(() => {
+    if (!shift) return;
+    setMyLocationId(shift.locationId);
+    setMyLocationName(shift.locationName);
+  }, [shift?.id]);
+  // Sin turno no se vende: una venta sin caja asignada no entra en ningún
+  // cierre y el inventario queda sin cuadrar.
+  useEffect(() => {
+    if (!cargandoTurno && user?.role === "cajero" && !shift) setPidiendoTurno(true);
+  }, [cargandoTurno, shift, user?.role]);
 
   // Espacio de nombres de los datos locales de ESTA cuenta en ESTA ubicación.
   // El catálogo y el stock cacheados nunca se mezclan con los de otra cuenta ni
@@ -142,8 +159,11 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
       try {
         const locs: any[] = await apiFetch("/locations");
-        const own = user.role === "almacenista" ? locs.find((l:any)=>l.type==="almacen")
-          : locs.find((l:any)=>l.ownerUserId===user.id);
+        // La caja sale del turno abierto; el almacén sale de su tipo. Si el
+        // cajero aún no abrió turno, no hay caja y no se puede vender.
+        const own = shift ? locs.find((l:any)=>l.id===shift.locationId)
+          : user.role === "almacenista" ? locs.find((l:any)=>l.type==="almacen")
+          : undefined;
         if (!own) { setProducts([]); setLoading(false); return; }
         if (cancelled) return;
         setMyLocationId(own.id);
@@ -171,7 +191,9 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
     // una promesa rechazada sin manejar (la pantalla se quedaría cargando).
     load().catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  },[online]);
+    // El shift?.id está: al abrir el turno cambia la caja, y sin esto el POS
+    // seguiría con el catálogo de la caja anterior.
+  },[online, shift?.id]);
 
   const q = search.trim().toLowerCase();
   const avail = products.filter(p =>
@@ -384,7 +406,17 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
     <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 120px)", gap:0 }}>
       <style>{posStyles}</style>
       <h2 style={{ margin:"0 0 4px", fontSize:20, fontWeight:800, color:"var(--ink)", flexShrink:0 }}>Punto de Venta</h2>
-      {myLocationName && <p style={{ margin:"0 0 12px", fontSize:12, color:"var(--muted)", flexShrink:0 }}>Vendiendo desde: <strong>{myLocationName}</strong></p>}
+      {/* La caja en la que se está trabajando no es un dato informativo: es
+          la que decide a qué cierre y a qué inventario va cada venta. Por eso
+          ocupa una banda con "terminar turno" y no una línea de texto. */}
+      {shift
+        ? <div style={{ flexShrink:0 }}><ShiftBadge shift={shift} onCerrar={async () => { await apiFetch("/shift/end", { method: "POST" }); showToast("Turno terminado", "success"); }} /></div>
+        : user?.role === "cajero" && (
+          <div style={{ flexShrink:0, marginBottom:12, padding:"10px 14px", background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.30)", borderRadius:12, display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" as any }}>
+            <span style={{ fontSize:13, color:"#7C2D12", flex:1 }}>No tienes un turno abierto, así que aún no hay caja.</span>
+            <button style={{ ...btn("primary"), fontSize:12, padding:"7px 12px" }} onClick={() => setPidiendoTurno(true)}>Comenzar turno</button>
+          </div>
+        )}
 
       {/* Buscador fijo */}
       <div style={{ position:"relative", flexShrink:0, marginBottom:10 }}>
@@ -560,6 +592,15 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
           </div>
         </Modal>
       )}
+
+      <AbrirTurno
+        user={user}
+        cajas={cajas}
+        showToast={showToast}
+        abierta={pidiendoTurno}
+        onCerrar={() => setPidiendoTurno(false)}
+        onListo={(s: ShiftInfo) => { setPidiendoTurno(false); showToast(`Turno abierto en ${s.locationName}`, "success"); }}
+      />
     </div>
   );
 };

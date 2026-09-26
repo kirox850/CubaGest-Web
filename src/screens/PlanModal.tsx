@@ -5,7 +5,7 @@ import { Modal, btn } from "@/components/shared/primitives";
 import { showAlert, showConfirm } from "@/components/shared/dialogs";
 
 // ─── PLAN Y SUSCRIPCIÓN (modal desde el perfil) ────────────────────────────────
-const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
+const PlanModal = ({ onClose, user, embedded }: { onClose: () => void; user: any; embedded?: boolean }) => {
   const [planInfo, setPlanInfo]   = useState<any>(null);
   const [loading, setLoading]     = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string|null>(null);
@@ -106,8 +106,7 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
     window.open(`https://wa.me/5354801057?text=${msg}`, "_blank");
   };
 
-  return (
-    <Modal title="Planes — CubaGest" onClose={onClose} width={660}>
+  const contenido = (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
         {/* Programa de referidos */}
@@ -255,10 +254,11 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
           Los pagos por QvaPay se renuevan automáticamente cada 30 días. Si no quieres renovar, usa el botón "Cancelar suscripción": no se te cobra más y conservas lo que ya pagaste hasta que termine el periodo.
         </div>
 
-        <button style={{ ...btn("secondary"), fontSize:14 }} onClick={onClose}>Cerrar</button>
+        {!embedded && <button style={{ ...btn("secondary"), fontSize:14 }} onClick={onClose}>Cerrar</button>}
       </div>
-    </Modal>
   );
+
+  return embedded ? contenido : <Modal title="Planes — CubaGest" onClose={onClose} width={660}>{contenido}</Modal>;
 };
 
 export default PlanModal;

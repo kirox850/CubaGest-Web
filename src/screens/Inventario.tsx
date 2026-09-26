@@ -5,14 +5,17 @@ import { downloadCSV } from "@/lib/format";
 import { useOnlineStatus } from "@/hooks/useOnline";
 import { CATEGORIES, UNITS } from "@/config/constants";
 import { cacheProducts, getOfflineProducts } from "@/offlineDB";
+import { useLocations } from "@/hooks/useLocations";
 import Icon from "@/components/shared/Icon";
 import { Modal, Badge, Field, Spinner, btn, inp, sel } from "@/components/shared/primitives";
 import { showConfirm } from "@/components/shared/dialogs";
 
 // ─── INVENTARIO ───────────────────────────────────────────────────────────────
 const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: string) => void }) => {
-  const [locations, setLocations] = useState<any[]>([]);
-  const [locationId, setLocationId] = useState<string>("");
+  // La ubicación se resuelve con el hook, que la busca en el servidor o en la
+  // copia local. Antes vivía aquí y siempre por red, y sin red se quedaba
+  // vacía: el inventario no cargaba nada.
+  const { locations, locationId, elegir: setLocationId } = useLocations(user);
   const [locationInfo, setLocationInfo] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -39,29 +42,37 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
   const account = { companyId: user?.company?.id || "", userId: user?.id || "" };
   const scope = { ...account, locationId };
 
+  // Las ubicaciones visibles según el rol. /locations devuelve TODAS las de la
+  // empresa (hace falta para elegir destino en Envíos) — acá solo interesan las
+  // que este rol puede realmente ver el stock.
+  const visibles = user.role === "admin" ? locations
+    : user.role === "almacenista" ? locations.filter((l:any)=>l.type==="almacen")
+    : locations.filter((l:any)=>l.ownerUserId===user.id);
+
   const loadLocations = useCallback(async () => {
     try {
-      const list = await apiFetch("/locations");
-      // /locations devuelve TODAS las ubicaciones de la empresa (hace falta
-      // para elegir destino en Envíos) — acá solo nos interesan las que
-      // este rol puede realmente ver el stock.
-      const accessible = user.role === "admin" ? list
-        : user.role === "almacenista" ? list.filter((l:any)=>l.type==="almacen")
-        : list.filter((l:any)=>l.ownerUserId===user.id);
-      setLocations(accessible);
-      // Por defecto mostramos el Almacén Central si está disponible (es donde
-      // se crean los productos nuevos); si no, la primera ubicación visible.
-      const almacen = accessible.find((l: any) => l.type === "almacen");
-      setLocationId(prev => prev || almacen?.id || accessible[0]?.id || "");
+      const list = visibles as any[];
+      // Por defecto el Almacén Central si está disponible (es donde se crean
+      // los productos nuevos); si no, la primera visible.
+      const almacen = list.find((l: any) => l.type === "almacen");
+      setLocationId(prev => prev || almacen?.id || list[0]?.id || "");
     } catch (e: any) { showToast(e.message, "error"); }
-  }, [user.role, user.id]);
+  }, [locations.length, user.role, user.id]);
 
   useEffect(() => { loadLocations(); }, [loadLocations]);
 
   const load = useCallback(async () => {
-    if (!locationId) return;
+    setLoading(true);
     try {
-      setLoading(true);
+      if (!locationId) {
+        // Antes esto salía en silencio y la pantalla se quedaba en blanco
+        // ("load failed"). Ahora se explica qué falta y cómo resolverlo.
+        if (!invOnline) {
+          setProducts([]);
+          showToast("Sin conexión: falta la ubicación de este usuario. Entra con internet una vez para que quede guardada.", "warning");
+        }
+        return;
+      }
       if (invOnline) {
         const { location, items } = await apiFetch(`/locations/${locationId}/stock`);
         setLocationInfo(location);
@@ -70,7 +81,8 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
       } else {
         const cached = await getOfflineProducts(scope);
         setProducts(cached as any[]);
-        showToast("Mostrando inventario offline","info");
+        if (cached.length > 0) showToast("Sin conexión — inventario de la última sincronización","info");
+        else showToast("Sin conexión y este inventario nunca se ha descargado. Entra con internet una vez para poder usarlo aquí.","warning");
       }
     } catch(e:any) {
       const cached = await getOfflineProducts(scope);
@@ -78,7 +90,8 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         setProducts(cached as any[]);
         showToast("Sin conexión — inventario cacheado","warning");
       } else {
-        showToast(e.message,"error");
+        setProducts([]);
+        showToast(invOnline ? e.message : "Sin conexión y sin copia local del inventario.", "error");
       }
     } finally { setLoading(false); }
   }, [invOnline, locationId, account.companyId, account.userId]);
@@ -165,9 +178,9 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         </div>
       </div>
 
-      {locations.length > 1 && (
+      {visibles.length > 1 && (
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-          {locations.map((l:any) => (
+          {visibles.map((l:any) => (
             <button key={l.id} onClick={()=>setLocationId(l.id)}
               style={{ ...btn(locationId===l.id?"primary":"secondary"), fontSize:13, padding:"7px 14px" }}>
               <Icon name={l.type==="almacen"?"warehouse":"pos"} size={14}/>{l.name}
