@@ -144,39 +144,51 @@ const Dashboard = ({ user }: { user: any }) => {
 
   const dashOnline = useOnlineStatus();
 
+  // El resumen cacheado es de ESTA cuenta. Al cerrar sesión NO se borra (el
+  // dispositivo es personal y se reutiliza al volver a entrar), pero sí está
+  // namespaced: otra cuenta en el mismo dispositivo nunca ve estos números.
+  const dashKey = `cubagest_dashboard_${user?.company?.id || "none"}_${user?.id || "none"}`;
+  const readCache = () => {
+    const cached = localStorage.getItem(dashKey);
+    if (!cached) return null;
+    try { return JSON.parse(cached); } catch { return null; }
+  };
+
+  // La versión anterior guardaba este resumen en una clave única, sin cuenta
+  // asociada. Esos datos no se pueden atribuir con certeza a nadie, así que se
+  // descartan en vez de mostrarse.
+  useEffect(() => { localStorage.removeItem("cubagest_dashboard"); }, []);
+
   useEffect(() => {
     if (dashOnline) {
       apiFetch("/dashboard/summary")
         .then(d => {
           setSummary(d);
-          // Cache dashboard data
-          localStorage.setItem('cubagest_dashboard', JSON.stringify({ data: d, cachedAt: Date.now() }));
+          localStorage.setItem(dashKey, JSON.stringify({ data: d, cachedAt: Date.now() }));
           setLoading(false);
         })
         .catch(e => {
           // Try cache
-          const cached = localStorage.getItem('cubagest_dashboard');
+          const cached = readCache();
           if (cached) {
-            const { data, cachedAt } = JSON.parse(cached);
-            setSummary(data);
-            setError(`Datos del ${new Date(cachedAt).toLocaleDateString("es-CU")}`);
+            setSummary(cached.data);
+            setError(`Datos del ${new Date(cached.cachedAt).toLocaleDateString("es-CU")}`);
           } else {
             setError(e.message);
           }
           setLoading(false);
         });
     } else {
-      const cached = localStorage.getItem('cubagest_dashboard');
+      const cached = readCache();
       if (cached) {
-        const { data, cachedAt } = JSON.parse(cached);
-        setSummary(data);
-        setError(`Sin conexión · Datos del ${new Date(cachedAt).toLocaleDateString("es-CU")}`);
+        setSummary(cached.data);
+        setError(`Sin conexión · Datos del ${new Date(cached.cachedAt).toLocaleDateString("es-CU")}`);
       } else {
         setError("Sin conexión y sin datos cacheados");
       }
       setLoading(false);
     }
-  }, [dashOnline]);
+  }, [dashOnline, dashKey]);
 
   // Analítica (mes vs mes, top productos, tendencia, muertos) — hook ANTES de
   // cualquier return condicional para respetar las reglas de React.

@@ -5,9 +5,9 @@ import { btn } from "./primitives";
 // ─── TOUR DE BIENVENIDA (onboarding) ───────────────────────────────────────
 const TOUR_STEPS = [
   { icon: "pos", title: "¡Bienvenido a CubaGest!", text: "Este es tu panel de gestión. Te mostramos lo esencial en 5 pasos (toca Siguiente para avanzar)." },
-  { icon: "pos", title: "Punto de Venta", text: "Cobra desde la pestaña Vender. Funciona incluso SIN internet: las ventas se sincronizan solas al volver la conexión." },
+  { icon: "pos", title: "Punto de Venta", text: "Cobra desde la pestaña Vender. Si no hay conexión, la venta se guarda en el dispositivo y se envía sola cuando vuelve la red." },
   { icon: "inventario", title: "Inventario multi-ubicación", text: "Tu stock vive en ubicaciones (Almacén Central, cajas). Desde Envíos mandas mercancía entre ellas." },
-  { icon: "facturacion", title: "Facturas y respaldo", text: "Todas tus facturas quedan en Facturas, y puedes descargar CSV de inventario, ventas y gastos como respaldo." },
+  { icon: "facturacion", title: "Facturas y exportación", text: "Todas tus facturas quedan en Facturas. Desde allí puedes exportar tus ventas, inventario y gastos a CSV cuando los necesites." },
   { icon: "contabilidad", title: "Configura tu negocio", text: "En el menú de tu perfil (arriba a la derecha): monedas que operas, descuentos, tu plan y más." },
 ];
 

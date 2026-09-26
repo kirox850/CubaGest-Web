@@ -21,20 +21,23 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
     }
   }, []);
 
+  // Solo se listan características que el producto tiene hoy. No se anuncian
+  // reportes en PDF, notificaciones, respaldos automáticos ni "permisos
+  // avanzados": esas funciones no existen todavía.
   const plans = [
     {
       key: "free", label: "Free", priceUSD: 0,
-      features: ["1 usuario","Hasta 10 productos","100 ventas al mes","Historial de 30 días","Reportes básicos","Soporte por email (48-72 h)"],
+      features: ["1 usuario","Hasta 10 productos","100 ventas al mes","Reportes básicos","Soporte por email (48-72 h)"],
       payable: false,
     },
     {
       key: "pro", label: "Pro", priceUSD: 5,
-      features: ["3 usuarios","Hasta 50 productos","1.000 ventas al mes","Historial de 12 meses","Reportes avanzados + PDF","Cierre de caja e inventario","Notificaciones y alertas","Soporte prioritario (24-48 h)","48 h de onboarding incluidas"],
+      features: ["3 usuarios","Hasta 50 productos","1.000 ventas al mes","Cierre de caja e inventario","Ventas sin conexión con sincronización","Soporte prioritario (24-48 h)"],
       payable: true,
     },
     {
       key: "empresarial", label: "Empresarial", priceUSD: 10,
-      features: ["Usuarios ilimitados","Productos ilimitados","Ventas ilimitadas","Historial ilimitado","Roles y permisos avanzados","Backup automático y exportación","Soporte prioritario (< 12 h)","Onboarding personalizado"],
+      features: ["Usuarios ilimitados","Productos ilimitados","Ventas ilimitadas","Todos los módulos: inventario, POS, facturación, contabilidad, cierre y envíos","Ventas sin conexión con sincronización","Soporte prioritario (< 12 h)"],
       payable: true,
     },
   ];
@@ -120,7 +123,7 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
           <div style={{ background:"rgba(220,38,38,0.08)", border:"1px solid rgba(220,38,38,0.30)", borderRadius:12, padding:14 }}>
             <div style={{ fontWeight:700, fontSize:14, color:"#DC2626", display:"inline-flex", alignItems:"center", gap:6 }}><Icon name="alert" size={15}/>Pago fallido</div>
             <div style={{ fontSize:12, color:"var(--muted)", marginTop:4 }}>
-              No pudimos cobrar tu suscripción. Asegúrate de tener saldo en QvaPay o contacta por WhatsApp para pagar manualmente.
+              No pudimos cobrar tu suscripción. Revisa que QvaPay tenga saldo autorizado o escríbenos para regularizar el pago.
             </div>
           </div>
         )}
@@ -204,7 +207,7 @@ const PlanModal = ({ onClose, user }: { onClose: () => void; user: any }) => {
         </div>
 
         <div style={{ fontSize:12, color:"var(--muted)", textAlign:"center" as const }}>
-          Los pagos por QvaPay se renuevan automáticamente cada 30 días. Puedes cancelar en cualquier momento.
+          Los pagos por QvaPay se renuevan automáticamente cada 30 días. Si no quieres renovar, escríbenos antes de la fecha del próximo cobro y desactivamos la renovación.
         </div>
 
         <button style={{ ...btn("secondary"), fontSize:14 }} onClick={onClose}>Cerrar</button>

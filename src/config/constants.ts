@@ -1,10 +1,18 @@
 // ─── CONSTANTES COMPARTIDAS (igual que backend) ───────────────────────────────
 
+// Matriz de roles aprobada por el backend. La UI navega con esta misma matriz,
+// pero el backend sigue siendo quien autoriza: la lista de aquí solo decide qué
+// pantallas se muestran, nunca qué se puede hacer.
+//   admin       → todos los módulos
+//   cajero      → dashboard, POS, facturación, cierre, transferencias
+//   contador    → dashboard, contabilidad
+//   almacenista → dashboard, inventario, POS, cierre, transferencias
+// "auditoria" incluye datos sensibles (IP, detalle técnico): solo admin.
 export const ROLES: Record<string, { label: string; color: string; perms: string[] }> = {
-  admin:       { label: "Administrador", color: "var(--brand)", perms: ["dashboard","inventario","facturacion","contabilidad","cierre","usuarios","config","transferencias","auditoria"] },
-  cajero:      { label: "Cajero",        color: "var(--brand)", perms: ["dashboard","pos","facturacion","cierre","transferencias","auditoria"] },
-  contador:    { label: "Contador",      color: "#10B981", perms: ["dashboard","contabilidad","cierre","auditoria"] },
-  almacenista: { label: "Almacenista",   color: "#7A5C1A", perms: ["dashboard","inventario","pos","cierre","transferencias","auditoria"] },
+  admin:       { label: "Administrador", color: "var(--brand)",  perms: ["dashboard","inventario","pos","facturacion","contabilidad","cierre","usuarios","config","transferencias","auditoria"] },
+  cajero:      { label: "Cajero",        color: "var(--brand)",  perms: ["dashboard","pos","facturacion","cierre","transferencias"] },
+  contador:    { label: "Contador",      color: "#10B981",       perms: ["dashboard","contabilidad"] },
+  almacenista: { label: "Almacenista",   color: "#7A5C1A",       perms: ["dashboard","inventario","pos","cierre","transferencias"] },
 };
 
 export const PAY_METHODS = [

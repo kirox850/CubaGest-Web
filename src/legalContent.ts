@@ -10,9 +10,8 @@ export const PRIVACY_POLICY_MD = `# Política de Privacidad de CubaGest
 
 ## 1. Responsable del tratamiento de datos
 
-CubaGest es un servicio de gestión empresarial (inventario, punto de venta, facturación, contabilidad y cierre de caja) operado por:
+CubaGest es un servicio de gestión empresarial (inventario, punto de venta, facturación, contabilidad y cierre de caja) que opera desde Cuba:
 
-- **Responsable:** [TU NOMBRE COMPLETO], persona natural
 - **País de operación:** Cuba
 - **Correo de contacto:** cubagest@gmail.com
 
@@ -38,18 +37,22 @@ Para poder ofrecerte el servicio, recopilamos las siguientes categorías de dato
 - Sí guardamos el estado de tu suscripción (plan activo, fecha de renovación) para administrar tu acceso al servicio.
 
 ### 2.4 Datos almacenados localmente (modo offline)
-CubaGest permite trabajar sin conexión. En ese modo, los datos de ventas e inventario se guardan temporalmente en el dispositivo (almacenamiento local del navegador/app) hasta que se sincronizan con nuestro servidor al recuperar la conexión.
+CubaGest permite trabajar sin conexión. En ese modo, el catálogo de productos, el stock de tu ubicación y las ventas capturadas se guardan en el almacenamiento local del navegador (IndexedDB) y se envían a nuestros servidores al recuperar la conexión.
+
+Esos datos quedan separados por empresa, usuario y ubicación: si otra persona usa el mismo dispositivo con su propia cuenta, no puede ver ni enviar los datos guardados por la tuya.
+
+Al cerrar sesión **no** se borran: se conservan en el dispositivo para que puedas seguir trabajando si te quedas sin conexión. Se eliminan cuando borras los datos de navegación o de la aplicación desde tu dispositivo.
 
 ## 3. Dónde se almacenan los datos
 
-Los datos se almacenan en un servidor propio alojado en la infraestructura de **Railway**, proveedor de hosting que actúa como encargado técnico del tratamiento. Railway no tiene acceso al contenido de tus datos más allá de alojar la infraestructura.
+Los datos se procesan en la infraestructura de **Cloudflare** (Workers y base de datos D1), que es nuestro proveedor de infraestructura y actúa como encargado técnico del tratamiento. Los datos de tu negocio se guardan en bases de datos separadas por empresa.
 
 ## 4. Para qué usamos tus datos
 
 - Crear y administrar tu cuenta y la de tu equipo de trabajo.
 - Permitir el funcionamiento del inventario, punto de venta, facturación y cierre de caja.
 - Procesar el pago y la renovación de tu plan de suscripción.
-- Enviarte notificaciones y alertas relacionadas con tu negocio dentro de la plataforma.
+- Mostrarte avisos dentro de la plataforma cuando una operación no pudo completarse (por ejemplo, una venta guardada sin conexión que sigue pendiente de sincronizar).
 - Brindar soporte técnico cuando lo solicites.
 - Mejorar y corregir el funcionamiento del servicio.
 
@@ -60,7 +63,7 @@ No vendemos ni cedemos tus datos a terceros con fines publicitarios.
 Solo compartimos datos con los proveedores estrictamente necesarios para operar el servicio:
 
 - **QvaPay:** para procesar los pagos de suscripción.
-- **Railway:** como proveedor de hosting/infraestructura del servidor.
+- **Cloudflare:** como proveedor de infraestructura que aloja y procesa los datos.
 
 No compartimos tus datos con ningún otro tercero salvo obligación legal.
 
@@ -83,9 +86,10 @@ Conservamos tus datos mientras tu cuenta esté activa. Si cancelas tu cuenta, el
 
 Aplicamos medidas razonables para proteger tus datos, incluyendo:
 
-- Cifrado de contraseñas.
-- Autenticación mediante token para acceder a la API.
-- Cierre de sesión automático cuando el token expira.
+- Contraseñas cifradas; nunca se guardan en texto plano.
+- Tokens de acceso para las peticiones a la API, y renovación automática de la sesión mientras el dispositivo tiene conexión.
+- La sesión visible de la app solo se cierra cuando tú la cierras o cuando el servidor deja de aceptarla; la falta de conexión no la cierra.
+- Separación de los datos locales por empresa, usuario y ubicación, para que una cuenta no vea los datos de otra en el mismo dispositivo.
 
 Ningún sistema es 100% infalible; en caso de un incidente de seguridad que afecte tus datos, te notificaremos según corresponda.
 
@@ -108,9 +112,8 @@ export const TERMS_MD = `# Términos y Condiciones de CubaGest
 
 **Última actualización:** 30 de julio de 2026
 
-Estos Términos y Condiciones ("Términos") regulan el uso de CubaGest, un servicio de gestión empresarial (inventario, punto de venta, facturación, contabilidad y cierre de caja) ofrecido por:
+Estos Términos y Condiciones ("Términos") regulan el uso de CubaGest, un servicio de gestión empresarial (inventario, punto de venta, facturación, contabilidad y cierre de caja) que opera desde Cuba:
 
-- **Responsable:** [TU NOMBRE COMPLETO], persona natural
 - **País:** Cuba
 - **Contacto:** cubagest@gmail.com
 
@@ -142,7 +145,7 @@ CubaGest ofrece los siguientes planes:
 - Empresarial: $10 USD/mes
 
 - Los pagos de los planes Pro y Empresarial se procesan a través de **QvaPay**, y se renuevan automáticamente cada 30 días.
-- Puedes cancelar tu suscripción en cualquier momento. La cancelación detiene la renovación futura, pero **no genera reembolsos** por el período ya pagado; conservarás el acceso al plan hasta el final del ciclo vigente.
+- Para dejar de renovar basta con escribirnos antes de la fecha del próximo cobro: desactivamos la renovación del plan. No hay reembolsos por el período ya pagado y conservas el acceso hasta el final del ciclo vigente.
 - Nos reservamos el derecho de modificar los precios o características de los planes, notificando dichos cambios con antelación razonable.
 - El impago o rechazo de un cobro puede resultar en la suspensión o degradación automática de tu cuenta al plan gratuito.
 
@@ -157,7 +160,12 @@ Al usar CubaGest, te comprometes a:
 
 ## 5. Modo offline y sincronización
 
-CubaGest permite operar sin conexión a internet, almacenando temporalmente los datos en el dispositivo. Es tu responsabilidad asegurarte de que el dispositivo sincronice correctamente al recuperar la conexión. No nos hacemos responsables de pérdidas de datos causadas por fallos del dispositivo, desinstalación de la aplicación o borrado del almacenamiento local antes de sincronizar.
+CubaGest permite operar sin conexión a internet: el punto de venta guarda la venta en el dispositivo, con su identificador propio y la ubicación donde se registró, y la envía al servidor al recuperar la conexión.
+
+- La sincronización ocurre con la aplicación abierta (al entrar, al recuperar la conexión o cuando pulsas "Sincronizar ahora"). Si el dispositivo está apagado o la aplicación cerrada, las ventas permanecen en cola.
+- Cada venta conserva su identificador, así que un reintento no genera una factura duplicada.
+- Los datos locales se conservan aunque cierres sesión, y se eliminan si borras los datos de navegación o de la aplicación.
+- No nos hacemos responsables de pérdidas de datos causadas por fallos del dispositivo, desinstalación de la aplicación o borrado del almacenamiento local antes de sincronizar.
 
 ## 6. Disponibilidad del servicio
 
@@ -177,7 +185,7 @@ Recomendamos exportar y respaldar periódicamente la información importante de 
 
 ## 8. Propiedad intelectual
 
-El software, diseño, marca y contenido de CubaGest son propiedad de [TU NOMBRE COMPLETO]. Los datos que ingreses sobre tu negocio (productos, ventas, facturas) siguen siendo de tu propiedad; nosotros solo los almacenamos y procesamos para prestarte el servicio.
+El software, diseño, marca y contenido de CubaGest son propiedad de sus titulares. Los datos que ingreses sobre tu negocio (productos, ventas, facturas) siguen siendo de tu propiedad; nosotros solo los almacenamos y procesamos para prestarte el servicio.
 
 ## 9. Suspensión y terminación
 
@@ -187,7 +195,7 @@ Podemos suspender o cancelar tu cuenta si:
 - Detectamos un uso fraudulento o abusivo de la plataforma.
 - Existen impagos reiterados de tu suscripción.
 
-Puedes cancelar tu cuenta en cualquier momento contactándonos o desde la configuración de la aplicación.
+Puedes cancelar tu cuenta en cualquier momento escribiéndonos a cubagest@gmail.com. Al cancelar tu cuenta se eliminan o anonimizan tus datos, salvo los que debamos conservar por motivos legales o contables.
 
 ## 10. Ley aplicable
 

@@ -2,10 +2,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   cacheProducts, getPendingSales, getAllOfflineSales, updateSaleStatus,
-  saveSyncLog, restoreLocalStock, resetStuckSyncingSales,
+  saveSyncLog, restoreLocalStock, resetStuckSyncingSales, setSaleLocationOnce,
+  getLastLocationId, type OfflineAccount, type OfflineSale,
 } from "@/offlineDB";
 import { PRIVACY_POLICY_MD, TERMS_MD } from "@/legalContent";
-import { apiFetch, getToken, saveToken } from "@/lib/api";
+import { apiFetch, getToken, saveToken, logout, ApiError } from "@/lib/api";
 import { useOnlineStatus } from "@/hooks/useOnline";
 import { ROLES } from "@/config/constants";
 
@@ -133,23 +134,33 @@ export default function App() {
       }
     }
   }, []);
-  // Si el token se invalida en cualquier momento (401 de apiFetch), volvemos
-  // a la pantalla de login SIN recargar la página — así no se interrumpe
-  // ninguna sincronización de ventas offline que pudiera estar en curso.
+  // Si el token se invalida en cualquier momento (401 de apiFetch tras no
+  // poder renovar la sesión), volvemos a la pantalla de login SIN recargar la
+  // página — así no se interrumpe ninguna sincronización de ventas offline que
+  // pudiera estar en curso.
   useEffect(() => {
-    const handler = () => setUser(null);
+    const handler = () => { setUser(null); setActiveModule("dashboard"); };
     window.addEventListener("cubagest-session-expired", handler);
     return () => window.removeEventListener("cubagest-session-expired", handler);
   }, []);
+
+  // Espacio de nombres local de esta cuenta. Todo lo que se guarda offline
+  // (catálogo, stock, cola) vive bajo companyId+userId (+locationId), así que
+  // un dispositivo usado por dos cuentas nunca mezcla ni reenvía datos ajenos.
+  const account: OfflineAccount | null = user
+    ? { companyId: user.company?.id || user.companyId || "", userId: user.id || "" }
+    : null;
+  const hasAccount = !!(account?.companyId && account?.userId);
 
   // Al abrir la app, recuperamos cualquier venta offline que haya quedado
   // "colgada" en estado 'syncing' por un cierre/recarga anterior en medio
   // de una sincronización, para que vuelva a intentarse.
   useEffect(() => {
-    resetStuckSyncingSales().then(recovered => {
+    if (!hasAccount) return;
+    resetStuckSyncingSales(account!).then(recovered => {
       if (recovered > 0) refreshPending();
     });
-  }, []);
+  }, [hasAccount, account?.userId, account?.companyId]);
 
   const syncRef = useRef(false);
   // Restaurar sesión al recargar
@@ -178,7 +189,8 @@ export default function App() {
       return;
     }
 
-    // Con conexión: verificar token con el servidor
+    // Con conexión: verificar token con el servidor (apiFetch ya intenta
+    // renovar el access token una vez si recibe un 401).
     apiFetch("/auth/me")
       .then(res=>{
         // El backend devuelve { ok:true, user:{...} }, no el usuario "plano"
@@ -188,67 +200,44 @@ export default function App() {
         setUser(u);
         setChecking(false);
       })
-      .catch(()=>{
-        // Falló (timeout, error red, etc.) — usar caché
+      .catch((e:any)=>{
+        // Sesión realmente terminada (el token no se pudo renovar): fuera.
+        if (e instanceof ApiError && e.kind === "auth") {
+          saveToken(null);
+          localStorage.removeItem("cubagest_user");
+          setChecking(false);
+          return;
+        }
+        // Falló por red (timeout, sin internet, servidor caído) — usar caché y
+        // seguir trabajando: la falta de conexión NO cierra la sesión.
         restoreFromCache();
       });
   },[]);
 
-  // Escuchar sync requests del Service Worker (Background Sync API)
-  useEffect(()=>{
-    const handler = () => { if (online && user) runSync(); };
-    window.addEventListener('sw-sync-requested', handler);
-    return () => window.removeEventListener('sw-sync-requested', handler);
-  },[online, user]);
-
-  // Renovar token automáticamente al recuperar conexión
-  useEffect(()=>{
-    if (!online || !user) return;
-    const storedRefreshToken = localStorage.getItem("cubagest_refresh_token");
-    if (!storedRefreshToken) return;
-    apiFetch("/auth/refresh", { method: "POST", body: { refreshToken: storedRefreshToken }, auth: false })
-      .then((data: any) => {
-        // El backend solo devuelve { ok:true, accessToken } — no reenvía
-        // el usuario, así que no lo tocamos aquí (ya está cacheado).
-        if (data?.accessToken) {
-          saveToken(data.accessToken);
-        }
-      })
-      .catch(()=>{}); // si falla (401) apiFetch ya avisa vía cubagest-session-expired
-  },[online]);
-
-  // Registrar background sync cuando hay ventas pendientes
-  useEffect(()=>{
-    if (pendingCount > 0 && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then(reg => {
-        if ('sync' in reg) {
-          (reg as any).sync.register('sync-sales').catch(() => {});
-        }
-      });
-    }
-  },[pendingCount]);
-
   // Actualizar contador de pendientes
   const refreshPending = useCallback(async () => {
-    const sales = await getAllOfflineSales();
+    if (!hasAccount) { setPendingCount(0); setConflictCount(0); return; }
+    const sales = await getAllOfflineSales(account!);
     setPendingCount(sales.filter(s=>s.status==='pending').length);
     setConflictCount(sales.filter(s=>s.status==='conflict').length);
-  }, []);
+  }, [hasAccount, account?.userId, account?.companyId]);
 
-  useEffect(() => { refreshPending(); }, []);
+  useEffect(() => { refreshPending(); }, [refreshPending]);
 
   // ── Sincronización de ventas offline ──────────────────────────────────────
-  // Función reutilizable: la dispara automáticamente el efecto de abajo al
-  // volver la conexión, y también el botón manual "Sincronizar ahora" desde
-  // Facturas. manual=true muestra mensajes también cuando no hay nada que
-  // sincronizar o ya hay una sincronización en curso, para dar feedback claro
-  // al usuario que pulsó el botón.
+  // Se dispara al volver la conexión, al entrar/arrancar con la app y con el
+  // botón manual "Sincronizar ahora" de Facturas. Solo manda las ventas
+  // PENDIENTES: no relee el catálogo entero ni hace lecturas de relleno.
+  // manual=true muestra mensajes también cuando no hay nada que sincronizar o
+  // ya hay una sincronización en curso, para dar feedback claro al usuario.
   const runSync = async (manual = false) => {
+    if (!hasAccount) return;
     if (syncRef.current) {
       if (manual) showToast("Ya hay una sincronización en curso","info");
       return;
     }
-    const pending = await getPendingSales();
+    const acc = account!;
+    const pending = await getPendingSales(acc);
     if (pending.length === 0) {
       if (manual) showToast("No hay ventas pendientes por sincronizar","info");
       return;
@@ -256,46 +245,89 @@ export default function App() {
 
     syncRef.current = true;
     setSyncing(true);
-    let synced = 0; let conflicts = 0;
+    let synced = 0; let conflicts = 0; let retryable = 0;
+    const touchedLocations = new Set<string>();
 
     try {
-      for (const sale of pending) await updateSaleStatus(sale.localId, 'syncing');
+      for (const sale of pending) await updateSaleStatus(acc, sale.localId, 'syncing');
 
-      const results = await apiFetch("/sales/sync", {
+      // Última ubicación conocida de esta cuenta. Solo se usa para rellenar
+      // ventas que se capturaron sin ubicación (no se cambia ninguna que ya
+      // tenga una: la locationId de una venta es inmutable).
+      const lastLocationId = (await getLastLocationId(acc)) || "";
+      for (const sale of pending) {
+        if (!sale.locationId && lastLocationId) await setSaleLocationOnce(acc, sale.localId, lastLocationId);
+      }
+
+      const results: any[] = await apiFetch("/sales/sync", {
         method: "POST",
         body: {
-          sales: pending.map(s => ({
+          sales: pending.map((s: OfflineSale) => ({
+            // Idempotencia: el mismo clientSaleId (UUID) en cada reintento.
+            clientSaleId: s.clientSaleId,
             localId: s.localId,
+            locationId: s.locationId || lastLocationId || undefined,
             client: s.client || s.clientName || "Consumidor Final",
             clientName: s.clientName || s.client || "Consumidor Final",
             clientNit: s.clientNit,
             clientPhone: s.clientPhone,
-            items: s.items.map(i=>({ productId:i.productId, name:i.name, qty:i.qty, price:i.price })),
+            items: s.items.map(i=>({ productId:i.productId, name:i.name, qty:i.qty, price:i.price, ...(i.discountId ? { discountId:i.discountId } : {}) })),
             payMethod: s.payMethod,
             currency: s.currency || "CUP",
+            ...(s.discountId ? { discountId: s.discountId } : {}),
+            subtotal: s.subtotal,
+            total: s.total,
+            // Momento local de la venta (auditoría). El servidor usa su propia
+            // hora de recepción para límites de plan y cierres.
             offlineTimestamp: s.timestamp,
           }))
-        }
+        },
+        // Un lote grande por una conexión inestable necesita más margen que
+        // una consulta normal.
+        timeoutMs: 25000,
       });
 
-      for (const result of results) {
+      // Una respuesta por venta. Si el servidor repite la misma venta (mismo
+      // clientSaleId), gana la primera, así una respuesta duplicada no cuenta
+      // dos veces ni devuelve stock dos veces. El stock local solo se restaura
+      // ante un conflicto explícito.
+      const byKey = new Map<string, any>();
+      for (const r of (Array.isArray(results) ? results : [])) {
+        const key = r?.clientSaleId || r?.localId;
+        if (key && !byKey.has(key)) byKey.set(key, r);
+      }
+
+      for (const sale of pending) {
+        const result = byKey.get(sale.clientSaleId) || byKey.get(sale.localId);
+        if (!result) {
+          // Respuesta ausente o incompleta: la venta NO se da por buena ni por
+          // mala. Sigue pendiente y su stock sigue descontado (reintentable).
+          await updateSaleStatus(acc, sale.localId, 'pending');
+          retryable++;
+          continue;
+        }
         if (result.status === 'synced') {
-          await updateSaleStatus(result.localId, 'synced', result.serverId);
+          await updateSaleStatus(acc, sale.localId, 'synced', result.serverId);
           synced++;
-        } else {
-          await updateSaleStatus(result.localId, 'conflict', undefined, result.reason);
-          const sale = pending.find(s=>s.localId===result.localId);
-          if (sale) await restoreLocalStock(sale.items);
+          if (sale.locationId) touchedLocations.add(sale.locationId);
+        } else if (result.status === 'conflict') {
+          // Conflicto explícito del servidor (stock, producto, permiso…): ahí
+          // sí se devuelve el stock local.
+          await updateSaleStatus(acc, sale.localId, 'conflict', undefined, result.reason || "Conflicto reportado por el servidor");
+          await restoreLocalStock({ ...acc, locationId: sale.locationId }, sale.items);
           conflicts++;
+        } else {
+          await updateSaleStatus(acc, sale.localId, 'pending');
+          retryable++;
         }
       }
 
-      await saveSyncLog({ timestamp: Date.now(), salesSynced: synced, salesConflict: conflicts });
+      await saveSyncLog(acc, { timestamp: Date.now(), salesSynced: synced, salesConflict: conflicts });
     } catch(e:any) {
       // Cualquier fallo (red, timeout, sesión expirada, etc.) revierte TODAS
       // las ventas de este intento a 'pending' — nunca quedan "colgadas" en
       // 'syncing', así que siempre se vuelven a reintentar más adelante.
-      for (const sale of pending) await updateSaleStatus(sale.localId, 'pending');
+      for (const sale of pending) await updateSaleStatus(acc, sale.localId, 'pending');
       showToast("No se pudo sincronizar — se reintentará automáticamente","error");
     } finally {
       await refreshPending();
@@ -305,20 +337,54 @@ export default function App() {
 
     if (synced > 0) showToast(`${synced} venta(s) sincronizada(s)`,"success");
     if (conflicts > 0) showToast(`${conflicts} conflicto(s) de stock — revisa Facturas`,"warning");
-    if (synced > 0) {
-      try { const updated = await apiFetch("/products"); await cacheProducts(updated); } catch {}
+    if (retryable > 0 && manual) showToast(`${retryable} venta(s) sin respuesta del servidor — se reintentarán`,"warning");
+
+    // Tras sincronizar, el stock del servidor de esas ubicaciones ya no es el
+    // que tenemos cacheado. Se refresca SOLO la ubicación afectada (lo que el
+    // POS necesita para volver a vender), nunca el catálogo completo de la
+    // empresa, que en una conexión intermitente es lo más caro que hay.
+    for (const locationId of touchedLocations) {
+      try {
+        const { items } = await apiFetch(`/locations/${locationId}/stock`);
+        await cacheProducts({ ...acc, locationId }, items);
+      } catch { /* sin red otra vez: se reintenta en la próxima venta */ }
     }
   };
 
-  // Sincronizar automáticamente cuando vuelve la conexión
+  // Sincronizar al volver la conexión y en cada arranque/entrada de la app.
   useEffect(() => {
     if (!online || !user) return;
     runSync();
   }, [online, user]);
 
+  // Al volver al primer plano de la app (el cajero dejó la PWA abierta en
+  // segundo plano y vuelve): se intenta sincronizar lo pendiente. No es
+  // sondeo: solo dispara al volver el usuario a la pantalla.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && navigator.onLine && user) runSync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [online, user]);
+
   const showToast = (msg: string, type = "info") => setToast({ msg, type, key: Date.now() });
 
-  const handleLogout = () => { saveToken(null); localStorage.removeItem("cubagest_user"); localStorage.removeItem("cubagest_dashboard"); setUser(null); setActiveModule("dashboard"); };
+  // Cierre de sesión: se revoca la sesión en el servidor (best-effort) y se
+  // borra SOLO el estado de autenticación. Los datos offline de esta cuenta
+  // (catálogo, stock, cola de ventas) se conservan para el próximo inicio de
+  // sesión en este mismo dispositivo; al entrar con otra cuenta se usa otro
+  // espacio de nombres y nunca se ven entre sí.
+  const handleLogout = () => {
+    setUser(null);
+    setActiveModule("dashboard");
+    setPendingCount(0); setConflictCount(0); setSyncing(false);
+    logout();
+  };
 
   // Pantalla pública de "establecer contraseña" — no importa si hay sesión
   // activa o no, ni si todavía se está verificando.

@@ -27,7 +27,7 @@ const LANDING_PLANS = [
     priceUSD: 10,
     tag: "Sin límites",
     audience: "Para equipos y negocios en crecimiento.",
-    features: ["Usuarios ilimitados", "Productos y ventas ilimitados", "Roles y permisos avanzados", "Backup y exportación"],
+    features: ["Usuarios ilimitados", "Productos y ventas ilimitados", "Todos los módulos disponibles", "Ventas sin conexión con sincronización"],
   },
 ];
 
@@ -41,9 +41,9 @@ const LANDING_FEATURES = [
 ];
 
 const FAQ_ITEMS = [
-  { question: "¿CubaGest funciona sin internet?", answer: "Sí. El punto de venta puede registrar operaciones offline y sincronizarlas al recuperar la conexión." },
+  { question: "¿CubaGest funciona sin internet?", answer: "Sí. Si el punto de venta no logra contactar con el servidor, guarda la venta en el propio dispositivo y la envía sola cuando vuelve la conexión. Si algo no cuadra, te lo muestra en Facturas." },
   { question: "¿Qué incluye la prueba gratis?", answer: "Puedes probar durante 30 días las funciones del plan Empresarial, sin tarjeta de crédito." },
-  { question: "¿Cómo se paga el servicio?", answer: "Los planes se muestran en USD y puedes pagar con QvaPay cuando decidas continuar." },
+  { question: "¿Cómo se paga el servicio?", answer: "Los planes se muestran en USD y puedes pagar con QvaPay cuando decidas continuar. La renovación es automática cada 30 días; si no quieres renovar, escríbenos antes del próximo cobro." },
   { question: "¿Puedo trabajar con varias ubicaciones?", answer: "Sí. El inventario y las operaciones pueden organizarse por almacén, tienda o caja." },
 ];
 
@@ -410,12 +410,11 @@ const Landing = ({ onEnter }: { onEnter: () => void }) => {
         <div className="landing-modal-backdrop" role="presentation" onMouseDown={() => setContactOpen(false)}>
           <div className="landing-modal" role="dialog" aria-modal="true" aria-labelledby="contact-title" onMouseDown={(event) => event.stopPropagation()}>
             <div className="landing-modal__header"><div><span className="landing-eyebrow">Estamos para ayudarte</span><h2 id="contact-title">Contáctenos</h2></div><button ref={contactCloseRef} type="button" className="landing-modal__close" onClick={() => setContactOpen(false)} aria-label="Cerrar contacto"><Icon name="close" size={18} color="currentColor" /></button></div>
-            <p className="landing-modal__intro">¿Dudas antes de empezar o necesitas ayuda con tu negocio? Escríbenos, respondemos rápido.</p>
+            <p className="landing-modal__intro">¿Dudas antes de empezar o necesitas ayuda con tu negocio? Escríbenos y te respondemos por correo.</p>
             <div className="landing-modal__options">
-              <a href="mailto:soporte@cubagest.dpdns.org"><span className="landing-modal__option-icon"><Icon name="doc" size={18} color="currentColor" /></span><span><small>Correo</small><strong>soporte@cubagest.dpdns.org</strong></span></a>
-              <a href="https://wa.me/5350000000" target="_blank" rel="noreferrer"><span className="landing-modal__option-icon landing-modal__option-icon--green"><Icon name="usuarios" size={18} color="currentColor" /></span><span><small>WhatsApp</small><strong>+53 5 000 0000</strong></span></a>
+              <a href="mailto:cubagest@gmail.com"><span className="landing-modal__option-icon"><Icon name="doc" size={18} color="currentColor" /></span><span><small>Correo</small><strong>cubagest@gmail.com</strong></span></a>
             </div>
-            <p className="landing-modal__hours">Atención de lunes a sábado, 8:00–18:00</p>
+            <p className="landing-modal__hours">Escríbenos desde tu cuenta de correo y te contestamos lo antes posible.</p>
           </div>
         </div>
       )}
