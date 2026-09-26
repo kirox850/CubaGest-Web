@@ -45,6 +45,35 @@ const kindForStatus = (status: number): ApiErrorKind =>
   : status >= 500 ? "server"
   : "validation";
 
+// ── "¿Hay internet de verdad?" ───────────────────────────────────────────────
+//
+// `navigator.onLine` MIENTE en muchos teléfonos: sigue diciendo true con el
+// WiFi conectado a una red sin salida, detrás de un portal cautivo, o cuando
+// solo queda la red móvil que no aguanta. Entonces la app cree que hay red,
+// espera 8 segundos en cada pantalla y al final muestra "Sin conexión con el
+// servidor", que es un error en la parte equivocada: el usuario ve
+// inventarios, facturas y POS rotos cuando lo único que pasa es que no hay red.
+//
+// Aquí se lleva la cuenta real: cualquier respuesta que llega (aunque sea un
+// 500) demuestra que hay red; cualquier fallo de transporte la desmiente. Un
+// corte de luz de 200 ms no voltea la app entera porque la siguiente respuesta
+// correcta lo arregla enseguida.
+let _hayRed = true;
+const _oyentes = new Set<(v: boolean) => void>();
+
+/** Notifica a los que escuchan si la red real se perdió o volvió. */
+export const onNetworkChange = (fn: (v: boolean) => void): (() => void) => {
+  _oyentes.add(fn);
+  return () => { _oyentes.delete(fn); };
+};
+const _setHayRed = (v: boolean) => {
+  if (_hayRed === v) return;
+  _hayRed = v;
+  for (const fn of _oyentes) { try { fn(v); } catch { /* un oyente roto no rompe la app */ } }
+};
+const _marcarHayRed = () => { if (!_hayRed) _setHayRed(true); };
+const _marcarSinRed = () => { if (_hayRed) _setHayRed(false); };
+
 export interface ApiFetchOptions {
   method?: string;
   body?: object;
@@ -74,6 +103,8 @@ async function request(path: string, opts: ApiFetchOptions, token: string | null
       signal: controller.signal,
     });
     clearTimeout(timeout);
+    // Llegó una respuesta: hay red, aunque el servidor conteste un error.
+    _marcarHayRed();
     if (res.status === 204) return null;
 
     // El mensaje REAL del servidor ("Correo o contraseña incorrectos",
@@ -96,6 +127,8 @@ async function request(path: string, opts: ApiFetchOptions, token: string | null
     return data;
   } catch (e: any) {
     clearTimeout(timeout);
+    // Fallo de transporte: la red no está, por mucho que navigator diga que sí.
+    if (e?.name === "AbortError" || !(e instanceof ApiError)) _marcarSinRed();
     if (e?.name === "AbortError") {
       throw new ApiError("Sin conexión con el servidor — revisa tu internet e inténtalo de nuevo", "timeout");
     }

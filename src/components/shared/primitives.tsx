@@ -47,12 +47,20 @@ export const Modal = ({ title, onClose, children, width = 560 }: { title: string
 );
 
 // ─── OFFLINE BANNER ──────────────────────────────────────────────────────────
-export const OfflineBanner = ({ online, syncing, pending, conflicts }: { online: boolean; syncing: boolean; pending: number; conflicts: number }) => {
+export const OfflineBanner = ({ online, syncing, pending, conflicts, pendingClosings = 0 }: {
+  online: boolean; syncing: boolean; pending: number; conflicts: number; pendingClosings?: number;
+}) => {
   if (online && !syncing && pending === 0 && conflicts === 0) return null;
 
+  const enCola = pending + pendingClosings;
   const bg = !online ? "#8B1A1A" : syncing ? "#1A5C8B" : conflicts > 0 ? "#c17a00" : "#1A7A3C";
+  // Sin conexión se dice QUÉ SIGUE FUNCIONANDO, no solo que falta internet. Un
+  // cajero que ve "Sin conexión" piensa que la app se rompió; si además ve que
+  // puede seguir vendiendo, entiende la situación y trabaja tranquilo.
   const msg = !online
-    ? `Sin conexión — modo offline${pending > 0 ? ` · ${pending} ventas en cola` : ""}`
+    ? `Sin conexión — puedes vender, ver el inventario y hacer el conteo de cierre${
+        enCola > 0 ? ` · ${pending} venta(s)${pendingClosings > 0 ? ` y ${pendingClosings} cierre(s)` : ""} se enviarán solas al volver la red` : ""
+      }`
     : syncing
     ? "Sincronizando ventas..."
     : conflicts > 0
@@ -60,7 +68,7 @@ export const OfflineBanner = ({ online, syncing, pending, conflicts }: { online:
     : `✓ ${pending === 0 ? "Todo sincronizado" : `${pending} pendientes`}`;
 
   return (
-    <div style={{ background: bg, color: "#fff", padding: "8px 16px", fontSize: 12, fontWeight: 600, textAlign: "center" as any, flexShrink: 0 }}>
+    <div style={{ background: bg, color: "#fff", padding: "8px 16px", fontSize: 12, fontWeight: 600, textAlign: "center" as any, flexShrink: 0, lineHeight: 1.45 }}>
       {msg}
     </div>
   );

@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
+import { useOnlineStatus } from "@/hooks/useOnline";
+import { useLocations, useReadings } from "@/hooks/useLocations";
+import {
+  saveClosingOffline, getPendingClosings, type PendingClosing,
+} from "@/offlineDB";
 import { fmt } from "@/lib/format";
 import Icon from "@/components/shared/Icon";
 import { Badge, Field, Modal, Spinner, btn, inp, sel } from "@/components/shared/primitives";
@@ -8,9 +13,15 @@ import { Badge, Field, Modal, Spinner, btn, inp, sel } from "@/components/shared
 const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: string) => void }) => {
   const [view, setView]               = useState<"list"|"selectReading"|"validate"|"detail">("list");
   const [closings, setClosings]       = useState<any[]>([]);
-  const [readings, setReadings]       = useState<any[]>([]);
-  const [locations, setLocations]     = useState<any[]>([]);
+  const [pendientes, setPendientes]   = useState<PendingClosing[]>([]);
   const [readingLocationId, setReadingLocationId] = useState("");
+
+  // Ubicaciones y lecturas se resuelven con red O desde la copia local. Sin red
+  // esto no se puede hacer un cierre, y antes fallaba justo ahí.
+  const online = useOnlineStatus();
+  const { locations } = useLocations(user);
+  const { readings } = useReadings(user);
+  const account = { companyId: user?.company?.id || "", userId: user?.id || "" };
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
   const [selectedReading, setSelectedReading] = useState<any>(null);
@@ -20,50 +31,90 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
   const [confirmReading, setConfirmReading]   = useState(false);
   const [notes, setNotes]             = useState("");
 
+  /**
+   * Reconstruye la pantalla de conteo con lo que hay en el móvil.
+   *
+   * Lo que SÍ se sabe sin conexión: qué productos había, de qué unidad y con
+   * cuánto stock arrancó el período (eso viene en la lectura).
+   * Lo que NO se sabe: cuánto se vendió, cuál era el esperado y por lo tanto
+   * los faltantes. Eso vive en el servidor y el móvil no tiene las ventas ya
+   * sincronizadas. Por eso esas columnas salen como "pendiente" y el cálculo se
+   * hace al enviarse el cierre.
+   */
+  const previewSinConexion = (reading: any) => ({
+    offline: true,
+    periodStart: reading.createdAt ?? reading.date,
+    totalSales: null,
+    totalIncome: null,
+    incomeEfectivo: null,
+    incomeTransferencia: null,
+    items: ((reading.items ?? []) as any[]).map((it) => ({
+      productId: it.productId,
+      productCode: it.productCode,
+      productName: it.productName,
+      unit: it.unit,
+      price: 0,
+      stockInitial: it.qty,
+      stockSold: null,
+      stockExpected: null,
+      stockValidated: null,
+      shortage: null,
+      income: null,
+    })),
+  });
+
   const isAdmin = user.role === "admin";
   const locationName = (id: string) => locations.find((l:any)=>l.id===id)?.name || "—";
 
+  // Ubicación por defecto para tomar una lectura nueva: el almacén si existe.
   useEffect(() => {
-    apiFetch("/locations").then((locs:any[]) => {
-      setLocations(locs);
-      setReadingLocationId(prev => prev || locs.find((l:any)=>l.type==="almacen")?.id || locs[0]?.id || "");
-    }).catch(()=>{});
-  }, []);
+    setReadingLocationId(prev => prev || locations.find((l:any)=>l.type==="almacen")?.id || locations[0]?.id || "");
+  }, [locations.length]);
 
   const loadClosings = useCallback(async () => {
+    // Los cierres que se hicieron sin conexión se muestran siempre, estén o
+    // no en el servidor: son trabajo real que ya se hizo y no se puede perder.
+    getPendingClosings(account).then(setPendientes).catch(() => {});
+
+    if (!online) { setLoading(false); return; }
     try {
       setLoading(true);
       const list = await apiFetch("/closing");
       setClosings(list);
-    } catch (e: any) { showToast(e.message, "error"); }
+    } catch (e: any) {
+      if (online) showToast(e.message, "error");
+    }
     finally { setLoading(false); }
-  }, []);
+  }, [online, account.companyId, account.userId]);
 
   useEffect(() => { loadClosings(); }, [loadClosings]);
 
-  const loadReadings = async () => {
-    try {
-      const list = await apiFetch("/closing/readings");
-      setReadings(list);
-    } catch (e: any) { showToast(e.message, "error"); }
-  };
-
   const startClosing = async () => {
-    await loadReadings();
+    if (readings.length === 0) {
+      showToast(online ? "No hay lecturas disponibles" : "No hay lecturas descargadas. Entra con internet una vez para poder cerrar sin conexión después.", "warning");
+    }
     setView("selectReading");
   };
 
   const selectReading = async (reading: any) => {
+    setSelectedReading(reading);
+    setSaving(true);
     try {
-      setSaving(true);
-      setSelectedReading(reading);
-      const data = await apiFetch(`/closing/preview/${reading.id}`);
+      const data = online
+        ? await apiFetch(`/closing/preview/${reading.id}`)
+        // Sin conexión se arma la misma pantalla con lo que trae la lectura
+        // (el stock con el que arrancó el período). Vendido / esperado /
+        // faltante quedan pendientes: dependen de las ventas, que el móvil no
+        // tiene todas, y calcularlos aquí daría cifras inventadas.
+        : previewSinConexion(reading);
       setPreview(data);
       const initValidated: Record<string, number> = {};
-      for (const item of data.items) initValidated[item.productId] = item.stockValidated;
+      for (const item of data.items) initValidated[item.productId] = item.stockValidated ?? 0;
       setValidatedItems(initValidated);
       setView("validate");
-    } catch (e: any) { showToast(e.message, "error"); }
+    } catch (e: any) {
+      showToast(online ? e.message : "Sin conexión y esta lectura no está descargada.", "error");
+    }
     finally { setSaving(false); }
   };
 
@@ -71,6 +122,27 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
     try {
       setSaving(true);
       const items = Object.entries(validatedItems).map(([productId, stockValidated]) => ({ productId, stockValidated }));
+
+      if (!online) {
+        // Sin conexión se guarda el CONTEO, no un cierre ya calculado. Al volver
+        // la conexión se envía y el servidor calcula vendido/esperado/faltantes
+        // con las ventas reales del período.
+        const loc = locations.find((l: any) => l.id === selectedReading.locationId);
+        await saveClosingOffline(account, {
+          initialReadingId: selectedReading.id,
+          items,
+          notes,
+          locationId: selectedReading.locationId ?? null,
+          locationName: loc?.name ?? null,
+          timestamp: Date.now(),
+        });
+        showToast("Cierre guardado en el móvil. Se enviará solo cuando vuelva el internet.", "success");
+        setView("list"); setPreview(null); setNotes("");
+        setValidatedItems({});
+        loadClosings();
+        return;
+      }
+
       await apiFetch("/closing/confirm", { method: "POST", body: { initialReadingId: selectedReading.id, items, notes } });
       showToast("Cierre registrado correctamente", "success");
       setView("list"); setPreview(null); setNotes(""); loadClosings();
@@ -115,10 +187,40 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         </div>
       </div>
 
+      {/* Cierres hechos sin conexión: se muestran siempre, para que nadie crea
+          que el trabajo se perdió. Cuando hay red se recargan del servidor. */}
+      {pendientes.length > 0 && (
+        <div style={{ marginBottom:16, display:"flex", flexDirection:"column", gap:10 }}>
+          {pendientes.map((p) => (
+            <div key={p.key}
+              style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.30)", borderRadius:14, padding:16 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap" as const }}>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:14, color:"#C2410C" }}>
+                    Conteo guardado sin conexión
+                  </div>
+                  <div style={{ fontSize:12, color:"#7C2D12", marginTop:3 }}>
+                    {p.locationName ? `${p.locationName} · ` : ""}{p.items.length} producto(s) · {fmtDate(new Date(p.timestamp).toISOString())}
+                  </div>
+                </div>
+                <Badge label={online ? "Enviándose…" : "Esperando internet"} color="#F97316"/>
+              </div>
+              <div style={{ fontSize:12, color:"#7C2D12", marginTop:8 }}>
+                El conteo está a salvo en este dispositivo. Los faltantes se calcularán cuando se envíe,
+                porque dependen de las ventas reales del período.
+              </div>
+              {p.error && <div style={{ fontSize:12, color:"#B91C1C", marginTop:6 }}>Último intento: {p.error}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
       {loading ? <Spinner/> : closings.length === 0 ? (
         <div style={{ textAlign:"center" as const, padding:60, color:"var(--muted)" }}>
           <Icon name="cierre" size={40} color="var(--muted)"/>
-          <p style={{ marginTop:12, fontSize:14 }}>No hay cierres registrados aún</p>
+          <p style={{ marginTop:12, fontSize:14 }}>
+            {online ? "No hay cierres registrados aún" : "Sin conexión: no se pueden ver los cierres ya registrados"}
+          </p>
         </div>
       ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
@@ -239,34 +341,45 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
 
   // ── Validar stock ───────────────────────────────────────────────────────────
   if (view === "validate" && preview) {
-    const itemsWithShortage = preview.items.filter((i: any) => (i.stockExpected - (validatedItems[i.productId] ?? i.stockValidated)) > 0.001);
+    const sinConexion = !!preview.offline;
+    // Sin conexión no hay "esperado" con qué comparar, así que no se resalta
+    // ningún faltante: todavía no se sabe si falta nada.
+    const itemsWithShortage = sinConexion ? [] : preview.items.filter((i: any) => (i.stockExpected - (validatedItems[i.productId] ?? i.stockValidated)) > 0.001);
     return (
       <div style={{ maxWidth:900, margin:"0 auto" }}>
         <button style={{ ...btn("ghost"), marginBottom:16, paddingLeft:0 }} onClick={() => setView("selectReading")}>← Cambiar lectura</button>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap" as const, gap:12, marginBottom:16 }}>
           <div>
             <h2 style={{ margin:"0 0 4px", fontSize:20, fontWeight:800, color:"var(--ink)" }}>Validar stock del período</h2>
-            <p style={{ margin:0, fontSize:13, color:"var(--muted)" }}>Desde {fmtDate(preview.periodStart)} · {preview.totalSales} ventas · {fmt(preview.totalIncome)} CUP</p>
+            <p style={{ margin:0, fontSize:13, color:"var(--muted)" }}>
+              Desde {fmtDate(preview.periodStart)}
+              {sinConexion ? " · sin conexión" : ` · ${preview.totalSales} ventas · ${fmt(preview.totalIncome)} CUP`}
+            </p>
           </div>
           <div style={{ display:"flex", gap:12, background:"var(--input-bg)", borderRadius:12, padding:"10px 16px" }}>
             {[{ l:"Efectivo", v:preview.incomeEfectivo },{ l:"Transferencia", v:preview.incomeTransferencia }].map(s=>(
               <div key={s.l} style={{ textAlign:"center" as const }}>
                 <div style={{ fontSize:11, color:"var(--brand)", fontWeight:600 }}>{s.l}</div>
-                <div style={{ fontSize:15, fontWeight:800, color:"var(--ink)" }}>{fmt(s.v)} CUP</div>
+                <div style={{ fontSize:15, fontWeight:800, color:"var(--ink)" }}>{sinConexion ? "—" : `${fmt(s.v)} CUP`}</div>
               </div>
             ))}
           </div>
         </div>
 
         <div style={{ background:"var(--input-bg)", border:"1px solid var(--line)", borderRadius:12, padding:12, marginBottom:16, fontSize:13, color:"var(--ink)" }}>
-          <strong>Instrucción:</strong> Cuenta físicamente cada producto y corrige el valor si difiere del esperado. La diferencia quedará registrada como faltante.
+          <strong>Instrucción:</strong> Cuenta físicamente cada producto y escribe la cantidad.
+          {sinConexion
+            ? " Sin conexión solo se anota tu conteo; el faltante se calcula al enviarse, cuando el servidor tenga las ventas del período."
+            : " La diferencia con el esperado quedará registrada como faltante."}
         </div>
 
         <div style={{ overflowX:"auto" as const, borderRadius:14, border:"1px solid var(--line)" }}>
           <table style={tbl}>
             <thead>
               <tr style={{ background:"var(--input-bg)" }}>
-                {["Producto","Stk. inicial","Vendido","Esperado","Conteo físico","Faltante","Ingreso"].map(h=>(
+                {(sinConexion
+                  ? ["Producto","Stk. inicial","Conteo físico"]
+                  : ["Producto","Stk. inicial","Vendido","Esperado","Conteo físico","Faltante","Ingreso"]).map(h=>(
                   <th key={h} style={th}>{h}</th>
                 ))}
               </tr>
@@ -280,8 +393,8 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
                   <tr key={item.productId}>
                     <td style={td(hasS)}><div style={{ fontWeight:600, color:"var(--ink)" }}>{item.productName}</div><div style={{ fontSize:11, color:"var(--muted)" }}>{item.productCode}</div></td>
                     <td style={td(hasS)}>{item.stockInitial} {item.unit}</td>
-                    <td style={td(hasS)}>{item.stockSold} {item.unit}</td>
-                    <td style={{ ...td(hasS), fontWeight:600, color:"var(--ink)" }}>{item.stockExpected} {item.unit}</td>
+                    {!sinConexion && <td style={td(hasS)}>{item.stockSold} {item.unit}</td>}
+                    {!sinConexion && <td style={{ ...td(hasS), fontWeight:600, color:"var(--ink)" }}>{item.stockExpected} {item.unit}</td>}
                     <td style={td(hasS)}>
                       <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                         <input type="number" min={0} step="0.001" value={validated}
@@ -290,10 +403,10 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
                         <span style={{ fontSize:11, color:"var(--muted)" }}>{item.unit}</span>
                       </div>
                     </td>
-                    <td style={{ ...td(hasS), fontWeight:700, color:hasS?"#F97316":"#10B981" }}>
+                    {!sinConexion && <td style={{ ...td(hasS), fontWeight:700, color:hasS?"#F97316":"#10B981" }}>
                       {hasS ? `-${shortage} ${item.unit}` : "✓"}
-                    </td>
-                    <td style={{ ...td(hasS), color:"#10B981", fontWeight:600 }}>{fmt(item.income)}</td>
+                    </td>}
+                    {!sinConexion && <td style={{ ...td(hasS), color:"#10B981", fontWeight:600 }}>{fmt(item.income)}</td>}
                   </tr>
                 );
               })}
@@ -318,7 +431,7 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:16 }}>
           <button style={btn("secondary")} onClick={() => setView("selectReading")}>Cancelar</button>
           <button style={{ ...btn("primary"), opacity:saving?0.6:1 }} onClick={confirmClosing} disabled={saving}>
-            {saving ? "Guardando cierre..." : "Confirmar cierre"}
+            {saving ? "Guardando..." : sinConexion ? "Guardar conteo en el móvil" : "Confirmar cierre"}
           </button>
         </div>
       </div>

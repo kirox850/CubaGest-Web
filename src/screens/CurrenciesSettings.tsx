@@ -4,7 +4,7 @@ import Icon from "@/components/shared/Icon";
 import { Field, Modal, btn, inp } from "@/components/shared/primitives";
 
 // ─── MONEDAS Y TASAS (config de empresa — solo admin) ──────────────────────
-const CurrenciesSettings = ({ showToast, onClose }: { showToast: (m:string,t:string)=>void; onClose: () => void }) => {
+const CurrenciesSettings = ({ showToast, onClose, embedded }: { showToast: (m:string,t:string)=>void; onClose: () => void; embedded?: boolean }) => {
   const [currencies, setCurrencies] = useState<string[]>(["CUP"]);
   const [rateMode, setRateMode]     = useState("manual");
   const [manualRates, setManualRates] = useState<Record<string,string>>({});
@@ -60,8 +60,10 @@ const CurrenciesSettings = ({ showToast, onClose }: { showToast: (m:string,t:str
     finally { setSaving(false); }
   };
 
-  return (
-    <Modal title="Monedas y Tasas de Cambio" onClose={onClose} width={520}>
+  // Un modal dentro de otro en el teléfono es un callejón sin salida: el de
+  // arriba tapa al de abajo y no hay forma de volver. Por eso, dentro de
+  // Configuración se renderiza el contenido pelado.
+  const contenido = (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <div>
           <Field label="Monedas que opera tu negocio" required>
@@ -129,12 +131,13 @@ const CurrenciesSettings = ({ showToast, onClose }: { showToast: (m:string,t:str
         )}
 
         <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
-          <button style={btn("secondary")} onClick={onClose}>Cancelar</button>
+          {!embedded && <button style={btn("secondary")} onClick={onClose}>Cancelar</button>}
           <button style={{ ...btn("primary"), opacity:saving?0.6:1 }} onClick={save} disabled={saving}>{saving?"Guardando...":"Guardar"}</button>
         </div>
       </div>
-    </Modal>
   );
+
+  return embedded ? contenido : <Modal title="Monedas y Tasas de Cambio" onClose={onClose} width={520}>{contenido}</Modal>;
 };
 
 export default CurrenciesSettings;
