@@ -8,6 +8,7 @@ import CurrenciesSettings from "@/screens/CurrenciesSettings";
 import PlanModal from "@/screens/PlanModal";
 import { CajaSettings } from "./CajaSettings";
 import DiscountsAdmin from "@/screens/DiscountsAdmin";
+import { CajasAdmin } from "@/screens/CajasAdmin";
 
 // ─── CONFIGURACIÓN ────────────────────────────────────────────────────────────
 //
@@ -25,10 +26,11 @@ import DiscountsAdmin from "@/screens/DiscountsAdmin";
 // así que la tabla de usuarios no sigue repintando mientras el cajero mira la
 // de monedas.
 
-type TabId = "caja" | "monedas" | "descuentos" | "usuarios" | "auditoria" | "plan";
+type TabId = "cajas" | "caja" | "monedas" | "descuentos" | "usuarios" | "auditoria" | "plan";
 
 const TABS: { id: TabId; label: string; icon: string; roles?: string[]; perms?: string[] }[] = [
-  { id: "caja",      label: "Caja",      icon: "pos" },
+  { id: "cajas",     label: "Cajas",     icon: "pos", roles: ["admin"] },
+  { id: "caja",      label: "Cierre de caja", icon: "cierre" },
   { id: "monedas",   label: "Monedas y tasas", icon: "contabilidad", roles: ["admin"] },
   { id: "descuentos", label: "Descuentos",   icon: "gift", roles: ["admin"] },
   { id: "usuarios",  label: "Usuarios",  icon: "usuarios", roles: ["admin"] },
@@ -37,7 +39,7 @@ const TABS: { id: TabId; label: string; icon: string; roles?: string[]; perms?: 
 ];
 
 const Configuracion = ({
-  user, perms, showToast, onClose, initialTab = "caja",
+  user, perms, showToast, onClose, initialTab = "cajas",
 }: {
   user: any; perms: string[]; showToast: (m: string, t: string) => void;
   onClose: () => void; initialTab?: TabId;
@@ -106,6 +108,8 @@ const Configuracion = ({
                 <Icon name="close" size={18} />
               </button>
             </div>
+
+            {activa?.id === "cajas" && <CajasAdmin showToast={showToast} />}
 
             {activa?.id === "caja" && <CajaSettings user={user} showToast={showToast} />}
 

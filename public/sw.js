@@ -13,7 +13,7 @@
 // abierta, así que no se registra ni se anuncia. La sincronización la dispara la
 // app (arranque, foreground, reconexión y el botón manual).
 
-const CACHE = 'cubagest-v8';
+const CACHE = 'cubagest-v9';
 const APP_SHELL = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', event => {

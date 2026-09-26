@@ -47,9 +47,20 @@ export function useLocations(user: any) {
         await cacheLocations(account, locs || []);
         setSinCache(false);
         if (!guardadoRef.current && locs?.length) {
-          // Primera vez con red: se fija la ubicación por defecto.
-          const propia = locs.find((l) => l.type === "caja" || l.type === "almacen") || locs[0];
-          setLocationId(prev => prev || propia.id);
+          // La caja de trabajo la dicta el TURNO, no el orden de la lista. Sin
+          // esto, un cajero con tres cajas asignadas empezaba en la que
+          // saliera primera por alphabetic, que casi nunca es la suya.
+          let turno: string | null = null;
+          try {
+            const r = await apiFetch("/shift/current");
+            turno = r?.shift?.locationId || null;
+          } catch { /* sin turno: se sigue con el criterio de abajo */ }
+          if (turno && locs.some((l: any) => l.id === turno)) {
+            setLocationId(prev => prev || turno!);
+          } else {
+            const propia = locs.find((l) => l.type === "caja" || l.type === "almacen") || locs[0];
+            setLocationId(prev => prev || propia.id);
+          }
         }
         return;
       } catch {
