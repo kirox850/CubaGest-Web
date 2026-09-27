@@ -197,14 +197,21 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
         // Se recuerda la ubicación para poder seguir vendiendo sin conexión.
         setLastLocationId(account, own.id).catch(() => {});
         const { items } = await apiFetch(`/locations/${own.id}/stock`);
-        // Guardar el catálogo para trabajar sin conexión es una mejora, no un
-        // requisito. Si IndexedDB falla, el POS tiene que seguir vendiendo
-        // igual: antes este fallo subía al catch de más arriba, que vaciaba la
-        // lista de productos, y se veía un POS sin productos NADA MÁS
-        // PROPIO y el catálogo entero estaba ahí, recibido del servidor.
-        cacheProducts(scopeOf(own.id), items).catch(() => {});
         if (cancelled) return;
-        await loadFromCache(own.id);
+
+        // Se pinta LO QUE LLEGÓ DEL SERVIDOR. Antes, con internet, la lista se
+        // sacaba de IndexedDB: la respuesta del servidor solo servía para
+        // llenar el caché y acto seguido se releía. Eso tenía dos fallos:
+        // si el guardado fallaba, la pantalla se quedaba vacía aunque el
+        // catálogo entero hubiera llegado (se veía "A request was aborted" y
+        // ningún producto), y además la escritura no se esperaba, así que la
+        // lectura podía ocurrir antes de que terminara.
+        setProducts(applyStock(items));
+        setLoading(false);
+
+        // El caché se guarda aparte, sin esperar y sin molestar si falla:
+        // sirve para cuando no hay red, nunca para decidir qué se ve ahora.
+        cacheProducts(scopeOf(own.id), items).catch(() => {});
       } catch (e: any) {
         if (cancelled) return;
         // Antes esto siempre decía "Sin conexión", aunque la causa real
