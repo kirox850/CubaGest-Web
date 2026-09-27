@@ -30,6 +30,10 @@ export function useShift(user: any) {
   const [cajas, setCajas] = useState<AssignedCaja[]>([]);
   const [cargando, setCargando] = useState(true);
   const [offline, setOffline] = useState(false);
+  // Un aviso del servidor, del estilo "falta aplicar una migración". Antes
+  // esto se perdía en un catch y el móvil creía que simplemente no había
+  // turno, y acababa mostrando un POS vacío blaming a los productos.
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     if (!user?.id) return;
@@ -37,6 +41,7 @@ export function useShift(user: any) {
       const r = await apiFetch("/shift/current");
       setShift(r?.shift ?? null);
       setCajas(r?.assignedCajas ?? []);
+      setAviso(r?.aviso ?? null);
       setOffline(false);
     } catch {
       // Sin conexión: el turno abierto se recuerda en el dispositivo. Sin esto
@@ -77,7 +82,7 @@ export function useShift(user: any) {
     recordar(null, []);
   }, []);
 
-  return { shift, cajas, cargando, offline, abrirTurno, cerrarTurno, refresh: cargar, recordar };
+  return { shift, cajas, cargando, offline, aviso, abrirTurno, cerrarTurno, refresh: cargar, recordar };
 }
 
 /**
@@ -103,6 +108,10 @@ export const AbrirTurno = ({
   // dato del que depende toda la conciliación: sin él, cualquier faltante es
   // imposible de atribuir.
   const [monedas, setMonedas] = useState<{ cur: string; valor: string }[]>([{ cur: "CUP", valor: "" }]);
+  // La caja elegida se confirma con un botón. Antes el turno arrancaba al
+  // tocar la caja, y no había forma de volver atrás: un toque en el sitio
+  // equivocado ya había abierto turno y creado la lectura de apertura.
+  const [elegida, setElegida] = useState<string | null>(null);
 
   if (!abierta) return null;
 
@@ -141,14 +150,32 @@ export const AbrirTurno = ({
             </div>
           ) : (
             <>
-            {cajas.map((c) => (
-            <button key={c.id} onClick={() => empezar(c.id)} disabled={eligiendo}
-              style={{ ...btn("secondary"), display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", textAlign: "left" as const, opacity: eligiendo ? 0.6 : 1 }}>
-              <Icon name="pos" size={20} color="#64748B" />
-              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", flex: 1 }}>{c.name}</span>
-              <Icon name="check" size={16} color="var(--brand)" />
-            </button>
-          ))}
+            {cajas.map((c) => {
+              const marcada = elegida === c.id;
+              return (
+              <button key={c.id} onClick={() => setElegida(c.id)} disabled={eligiendo}
+                aria-pressed={marcada}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "13px 15px",
+                  textAlign: "left" as const, cursor: "pointer",
+                  borderRadius: 12,
+                  border: `1px solid ${marcada ? "var(--brand)" : "var(--line)"}`,
+                  background: marcada ? "var(--input-bg)" : "transparent",
+                  opacity: eligiendo ? 0.6 : 1,
+                }}>
+                <span style={{
+                  width: 20, height: 20, borderRadius: "50%", flex: "0 0 auto",
+                  border: `2px solid ${marcada ? "var(--brand)" : "var(--line)"}`,
+                  background: marcada ? "var(--brand)" : "transparent",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {marcada && <Icon name="check" size={12} color="#fff" />}
+                </span>
+                <Icon name="pos" size={20} color={marcada ? "var(--brand)" : "#64748B"} />
+                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", flex: 1 }}>{c.name}</span>
+              </button>
+              );
+            })}
 
           <div style={{ marginTop: 6, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", marginBottom: 3 }}>¿Con cuánto dinero abres la caja?</div>
@@ -192,11 +219,20 @@ export const AbrirTurno = ({
             </div>
           )}
 
-          {onCerrar && (
-            <button onClick={onCerrar} style={{ ...btn("ghost"), marginTop: 4, fontSize: 13 }}>
-              Ahora no
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+            <button
+              onClick={() => elegida && empezar(elegida)}
+              disabled={!elegida || eligiendo}
+              style={{ ...btn("primary"), opacity: (!elegida || eligiendo) ? 0.55 : 1, cursor: (!elegida || eligiendo) ? "not-allowed" : "pointer" }}
+            >
+              {eligiendo ? "Abriendo turno…" : "Comenzar turno"}
             </button>
-          )}
+            {onCerrar && (
+              <button onClick={onCerrar} style={{ ...btn("ghost"), fontSize: 13 }}>
+                Ahora no
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
