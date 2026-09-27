@@ -72,7 +72,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   // El turno decide la caja. Ya no vale "la caja cuyo dueño soy", porque la
   // caja es del negocio y la pueden llevar varios cajeros: lo que dice el turno
   // abierto es con cuál estoy trabajando yo ahora mismo.
-  const { shift, cajas, cargando: cargandoTurno, abrirTurno } = useShift(user);
+  const { shift, cajas, cargando: cargandoTurno, aviso: avisoTurno, abrirTurno } = useShift(user);
   const [pidiendoTurno, setPidiendoTurno] = useState(false);
   useEffect(() => {
     if (!shift) return;
@@ -82,8 +82,13 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   // Sin turno no se vende: una venta sin caja asignada no entra en ningún
   // cierre y el inventario queda sin cuadrar.
   useEffect(() => {
-    if (!cargandoTurno && user?.role === "cajero" && !shift) setPidiendoTurno(true);
-  }, [cargandoTurno, shift, user?.role]);
+    // El modal se pide cuando hay algo que elegir. Con UNA sola caja asignada
+    // no hay nada que decidir y el POS funciona igual, así que interrumpir al
+    // cajero para preguntarle algo que ya está decidido solo estorba.
+    if (!cargandoTurno && user?.role === "cajero" && !shift && !avisoTurno && cajas.length > 1) {
+      setPidiendoTurno(true);
+    }
+  }, [cargandoTurno, shift, user?.role, avisoTurno, cajas.length]);
 
   // Espacio de nombres de los datos locales de ESTA cuenta en ESTA ubicación.
   // El catálogo y el stock cacheados nunca se mezclan con los de otra cuenta ni
@@ -159,10 +164,20 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
       try {
         const locs: any[] = await apiFetch("/locations");
-        // La caja sale del turno abierto; el almacén sale de su tipo. Si el
-        // cajero aún no abrió turno, no hay caja y no se puede vender.
+        // De dónde sale la caja, en este orden:
+        //  1. el turno abierto, que es lo que manda;
+        //  2. el almacén, para quien trabaja en él;
+        //  3. la única caja que le tienen asignada.
+        //
+        // El punto 3 es el que faltaba, y era un fallo serio: sin él, un
+        // cajero con una sola caja y sin turno abierto se quedaba con el POS
+        // vacío y el mensaje "no hay productos", cuando su caja estaba ahí y
+        // el backend mesmo se la habría dado. Con varias cajas sí hace falta
+        // elegir, que para eso está el turno.
+        const unicaAsignada = cajas.length === 1 ? cajas[0].id : null;
         const own = shift ? locs.find((l:any)=>l.id===shift.locationId)
           : user.role === "almacenista" ? locs.find((l:any)=>l.type==="almacen")
+          : unicaAsignada ? locs.find((l:any)=>l.id===unicaAsignada)
           : undefined;
         if (!own) { setProducts([]); setLoading(false); return; }
         if (cancelled) return;
@@ -406,6 +421,11 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
     <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 120px)", gap:0 }}>
       <style>{posStyles}</style>
       <h2 style={{ margin:"0 0 4px", fontSize:20, fontWeight:800, color:"var(--ink)", flexShrink:0 }}>Punto de Venta</h2>
+      {avisoTurno && (
+        <div style={{ flexShrink:0, marginBottom:12, padding:"11px 14px", background:"rgba(220,38,38,0.07)", border:"1px solid rgba(220,38,38,0.32)", borderRadius:12, fontSize:13, color:"#991B1B", fontWeight:600 }}>
+          {avisoTurno}
+        </div>
+      )}
       {/* La caja en la que se está trabajando no es un dato informativo: es
           la que decide a qué cierre y a qué inventario va cada venta. Por eso
           ocupa una banda con "terminar turno" y no una línea de texto. */}
@@ -460,7 +480,22 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
                 </div>
               );
             })}
-            {avail.length===0 && <div style={{ textAlign:"center", padding:40, color:"var(--muted)", fontSize:14 }}>No hay productos disponibles</div>}
+            {avail.length===0 && (
+              <div style={{ textAlign:"center", padding:40, color:"var(--muted)", fontSize:14, lineHeight:1.6 }}>
+                {/* Decir "no hay productos" cuando lo que falla es que no se
+                    pudo saber la caja lleva a la gente a cargar el catálogo
+                    entero, que no es el problema y además lo empeora. */}
+                {avisoTurno
+                  ? <><strong style={{ display:"block", color:"#C2410C", marginBottom:6 }}>No se pudo cargar el catálogo</strong>{avisoTurno}</>
+                  : search
+                  ? "Ningún producto coincide con la búsqueda."
+                  : user?.role === "cajero" && cajas.length === 0
+                  ? "No tienes ninguna caja asignada. Pídele al administrador que te asigne una en Configuración."
+                  : user?.role === "cajero" && cajas.length > 1 && !shift
+                  ? "Elige con qué caja vas a trabajar para poder cargar los productos."
+                  : "No hay productos disponibles en esta caja."}
+              </div>
+            )}
           </div>
         )}
       </div>
