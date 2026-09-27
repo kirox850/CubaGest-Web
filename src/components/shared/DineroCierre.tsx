@@ -220,3 +220,99 @@ export const ExplicarDescuadre = ({
     </div>
   );
 };
+
+// ─── POR QUÉ FALTÓ MERCANCÍA ────────────────────────────────────────────────
+//
+// Esto NO resuelve el cierre. Es el relato de por qué faltaron 3 cigarettes,
+// para el día que alguien pregunte. El cierre sigue pendiente hasta que la
+// mercancía cuadre, porque escribir por qué no hace que falte menos.
+export const NotasMercaderia = ({
+  pendientes, notas, closingId, showToast, onGuardado,
+}: {
+  pendientes: { productId: string; productName: string; unit: string; shortage: number }[];
+  notas: { id: string; productId?: string | null; productName?: string | null; qty: number; note: string; autor: string; createdAt: string }[];
+  closingId: string;
+  showToast: (m: string, t: string) => void;
+  onGuardado: () => void;
+}) => {
+  const [abierta, setAbierta] = useState<string | null>(null);
+  const [texto, setTexto] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async (productId?: string) => {
+    if (!texto.trim()) { showToast("Escribe la nota", "error"); return; }
+    try {
+      setGuardando(true);
+      await apiFetch(`/closing/${closingId}/note`, {
+        method: "POST", body: { productId, note: texto.trim() },
+      });
+      setTexto(""); setAbierta(null);
+      showToast("Nota guardada", "success");
+      onGuardado();
+    } catch (e: any) { showToast(e.message, "error"); }
+    finally { setGuardando(false); }
+  };
+
+  if (pendientes.length === 0 && notas.length === 0) return null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {notas.length > 0 && (
+        <div style={{ background: "var(--input-bg)", borderRadius: 12, padding: "11px 13px" }}>
+          <div style={{ fontSize: 11.5, fontWeight: 800, color: "var(--muted)", textTransform: "uppercase" as any, marginBottom: 7 }}>
+            Notas sobre lo que faltó
+          </div>
+          {notas.map((n) => (
+            <div key={n.id} style={{ fontSize: 12.5, color: "var(--ink)", lineHeight: 1.5, marginBottom: 6 }}>
+              {n.productName ? <strong>{n.productName}: </strong> : null}
+              {n.note}
+              <span style={{ color: "var(--muted)", fontSize: 11 }}> — {n.autor}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {pendientes.map((l) => {
+        const yaEsta = abierta === l.productId;
+        const suyas = notas.filter((n) => n.productId === l.productId);
+        return (
+          <div key={l.productId} style={{ border: "1px solid rgba(217,119,6,0.30)", background: "rgba(217,119,6,0.04)", borderRadius: 12, padding: 13 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13.5, fontWeight: 800, color: l.shortage > 0 ? "#B45309" : "#047857" }}>
+                {l.shortage > 0 ? "Faltan" : "Sobran"} {Math.abs(Math.round(l.shortage * 100) / 100)} {l.unit || "ud"} de {l.productName}
+              </span>
+              {!yaEsta && (
+                <button onClick={() => { setAbierta(l.productId); setTexto(""); }}
+                  style={{ ...btn("secondary"), fontSize: 12, padding: "6px 11px" }}>Explicar por qué</button>
+              )}
+            </div>
+            {suyas.length > 0 && !yaEsta && (
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 7, lineHeight: 1.5 }}>
+                Ya está anotado: {suyas.map((n) => n.note).join(" · ")}
+              </div>
+            )}
+
+            {yaEsta && (
+              <div style={{ marginTop: 11, display: "flex", flexDirection: "column", gap: 9 }}>
+                <input value={texto} onChange={(e) => setTexto(e.target.value)}
+                  placeholder="Ej: se rompió un paquete al moverlo / lo took un cliente sin pagar"
+                  style={inp} />
+                <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.5 }}>
+                  Esto queda anotado en el cierre. No lo resuelve: el cierre
+                  sigue pendiente hasta que la mercancía cuadre.
+                </div>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <button onClick={() => setAbierta(null)} style={{ ...btn("secondary"), fontSize: 12 }}>Cancelar</button>
+                  <button onClick={() => guardar(l.productId)} disabled={guardando}
+                    style={{ ...btn("primary"), fontSize: 12, opacity: guardando ? 0.6 : 1 }}>
+                    {guardando ? "Guardando…" : "Guardar nota"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};

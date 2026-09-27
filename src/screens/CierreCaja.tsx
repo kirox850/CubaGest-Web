@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
-import { DineroCierre, ExplicarDescuadre } from "@/components/shared/DineroCierre";
+import { DineroCierre, ExplicarDescuadre, NotasMercaderia } from "@/components/shared/DineroCierre";
 import { MovimientosDinero } from "@/screens/MovimientosDinero";
 import { useOnlineStatus } from "@/hooks/useOnline";
 import { useLocations, useReadings } from "@/hooks/useLocations";
@@ -499,6 +499,11 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
     const c = detailClosing;
     const hasShortage = c.items?.some((i: any) => i.shortage > 0.001);
     const provisional = c.status === "provisional";
+    // El servidor es quien sabe qué sigue explicado y qué no: aquí no se deduce
+    // nada, que es como antes se mostraba un cierre como limpio con mercancía
+    // sin cuadrar.
+    const pendientesDinero: Record<string, number> = c.pendientes?.dinero || {};
+    const pendientesMercaderia = c.pendientes?.mercaderia || [];
     const hasta = c.provisionalUntil ? new Date(c.provisionalUntil) : null;
     const horasRestantes = hasta
       ? Math.max(0, Math.ceil((hasta.getTime() - Date.now()) / 3_600_000)) : null;
@@ -559,18 +564,63 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
 
         {provisional && (
           <div style={{ background:"rgba(217,119,6,0.07)", border:"1px solid rgba(217,119,6,0.30)", borderRadius:14, padding:"14px 16px", marginBottom:18 }}>
-            <div style={{ fontSize:13.5, fontWeight:800, color:"#92400E", marginBottom:3 }}>Este cierre no cuadró el dinero</div>
-            <div style={{ fontSize:12.5, color:"#B45309", lineHeight:1.55, marginBottom:12 }}>
-              Queda pendiente hasta que alguien explique el descuadre.
+            <div style={{ fontSize:13.5, fontWeight:800, color:"#92400E", marginBottom:3 }}>Este cierre tiene cosas sin cuadrar</div>
+            <div style={{ fontSize:12.5, color:"#B45309", lineHeight:1.55, marginBottom:14 }}>
+              Queda pendiente hasta que todas las líneas cuadren.
               {horasRestantes !== null && horasRestantes > 0
-                ? ` Tienes ${horasRestantes} hora${horasRestantes === 1 ? "" : "s"} para hacerlo.`
-                : " Ya se venció la ventana y se cerró con el descuadre tal cual."}
+                ? ` Tienes ${horasRestantes} hora${horasRestantes === 1 ? "" : "s"} para resolverlo.`
+                : " Ya se venció la ventana y se cerró con lo que había."}
             </div>
-            <ExplicarDescuadre
-              closing={c}
-              showToast={showToast}
-              onResuelto={() => reloadDetail(c.id)}
-            />
+
+            {/* El dinero se explica con una cantidad exacta. */}
+            {Object.keys(pendientesDinero).length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize:11.5, fontWeight:800, color:"#92400E", textTransform:"uppercase" as any, marginBottom:7 }}>
+                  Dinero
+                </div>
+                <ExplicarDescuadre
+                  closing={{ ...c, cashDiff: pendientesDinero }}
+                  showToast={showToast}
+                  onResuelto={() => reloadDetail(c.id)}
+                />
+              </div>
+            )}
+
+            {/* La mercancía se anota, pero anotarla no la cuadra. */}
+            <div>
+              <div style={{ fontSize:11.5, fontWeight:800, color:"#92400E", textTransform:"uppercase" as any, marginBottom:7 }}>
+                Mercancía
+              </div>
+              <NotasMercaderia
+                pendientes={pendientesMercaderia}
+                notas={c.notas || []}
+                closingId={c.id}
+                showToast={showToast}
+                onGuardado={() => reloadDetail(c.id)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Las notas se ven siempre, no solo mientras está pendiente: son el
+            registro de por qué pasó, y sirve meses después. */}
+        {!provisional && (c.notas?.length > 0 || c.explicaciones?.length > 0) && (
+          <div style={{ background:"var(--input-bg)", borderRadius:14, padding:"14px 16px", marginBottom:18 }}>
+            <div style={{ fontSize:11.5, fontWeight:800, color:"var(--muted)", textTransform:"uppercase" as any, marginBottom:8 }}>
+              Notas de este cierre
+            </div>
+            {c.explicaciones?.map((x: any) => (
+              <div key={x.id} style={{ fontSize:12.5, color:"var(--ink)", lineHeight:1.5, marginBottom:5 }}>
+                <strong>{fmt(Math.abs(x.amount))} {x.currency}</strong> — {x.note}
+                <span style={{ color:"var(--muted)", fontSize:11 }}> · {x.autor}</span>
+              </div>
+            ))}
+            {c.notas?.map((n: any) => (
+              <div key={n.id} style={{ fontSize:12.5, color:"var(--ink)", lineHeight:1.5, marginBottom:5 }}>
+                {n.productName ? <>{n.productName}: </> : null}{n.note}
+                <span style={{ color:"var(--muted)", fontSize:11 }}> · {n.autor}</span>
+              </div>
+            ))}
           </div>
         )}
 
