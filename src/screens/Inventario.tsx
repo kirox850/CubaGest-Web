@@ -76,7 +76,10 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
       if (invOnline) {
         const { location, items } = await apiFetch(`/locations/${locationId}/stock`);
         setLocationInfo(location);
-        await cacheProducts(scope, items);
+        // Igual que en el POS: si la copia local falla, el inventario sigue
+        // mostrando lo que dijo el servidor. Perder la copia sin conexión
+        // es un problema menor; perder la pantalla es el problema grande.
+        cacheProducts(scope, items).catch(() => {});
         setProducts(items);
       } else {
         const cached = await getOfflineProducts(scope);

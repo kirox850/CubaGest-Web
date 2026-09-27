@@ -271,71 +271,145 @@ function clearScopeProducts(store: IDBObjectStore, index: IDBIndex, scope: strin
   });
 }
 
-// Cantidad ya descontada por ventas PENDIENTES de esta ubicación. Al refrescar
-// el stock del servidor hay que volver a descontarla: si no, una venta offline
-// pendiente desaparecería del cálculo local y el POS mostraría stock de más.
-async function pendingQtyByProduct(store: IDBObjectStore, account: string): Promise<Map<string, number>> {
-  const idx = store.index('by_status');
-  const out = new Map<string, number>();
-  const rows = await reqToPromise(
-    idx.getAll(IDBKeyRange.only([account, 'pending'])),
-  ) as OfflineSale[];
-  const syncing = await reqToPromise(
-    idx.getAll(IDBKeyRange.only([account, 'syncing'])),
-  ) as OfflineSale[];
-  for (const sale of [...rows, ...syncing]) {
-    for (const item of sale.items || []) {
-      const prev = out.get(item.productId) || 0;
-      out.set(item.productId, prev + Number(item.qty || 0));
-    }
-  }
-  return out;
-}
-
-// Reemplaza el catálogo cacheado de UNA ubicación. Todo en una sola transacción:
-// o queda el stock nuevo (con las ventas locales aún descontadas), o no cambia
-// nada.
+/**
+ * Guarda el catálogo de una ubicación para poder vender sin conexión.
+ *
+ * La forma de esto no es casualidad. Una transacción de IndexedDB se cierra
+ * sola en cuanto el código deja de encolar peticiones, y un `await` en medio
+ * de la transacción es exactamente eso: una pausa. Antes, dentro de la misma
+ * transacción, se leían las ventas pendientes con un await y luego se
+ * escribían los productos, y al volver a escribir la transacción ya había
+ * cerrado. El resultado era el error "A request was aborted for example
+ * through a call to IDBTransaction.abort", que el POS y el inventario
+ * mostraban en pantalla y que se comía el catálogo entero: por eso no se veían
+ * productos aunque el servidor los hubiera mandado bien.
+ *
+ * Ahora son dos transacciones: una de solo lectura para preguntar, y una de
+ * escritura en la que todo se encola seguido sin pausas, y se espera al final
+ * a que termine. El orden es el mismo y el resultado también.
+ */
 export async function cacheProducts(scope: OfflineScope, products: any[]): Promise<void> {
   requireScope(scope, 'cacheProducts');
   const db = await openDB();
-  const t = tx(db, ['products', 'sales_queue', 'app_meta'], 'readwrite');
-  const store = t.objectStore('products');
   const sk = scopeKey(scope);
-  const acc = accountKey(scope);
 
-  const pending = await pendingQtyByProduct(t.objectStore('sales_queue'), acc);
+  // 1) Las ventas locales pendientes, en su propia transacción de lectura.
+  const pending = await readPendingQty(db, accountKey(scope));
 
-  await clearScopeProducts(store, store.index('scope'), sk);
+  // 2) Las escrituras, en una sola transacción y sin ningún await en medio.
+  await new Promise<void>((resolve, reject) => {
+    const t = db.transaction(['products', 'app_meta'], 'readwrite');
+    t.oncomplete = () => resolve();
+    t.onabort = () => reject(t.error || new Error('Transacción de IndexedDB abortada'));
+    t.onerror = () => reject(t.error || new Error('Error en transacción de IndexedDB'));
 
-  for (const p of products) {
-    const productId = String(p.id ?? p.productId ?? '');
-    if (!productId) continue;
-    const stock = Number(p.stock) || 0;
-    store.put({
-      key: `${sk}::${productId}`,
-      scope: sk,
-      locationId: String(scope.locationId || ''),
-      id: productId,
-      productId,
-      code: p.code || '',
-      barcode: p.barcode || '',
-      name: p.name,
-      price: Number(p.price),
-      cost: Number(p.cost || 0),
-      stock,
-      localStock: Math.max(0, stock - (pending.get(productId) || 0)),
-      minStock: Number(p.minStock || 0),
-      currency: p.currency || 'CUP',
-      unit: p.unit || 'ud',
-      category: p.category || '',
-      active: p.active !== false,
-      cachedAt: Date.now(),
-    } as OfflineProduct);
-  }
+    const store = t.objectStore('products');
 
-  t.objectStore('app_meta').put({ key: metaKey(scope, 'lastProductSync'), value: Date.now() });
+    // Primero se borra lo que había de esta ubicación. El cursor va porque el
+    // índice es por 'scope', no por clave, y todo se sigue encadenando desde
+    // el mismo manejador: la transacción nunca queda sin petición pendiente.
+    const cursorReq = store.index('scope').openKeyCursor(IDBKeyRange.only(sk));
+    cursorReq.onsuccess = () => {
+      const cursor = cursorReq.result;
+      if (cursor) {
+        store.delete(cursor.primaryKey);
+        cursor.continue();
+        return;
+      }
+      // Cursor agotado: se encolan todas las altas de una vez, seguidas.
+      for (const p of products) {
+        const productId = String(p.id ?? p.productId ?? '');
+        if (!productId) continue;
+        const stock = Number(p.stock) || 0;
+        store.put({
+          key: `${sk}::${productId}`,
+          scope: sk,
+          locationId: String(scope.locationId || ''),
+          id: productId,
+          productId,
+          code: p.code || '',
+          barcode: p.barcode || '',
+          name: p.name,
+          price: Number(p.price),
+          cost: Number(p.cost || 0),
+          stock,
+          // El stock del servidor no sabe de las ventas que aún no se han
+          // sincronizado, así que se descuentan aquí o el POS mostraría de más.
+          localStock: Math.max(0, stock - (pending.get(productId) || 0)),
+          minStock: Number(p.minStock || 0),
+          currency: p.currency || 'CUP',
+          unit: p.unit || 'ud',
+          category: p.category || '',
+          active: p.active !== false,
+          cachedAt: Date.now(),
+        } as OfflineProduct);
+      }
+      t.objectStore('app_meta').put({ key: metaKey(scope, 'lastProductSync'), value: Date.now() });
+    };
+    cursorReq.onerror = () => reject(cursorReq.error);
+  });
+}
 
-  await txDone(t);
+/** Ventas de esta cuenta sin sincronizar, por producto. Transacción propia. */
+function readPendingQty(db: IDBDatabase, account: string): Promise<Map<string, number>> {
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(['sales_queue'], 'readonly');
+    const idx = t.objectStore('sales_queue').index('by_status');
+    const out = new Map<string, number>();
+
+    const accumulate = (rows: OfflineSale[] | undefined) => {
+      for (const sale of rows || []) {
+        for (const it of sale.items || []) {
+          const pid = String(it.productId || '');
+          if (!pid) continue;
+          out.set(pid, (out.get(pid) || 0) + (Number(it.qty) || 0));
+        }
+      }
+    };
+
+    const primero = idx.getAll(IDBKeyRange.only([account, 'pending']));
+    primero.onsuccess = () => {
+      accumulate(primero.result as OfflineSale[]);
+      // Se lanza la segunda lectura desde el manejador de la primera, para no
+      // dejar la transacción en pausa.
+      const segundo = idx.getAll(IDBKeyRange.only([account, 'syncing']));
+      segundo.onsuccess = () => { accumulate(segundo.result as OfflineSale[]); };
+      segundo.onerror = () => reject(segundo.error);
+    };
+    primero.onerror = () => reject(primero.error);
+    t.onabort = () => reject(t.error || new Error('Transacción de IndexedDB abortada'));
+    t.oncomplete = () => resolve(out);
+  });
+}
+
+/** Un producto del catálogo local. Su propia transacción de solo lectura. */
+function readOneProduct(db: IDBDatabase, key: string): Promise<OfflineProduct | undefined> {
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(['products'], 'readonly');
+    const req = t.objectStore('products').get(key);
+    req.onsuccess = () => resolve(req.result as OfflineProduct | undefined);
+    req.onerror = () => reject(req.error);
+    t.onabort = () => reject(t.error || new Error('Transacción de IndexedDB abortada'));
+  });
+}
+
+/**
+ * Escribe productos en UNA transacción, sin pausas entre ellos.
+ *
+ * Es lo que hace falta para que una lista larga no tumbe la operación a mitad:
+ * todas las escrituras se encolan seguidas y la transacción no llega a quedar
+ * inactiva.
+ */
+function putProducts(db: IDBDatabase, products: OfflineProduct[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!products.length) return resolve();
+    const t = db.transaction(['products'], 'readwrite');
+    t.oncomplete = () => resolve();
+    t.onabort = () => reject(t.error || new Error('Transacción de IndexedDB abortada'));
+    t.onerror = () => reject(t.error || new Error('Error en transacción de IndexedDB'));
+    const store = t.objectStore('products');
+    for (const p of products) store.put(p);
+  });
 }
 
 export async function getOfflineProducts(scope: OfflineScope): Promise<OfflineProduct[]> {
@@ -351,18 +425,17 @@ export async function getOfflineProducts(scope: OfflineScope): Promise<OfflinePr
 export async function decrementLocalStock(scope: OfflineScope, productId: string, qty: number): Promise<void> {
   requireScope(scope, 'decrementLocalStock');
   const db = await openDB();
-  const t = tx(db, ['products'], 'readwrite');
-  const store = t.objectStore('products');
+  const sk = scopeKey(scope);
 
-  // get() y put() dentro de la MISMA transacción: o se aplican los dos, o
-  // ninguno (si algo falla, la transacción se aborta entera).
-  const p = await reqToPromise(store.get(`${scopeKey(scope)}::${productId}`)) as OfflineProduct | undefined;
-  if (p) {
-    p.localStock = Math.max(0, p.localStock - qty);
-    store.put(p);
-  }
-
-  await txDone(t);
+  // Leer y escribir en transacciones distintas. El motivo es el mismo que en
+  // cacheProducts: entre el get() y el put() hay una pausa, y una transacción
+  // de IndexedDB no sobrevive a una pausa. Antes, cuando la venta salía de la
+  // transacción ya cerrada, el descuento de stock no se guardaba y el POS
+  // seguía mostrando como disponible lo que en realidad ya se había vendido.
+  const p = await readOneProduct(db, `${sk}::${productId}`);
+  if (!p) return;
+  const siguiente = { ...p, localStock: Math.max(0, p.localStock - qty) };
+  await putProducts(db, [siguiente]);
 }
 
 // Devuelve stock al producto. SOLO se llama ante un conflicto explícito del
@@ -372,21 +445,25 @@ export async function decrementLocalStock(scope: OfflineScope, productId: string
 export async function restoreLocalStock(scope: OfflineScope, items: OfflineSaleItem[]): Promise<void> {
   requireScope(scope, 'restoreLocalStock');
   const db = await openDB();
-  const t = tx(db, ['products'], 'readwrite');
-  const store = t.objectStore('products');
   const sk = scopeKey(scope);
 
-  // Todos los items se restauran dentro de la misma transacción: o se
-  // restauran todos, o ninguno.
+  // Primero se leen TODOS, después se escriben TODOS.
+  //
+  // Antes era un bucle con un get y un put por producto, con una pausa entre
+  // cada vuelta. Con dos productos ya era arriesgado, y con veinte la
+  // transacción se cerraba a mitad del bucle: a partir de ahí, cada get
+  // lanzaba "A request was aborted" y el stock local se quedaba a medias, sin
+  // saber cuántas.restauraciones se habían aplicado.
+  const leidos: OfflineProduct[] = [];
   for (const item of items) {
-    const p = await reqToPromise(store.get(`${sk}::${item.productId}`)) as OfflineProduct | undefined;
-    if (p) {
-      p.localStock += item.qty;
-      store.put(p);
-    }
+    const p = await readOneProduct(db, `${sk}::${item.productId}`);
+    if (p) leidos.push(p);
   }
-
-  await txDone(t);
+  const cambios = new Map<string, number>();
+  for (const item of items) {
+    cambios.set(String(item.productId), (cambios.get(String(item.productId)) || 0) + (Number(item.qty) || 0));
+  }
+  await putProducts(db, leidos.map((p) => ({ ...p, localStock: p.localStock + (cambios.get(p.productId) || 0) })));
 }
 
 // ── Cola de ventas ─────────────────────────────────────────────────────────────

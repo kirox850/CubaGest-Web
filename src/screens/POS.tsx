@@ -69,6 +69,12 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   const [myLocationId, setMyLocationId] = useState<string>("");
   const [myLocationName, setMyLocationName] = useState<string>("");
 
+  // Dónde se está vendiendo ahora. Para casi todos lo decide el turno; para
+  // el admin, que puede vender desde cualquier caja mientras no tenga turno
+  // abierto, se elige a mano y se recuerda entre recargas.
+  const [cajaElegida, setCajaElegida] = useState<string>("");
+  const [cajasVisibles, setCajasVisibles] = useState<any[]>([]);
+
   // El turno decide la caja. Ya no vale "la caja cuyo dueño soy", porque la
   // caja es del negocio y la pueden llevar varios cajeros: lo que dice el turno
   // abierto es con cuál estoy trabajando yo ahora mismo.
@@ -164,21 +170,26 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
 
       try {
         const locs: any[] = await apiFetch("/locations");
+        setCajasVisibles(locs);
+
         // De dónde sale la caja, en este orden:
-        //  1. el turno abierto, que es lo que manda;
+        //  1. el turno abierto, que siempre manda por encima de todo;
         //  2. el almacén, para quien trabaja en él;
-        //  3. la única caja que le tienen asignada.
+        //  3. la única caja asignada, para el cajero que solo tiene una;
+        //  4. la que el admin haya elegido, porque el admin vende desde
+        //     donde quiera mientras no tenga turno abierto.
         //
-        // El punto 3 es el que faltaba, y era un fallo serio: sin él, un
-        // cajero con una sola caja y sin turno abierto se quedaba con el POS
-        // vacío y el mensaje "no hay productos", cuando su caja estaba ahí y
-        // el backend mesmo se la habría dado. Con varias cajas sí hace falta
-        // elegir, que para eso está el turno.
+        // Sin el caso 4 el POS del admin no tenía forma de saber dónde
+        // vendía: no abre turno, no es almacenista y nunca tiene cajas
+        // asignadas, así que las tres reglas anteriores fallaban y se
+        // quedaba siempre vacío.
         const unicaAsignada = cajas.length === 1 ? cajas[0].id : null;
+        const cajasParaVender = locs.filter((l:any)=>l.type==="caja" && l.active!==false);
+        const recordada = cajaElegida || (await lastKnownLocation()) || "";
         const own = shift ? locs.find((l:any)=>l.id===shift.locationId)
           : user.role === "almacenista" ? locs.find((l:any)=>l.type==="almacen")
-          : unicaAsignada ? locs.find((l:any)=>l.id===unicaAsignada)
-          : undefined;
+          : user.role === "cajero" && unicaAsignada ? locs.find((l:any)=>l.id===unicaAsignada)
+          : cajasParaVender.find((l:any)=>l.id===recordada) || cajasParaVender[0];
         if (!own) { setProducts([]); setLoading(false); return; }
         if (cancelled) return;
         setMyLocationId(own.id);
@@ -186,7 +197,12 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
         // Se recuerda la ubicación para poder seguir vendiendo sin conexión.
         setLastLocationId(account, own.id).catch(() => {});
         const { items } = await apiFetch(`/locations/${own.id}/stock`);
-        await cacheProducts(scopeOf(own.id), items);
+        // Guardar el catálogo para trabajar sin conexión es una mejora, no un
+        // requisito. Si IndexedDB falla, el POS tiene que seguir vendiendo
+        // igual: antes este fallo subía al catch de más arriba, que vaciaba la
+        // lista de productos, y se veía un POS sin productos NADA MÁS
+        // PROPIO y el catálogo entero estaba ahí, recibido del servidor.
+        cacheProducts(scopeOf(own.id), items).catch(() => {});
         if (cancelled) return;
         await loadFromCache(own.id);
       } catch (e: any) {
@@ -384,7 +400,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
       if (locationId) {
         try {
           const { items } = await apiFetch(`/locations/${locationId}/stock`);
-          await cacheProducts(scopeOf(locationId), items);
+          cacheProducts(scopeOf(locationId), items).catch(() => {});
           const cached = await getOfflineProducts(scopeOf(locationId));
           setProducts(cached.map(p => ({ ...p, stock: p.localStock })).filter(p => p.stock > 0));
         } catch { /* la factura está emitida; el stock se refresca en la próxima carga */ }
@@ -437,6 +453,32 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
             <button style={{ ...btn("primary"), fontSize:12, padding:"7px 12px" }} onClick={() => setPidiendoTurno(true)}>Comenzar turno</button>
           </div>
         )}
+
+      {/* El admin sí puede vender sin turno, pero desde una caja concreta:
+          cada venta descuenta del stock de ESA caja, así que tiene que saber
+          cuál es. El selector solo aparece sin turno abierto, porque con turno
+          abierto la caja ya está decidida y cambiarla a mitad de turno
+          mezclaría dos inventarios. */}
+      {!shift && user?.role === "admin" && cajasVisibles.some((l:any)=>l.type==="caja") && (
+        <div style={{ flexShrink:0, marginBottom:12, display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" as any }}>
+          <label htmlFor="pos-caja" style={{ fontSize:13, fontWeight:700, color:"var(--ink)" }}>
+            Vendiendo desde
+          </label>
+          <select
+            id="pos-caja"
+            value={cajaElegida || myLocationId}
+            onChange={(e) => { setCajaElegida(e.target.value); }}
+            style={{ ...sel, maxWidth:280 }}
+          >
+            {cajasVisibles.filter((l:any)=>l.type==="caja" && l.active!==false).map((l:any)=>(
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
+          </select>
+          <span style={{ fontSize:12, color:"var(--muted)" }}>
+            Sin turno abierto. Las ventas se descuentan del stock de esta caja.
+          </span>
+        </div>
+      )}
 
       {/* Buscador fijo */}
       <div style={{ position:"relative", flexShrink:0, marginBottom:10 }}>
