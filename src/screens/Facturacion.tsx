@@ -45,18 +45,31 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
   const scopeOfSale = (s: OfflineSale) => ({ ...account, locationId: s.locationId });
 
   const load = useCallback(async()=>{
-    try {
-      setLoading(true);
-      // Cargar facturas offline siempre (no requiere servidor)
-      const offline = account.companyId && account.userId ? await getAllOfflineSales(account) : [];
-      setOfflineSales(offline);
-      // Cargar del servidor si hay conexión
-      if (facOnline) {
+    setLoading(true);
+    // EL SERVIDOR PRIMERO. Antes empezaba leyendo la cola offline, dentro del
+    // mismo try que la petición de facturas, y eso lo rompía todo: si la
+    // lectura local fallaba (por ejemplo con "A request was aborted"), la
+    // excepción se comía el apiFetch de al lado y las facturas no se pedían
+    // nunca. La pantalla se quedaba vacía y el aviso era el del error de
+    // almacenamiento, que no señalaba el problema real.
+    //
+    // Ahora son dos pasos separados: primero lo que viene de arriba, y la cola
+    // local aparte, que es un extra y no un requisito para ver las facturas.
+    if (facOnline) {
+      try {
         const list = await apiFetch("/sales");
         setSales(list);
-      }
-    } catch(e:any) { showToast(e.message,"error"); }
-    finally { setLoading(false); }
+      } catch(e:any) { showToast(e.message,"error"); }
+    }
+    try {
+      const offline = account.companyId && account.userId ? await getAllOfflineSales(account) : [];
+      setOfflineSales(offline);
+    } catch {
+      // Sin la cola local se ven igual las facturas del servidor: la cola solo
+      // sirve para reintentar ventas que aún no han subido.
+      setOfflineSales([]);
+    }
+    setLoading(false);
   },[facOnline, account.companyId, account.userId]);
   useEffect(()=>{ load(); },[load]);
 
