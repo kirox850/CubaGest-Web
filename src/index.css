@@ -28,6 +28,12 @@
   --line: #e8e0d8;
   --input-bg: #f1f5f9;
   --input-border: #d8cfc4;
+
+  /* Tinta de las etiquetas de CATEGORÍA (gastos, inventario, auditoría).
+     Estaba #5a3a1a escrito a mano en tres pantallas distintas: un color
+     repetido tres veces es un token esperando a existir, y mientras sea un
+     número, cambiarlo exige acordarse de los tres sitios. */
+  --category-ink: #5a3a1a;
 }
 .dark {
   --brand-tint: rgba(4, 138, 251, 0.14);

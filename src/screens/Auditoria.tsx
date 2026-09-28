@@ -109,7 +109,7 @@ const Auditoria = ({ showToast, embedded }: { showToast: (m:string,t:string)=>vo
           {logs.map((log:any, idx:number) => (
             <div key={log.id} style={{ display:"flex", gap:12, alignItems:"flex-start", padding:"14px 16px", borderTop: idx===0?"none":"1px solid var(--line)" }}>
               <div style={{ width:34, height:34, borderRadius:10, background:"var(--input-bg)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                <Icon name={AUDIT_ENTITY_ICON[log.entity] || "doc"} size={16} color="#5a3a1a"/>
+                <Icon name={AUDIT_ENTITY_ICON[log.entity] || "doc"} size={16} color="var(--category-ink)"/>
               </div>
               <div style={{ flex:1, minWidth:0 }}>
                 <p style={{ margin:0, fontSize:13.5, color:"var(--ink)", lineHeight:1.5 }}>{describeAuditLog(log)}</p>

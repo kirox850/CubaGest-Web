@@ -220,7 +220,7 @@ const Inventario = ({ user, showToast }: { user: any; showToast: (m: string, t: 
                 <tr key={p.id} style={{ borderTop:"1px solid var(--line)", opacity:p.active?1:0.5 }}>
                   <td style={{ padding:"11px 14px", fontSize:12, fontWeight:600, color:"var(--muted)", fontFamily:"monospace" }}>{p.code}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{p.name} <span style={{ fontSize:11, color:"var(--muted)", fontWeight:400 }}>/{p.unit}</span></td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={p.category||"—"} color="#5a3a1a"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={p.category||"—"} color="var(--category-ink)"/></td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:700 }}>{p.currency==="EUR"?"€":"$"}{fmt(p.price)} <span style={{ fontWeight:400, color:"var(--muted)", fontSize:11 }}>{p.currency||"CUP"}</span></td>
                   <td style={{ padding:"11px 14px", fontSize:13, color:"var(--ink)" }}>${fmt(p.cost)}</td>
                   <td style={{ padding:"11px 14px" }}>
