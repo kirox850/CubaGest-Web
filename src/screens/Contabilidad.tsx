@@ -194,7 +194,7 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
                 <tr key={e.id} style={{ borderTop:"1px solid var(--line)" }}>
                   <td style={{ padding:"11px 14px", fontSize:13, color:"var(--ink)" }}>{(e.date||e.createdAt||"").split("T")[0]}</td>
                   <td style={{ padding:"11px 14px", fontSize:13, fontWeight:600 }}>{e.concept}</td>
-                  <td style={{ padding:"11px 14px" }}><Badge label={e.category} color="#5a3a1a"/></td>
+                  <td style={{ padding:"11px 14px" }}><Badge label={e.category} color="var(--category-ink)"/></td>
                   <td style={{ padding:"11px 14px" }}><Badge label={PAY_METHODS.find(p=>p.id===e.method)?.label||e.method} color="var(--brand)"/></td>
                   <td style={{ padding:"11px 14px", fontSize:14, fontWeight:700, color:"var(--brand)" }}>${fmt(e.amount)}</td>
                 </tr>
