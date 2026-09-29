@@ -43,44 +43,81 @@ export function useShift(user: any) {
       setCajas(r?.assignedCajas ?? []);
       setAviso(r?.aviso ?? null);
       setOffline(false);
+      // Se guarda el turno Y la lista de cajas, y se guardan SIEMPRE. Antes
+      // esto no se guardaba al leer: la copia local solo la escribía
+      // `abrirTurno`, así que un cajero recién logueado (que es justo cuando no
+      // tiene turno abierto) se quedaba sin lista de cajas, y al caerse la red
+      // `cargar()` caía al `catch`, no encontraba nada, y el POS acababa
+      // diciendo que no tenía caja asignada — de una caja que sí tenía.
+      persistirTurno(r?.shift ?? null, r?.assignedCajas ?? []);
     } catch {
       // Sin conexión: el turno abierto se recuerda en el dispositivo. Sin esto
       // el cajero perdería la caja justo cuando más la necesita.
       try {
         const guardado = localStorage.getItem("cubagest_shift");
         if (guardado) {
+          // Formato `{ shift, cajas }`. El `shift` va explícito dentro del
+          // registro y no esparcido en la raíz: con el formato viejo (los campos
+          // del turno sueltos + `cajas`) no se puede distinguir "no hay turno" de
+          // "hay un registro con solo las cajas", y esa distinción es la que
+          // decide si el POS puede vender.
           const s = JSON.parse(guardado);
-          setShift(s);
-          setCajas(s.cajas || []);
+          setShift(s?.shift ?? null);
+          setCajas(Array.isArray(s?.cajas) ? s.cajas : []);
         } else {
           setShift(null);
+          setCajas([]);
         }
         setOffline(true);
-      } catch { setShift(null); }
+      } catch { setShift(null); setCajas([]); }
     } finally { setCargando(false); }
   }, [user?.id]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const recordar = (s: ShiftInfo | null, c: AssignedCaja[]) => {
+  /**
+   * Guarda el turno y las cajas en el mismo registro.
+   *
+   * `s === null` es un valor legítimo: significa que el servidor confirmó que no
+   * hay turno abierto. Antes de esto, ese caso BORRABA el registro entero, y se
+   * llevaba por delante la lista de cajas. Como el único momento en que el
+   * servidor manda `assignedCajas` es en `/shift/current`, y ese es
+   * precisamente el momento en que se descartaba, la lista nunca se guardaba.
+   *
+   * La lista de cajas es de la CUENTA, no de la caja en la que se esté: dice
+   * dónde puede abrir turno esta persona, no dónde está. Por eso cerrar un turno
+   * no la vacía.
+   */
+  const persistirTurno = (s: ShiftInfo | null, c: AssignedCaja[]) => {
     try {
-      if (s) localStorage.setItem("cubagest_shift", JSON.stringify({ ...s, cajas: c }));
-      else localStorage.removeItem("cubagest_shift");
+      localStorage.setItem("cubagest_shift", JSON.stringify({ shift: s ?? null, cajas: c }));
     } catch { /* almacenamiento lleno: no es motivo para romper nada */ }
   };
+
+  /**
+   * El turno abierto de esta cuenta, o null si no hay ninguno.
+   *
+   * Antes borraba el registro cuando no había turno, y con él la lista de cajas
+   * asignadas. `cargar()` es la que llama a `persistirTurno` en cada lectura, y
+   * `cerrarTurno` conserva la lista en vez de mandarla a cero.
+   */
+  const recordar = (s: ShiftInfo | null, c: AssignedCaja[]) => persistirTurno(s, c);
 
   const abrirTurno = useCallback(async (locationId: string, baseCash?: Record<string, number>) => {
     const r = await apiFetch("/shift/start", { method: "POST", body: { locationId, baseCash } });
     const nuevo: ShiftInfo = r?.shift;
-    if (nuevo) { setShift(nuevo); recordar(nuevo, cajas); }
+    if (nuevo) { setShift(nuevo); persistirTurno(nuevo, cajas); }
     return nuevo;
   }, [cajas]);
 
   const cerrarTurno = useCallback(async () => {
     await apiFetch("/shift/end", { method: "POST" });
     setShift(null);
-    recordar(null, []);
-  }, []);
+    // Las cajas NO se borran al cerrar el turno: siguen siendo las del cajero.
+    // Mandarlas a [] vaciaba la lista y dejaba la app sin saber dónde puede
+    // abrir el siguiente turno, que es justo lo que hace falta al cerrar uno.
+    persistirTurno(null, cajas);
+  }, [cajas]);
 
   return { shift, cajas, cargando, offline, aviso, abrirTurno, cerrarTurno, refresh: cargar, recordar };
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
+import { cacheMovements, getOfflineMovements } from "@/offlineDB";
 import { fmt } from "@/lib/format";
 import Icon from "@/components/shared/Icon";
 import { Spinner, Modal, Field, btn, inp, sel } from "@/components/shared/primitives";
@@ -30,6 +31,9 @@ export const MovimientosDinero = ({
   locationId: string;
   locationName: string;
 }) => {
+  // Misma cuenta que usa el resto de pantallas para aislar la caché por
+  // usuario: dos personas en el mismo dispositivo no pueden verse los datos.
+  const account = { companyId: user?.company?.id || "", userId: user?.id || "" };
   const [lista, setLista] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
   const [modal, setModal] = useState(false);
@@ -40,11 +44,22 @@ export const MovimientosDinero = ({
     if (!locationId) return;
     try {
       setCargando(true);
-      setLista((await apiFetch(`/cash-movements?locationId=${locationId}`)) || []);
+      const lista = (await apiFetch(`/cash-movements?locationId=${locationId}`)) || [];
+      setLista(lista);
+      if (account.companyId && account.userId) void cacheMovements(account, lista).catch(() => {});
     } catch (e: any) {
-      showToast(e.message, "error");
+      // Sin red se muestran los movimientos ya registrados. El saldo de la caja
+      // no se inventa: se enseña lo que el servidor confirmó la última vez que
+      // hubo conexión, y se dice que viene de la copia local.
+      const local = account.companyId && account.userId ? await getOfflineMovements(account) : [];
+      if (local.length > 0) {
+        setLista(local);
+        showToast("Sin conexión con el servidor — mostrando los movimientos guardados en este dispositivo", "info");
+      } else {
+        showToast(e.message, "error");
+      }
     } finally { setCargando(false); }
-  }, [locationId]);
+  }, [locationId, account.companyId, account.userId]);
 
   useEffect(() => { cargar(); }, [cargar]);
 

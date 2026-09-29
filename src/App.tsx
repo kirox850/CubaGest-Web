@@ -8,6 +8,7 @@ import {
 } from "@/offlineDB";
 import { PRIVACY_POLICY_MD, TERMS_MD } from "@/legalContent";
 import { apiFetch, getToken, saveToken, logout, ApiError } from "@/lib/api";
+import { warmCache } from "@/warmCache";
 import { useOnlineStatus, usePendingClosingsCount } from "@/hooks/useOnline";
 import { ROLES } from "@/config/constants";
 
@@ -408,18 +409,45 @@ export default function App() {
     if (cerrados > 0) showToast(`${cerrados} cierre(s) sin conexión enviado(s) al servidor`,"success");
   };
 
+  // Cada cuánto refresca la app por su cuenta, con la pestaña abierta y con red.
+  // No corre en segundo plano: una pestaña en background no debería despertar la
+  // radio cada 5 minutos, y el navegador ya congela los temporizadores de las
+  // pestañas que no están visibles.
+  const SYNC_CYCLE_MS = 5 * 60 * 1000;
+  // Mínimo entre sincronizaciones automáticas, para que un tick del intervalo no
+  // se pile encima de la sincronización que dispara la reconexión de red.
+  const AUTO_SYNC_COOLDOWN_MS = 45 * 1000;
+  const ultimoSync = useRef(0);
+
+  // Calienta TODAS las cachés de una vez. Sin esto, la copia offline de cada
+  // pantalla solo existía si alguien la había abierto antes con red, y el cajero
+  // que entraba y perdía la conexión se encontraba media aplicación vacía.
+  //
+  // En segundo plano y sin await: la app no puede quedarse esperando a ocho
+  // peticiones para dejar usable la pantalla. `warmCache` nunca lanza.
+  const calentar = useCallback(() => {
+    if (!account) return;
+    void warmCache({ account });
+  }, [account]);
+
   // Sincronizar al volver la conexión y en cada arranque/entrada de la app.
   useEffect(() => {
     if (!online || !user) return;
+    ultimoSync.current = Date.now();
+    calentar();
     runSync();
-  }, [online, user]);
+  }, [online, user, calentar]);
 
   // Al volver al primer plano de la app (el cajero dejó la PWA abierta en
   // segundo plano y vuelve): se intenta sincronizar lo pendiente. No es
   // sondeo: solo dispara al volver el usuario a la pantalla.
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === "visible" && navigator.onLine && user) runSync();
+      if (document.visibilityState !== "visible" || !navigator.onLine || !user) return;
+      if (Date.now() - ultimoSync.current < AUTO_SYNC_COOLDOWN_MS) return;
+      ultimoSync.current = Date.now();
+      calentar();
+      runSync();
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
@@ -427,6 +455,23 @@ export default function App() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
+  }, [online, user]);
+
+  // ── Ciclo de 5 minutos ────────────────────────────────────────────────────
+  // Cuatro condiciones, y todas hacen falta: con sesión, con red, con la pestaña
+  // visible, y sin solaparse con otra sincronización. Cada pasada sube primero lo
+  // pendiente y baja después lo fresco; al revés, una descarga podría pisar la
+  // vista local de una venta que el servidor todavía no ha visto.
+  useEffect(() => {
+    if (!online || !user) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (syncRef.current) return;
+      if (Date.now() - ultimoSync.current < AUTO_SYNC_COOLDOWN_MS) return;
+      ultimoSync.current = Date.now();
+      void runSync();
+    }, SYNC_CYCLE_MS);
+    return () => window.clearInterval(id);
   }, [online, user]);
 
   const showToast = (msg: string, type = "info") => setToast({ msg, type, key: Date.now() });
@@ -455,7 +500,14 @@ export default function App() {
 
   if (!user) {
     if (showLanding) return <Landing onEnter={enterApp}/>;
-    return <LoginScreen onLogin={u=>{ setUser(u); setActiveModule("dashboard"); }} onBackToLanding={()=>setShowLanding(true)}/>;
+    return <LoginScreen onLogin={(u)=>{
+      setUser(u); setActiveModule("dashboard");
+      // Calienta TODAS las cachés nada más entrar. Sin esto la copia offline
+      // de cada pantalla solo existía si alguien la había abierto antes con red.
+      // La cuenta se deriva del propio usuario recién logueado, así que no hace
+      // falta esperar al re-render.
+      void warmCache({ account: { companyId: u?.company?.id || "", userId: u?.id || "" } });
+    }} onBackToLanding={()=>setShowLanding(true)}/>;
   }
 
   const perms = ROLES[user.role]?.perms || [];

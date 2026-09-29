@@ -25,7 +25,7 @@ const DB_NAME = 'cubagest_offline_v2';
 // a la cuenta que entre ahora (mismo criterio que en la app móvil).
 const LEGACY_DB_NAME = 'cubagest_offline';
 const LEGACY_PURGE_FLAG = 'cubagest_offline_legacy_purged';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'conflict';
 
@@ -199,6 +199,36 @@ function openDB(): Promise<IDBDatabase> {
       const cs = db.createObjectStore('closings_queue', { keyPath: 'key' });
       cs.createIndex('account', 'account');
       cs.createIndex('by_time', ['account', 'timestamp']);
+
+      // v3 ── Colecciones de LECTURA para pintar sin conexión. No son colas: son
+      // la última versión buena que entregó el servidor, para que una pantalla
+      // pueda mostrar algo cuando no hay red. Antes cada caché se creaba de
+      // rebote al abrir esa pantalla, así que entrar con conexión y perderla al
+      // rato dejaba al cajero con pantallas vacías.
+
+      // Ventas ya confirmadas por el servidor. Las PENDIENTES viven en
+      // `sales_queue`, que es otra cosa: esto es el histórico.
+      const si = db.createObjectStore('sales_index', { keyPath: 'key' });
+      si.createIndex('account', 'account');
+
+      // Entradas y salidas de dinero de la caja.
+      const mv = db.createObjectStore('movements', { keyPath: 'key' });
+      mv.createIndex('account', 'account');
+
+      // Ajustes de la empresa: monedas, modo de tasa y tolerancia de caja. El
+      // POS pinta el símbolo de la moneda desde aquí.
+      const st = db.createObjectStore('settings', { keyPath: 'key' });
+      st.createIndex('account', 'account');
+
+      // Descuentos aplicables a una venta.
+      const ds = db.createObjectStore('discounts', { keyPath: 'key' });
+      ds.createIndex('account', 'account');
+
+      // Cierres ya confirmados por el servidor, para poder consultarlos sin
+      // red. Los contados SIN conexión viven en `closings_queue`, que es otra
+      // cosa: esta es solo la lista de los que ya existen.
+      const cl = db.createObjectStore('closings', { keyPath: 'key' });
+      cl.createIndex('account', 'account');
     };
 
     req.onsuccess = () => {
@@ -669,6 +699,75 @@ export async function getOfflineLocations(account: OfflineAccount): Promise<Offl
     tx(db, ['locations']).objectStore('locations').index('account').getAll(IDBKeyRange.only(accountKey(account)))
   ) as any[];
   return (rows ?? []).map(({ key, account: _a, ...rest }) => rest);
+}
+
+// ── Colecciones de lectura (v3) ──────────────────────────────────────────────
+//
+// NO son colas: son la última versión buena que entregó el servidor, para que
+// una pantalla pueda pintar algo sin red. La misma forma que `locations`, y con
+// la misma regla que importa: un array VACÍO no borra la copia anterior. Sin esa
+// regla, un cierre o una factura que el servidor devolviera vacío —por un cambio
+// de filtro, por un error momentáneo— desaparecería del dispositivo, y sin red
+// no hay forma de recuperarlo hasta que vuelva la conexión.
+
+/** Reemplaza una colección de lectura de la cuenta, conservando la anterior si llega vacía. */
+async function cacheDocList(account: OfflineAccount, store: string, rows: any[], idOf: (r: any) => string): Promise<void> {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  const db = await openDB();
+  const t = tx(db, [store], 'readwrite');
+  const os = t.objectStore(store);
+  const old = await reqToPromise(os.index('account').getAllKeys(IDBKeyRange.only(accountKey(account))));
+  for (const k of (old ?? [])) os.delete(k);
+  for (const r of rows) os.put({ key: `${accountKey(account)}::${seg(idOf(r))}`, account: accountKey(account), ...r });
+  await txDone(t);
+}
+
+/** Lee una colección de lectura. Array vacío = nunca se descargó o no hay copia. */
+async function readDocList(account: OfflineAccount, store: string): Promise<any[]> {
+  const db = await openDB();
+  const rows = await reqToPromise(
+    tx(db, [store]).objectStore(store).index('account').getAll(IDBKeyRange.only(accountKey(account)))
+  ) as any[];
+  return (rows ?? []).map(({ key, account: _a, ...rest }) => rest);
+}
+
+// Ventas ya confirmadas por el servidor. Las PENDIENTES viven en
+// `sales_queue`: esto es solo el histórico, para que la lista de facturas no
+// desaparezca cuando el cajero pierde la red.
+export const cacheSales = (account: OfflineAccount, sales: any[]) =>
+  cacheDocList(account, 'sales_index', sales, (r) => String(r.id));
+export const getOfflineSales = (account: OfflineAccount) => readDocList(account, 'sales_index');
+
+// Entradas y salidas de dinero de la caja.
+export const cacheClosings = (account: OfflineAccount, closings: any[]) =>
+  cacheDocList(account, 'closings', closings, (r) => String(r.id));
+export const getOfflineClosings = (account: OfflineAccount) => readDocList(account, 'closings');
+
+export const cacheMovements = (account: OfflineAccount, movements: any[]) =>
+  cacheDocList(account, 'movements', movements, (r) => String(r.id));
+export const getOfflineMovements = (account: OfflineAccount) => readDocList(account, 'movements');
+
+// Descuentos aplicables a una venta.
+export const cacheDiscounts = (account: OfflineAccount, discounts: any[]) =>
+  cacheDocList(account, 'discounts', discounts, (r) => String(r.id));
+export const getOfflineDiscounts = (account: OfflineAccount) => readDocList(account, 'discounts');
+
+// Ajustes: monedas, modo de tasa y tolerancia. Es un objeto suelto, no una
+// lista, así que se guarda bajo una clave fija en vez de indexar por id.
+export async function cacheSettings(account: OfflineAccount, settings: unknown): Promise<void> {
+  if (!settings || typeof settings !== 'object') return;
+  const db = await openDB();
+  const t = tx(db, ['settings'], 'readwrite');
+  t.objectStore('settings').put({ key: accountKey(account), account: accountKey(account), settings });
+  await txDone(t);
+}
+
+export async function getOfflineSettings(account: OfflineAccount): Promise<any | null> {
+  const db = await openDB();
+  const row = await reqToPromise(
+    tx(db, ['settings']).objectStore('settings').get(accountKey(account))
+  ) as { settings?: unknown } | undefined;
+  return row?.settings ?? null;
 }
 
 // ── Lecturas de apertura (v2) ────────────────────────────────────────────────
