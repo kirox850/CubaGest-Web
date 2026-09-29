@@ -4,7 +4,7 @@ import { fmt, downloadCSV } from "@/lib/format";
 import { useOnlineStatus } from "@/hooks/useOnline";
 import { PAY_METHODS } from "@/config/constants";
 import {
-  getAllOfflineSales, updateSaleStatus, restoreLocalStock,
+  getAllOfflineSales, updateSaleStatus, restoreLocalStock, cacheSales, getOfflineSales,
   type OfflineSale,
 } from "@/offlineDB";
 import Icon from "@/components/shared/Icon";
@@ -59,7 +59,29 @@ const Facturacion = ({ user, showToast, onSyncRefresh, onManualSync, syncing }: 
       try {
         const list = await apiFetch("/sales");
         setSales(list);
-      } catch(e:any) { showToast(e.message,"error"); }
+        // Se guarda la copia del servidor para poder pintar sin red. Sin esto,
+        // al caerse la conexión el cajero veía ÚNICAMENTE las ventas que aún no
+        // habían subido, y las ya facturadas desaparecían de su propia pantalla:
+        // el mismo número dos veces, o entregar una factura a un cliente que ya
+        // la tenía.
+        if (account.companyId && account.userId) {
+          void cacheSales(account, list).catch(() => {});
+        }
+      } catch(e:any) {
+        const local = account.companyId && account.userId ? await getOfflineSales(account) : [];
+        if (local.length > 0) {
+          setSales(local);
+          showToast("Sin conexión con el servidor — mostrando las facturas guardadas en este dispositivo","info");
+        } else {
+          showToast(e.message,"error");
+        }
+      }
+    } else {
+      const local = account.companyId && account.userId ? await getOfflineSales(account) : [];
+      if (local.length > 0) {
+        setSales(local);
+        showToast("Sin conexión con el servidor — mostrando las facturas guardadas en este dispositivo","info");
+      }
     }
     try {
       const offline = account.companyId && account.userId ? await getAllOfflineSales(account) : [];

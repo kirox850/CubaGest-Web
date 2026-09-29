@@ -5,7 +5,7 @@ import { MovimientosDinero } from "@/screens/MovimientosDinero";
 import { useOnlineStatus } from "@/hooks/useOnline";
 import { useLocations, useReadings } from "@/hooks/useLocations";
 import {
-  saveClosingOffline, getPendingClosings, type PendingClosing,
+  saveClosingOffline, getPendingClosings, cacheClosings, getOfflineClosings, type PendingClosing,
 } from "@/offlineDB";
 import { fmt } from "@/lib/format";
 import Icon from "@/components/shared/Icon";
@@ -86,8 +86,18 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
       setLoading(true);
       const list = await apiFetch("/closing");
       setClosings(list);
+      // La lista de cierres se guarda para poder consultarla sin red. El
+      // cajero necesita ver el descuadre que tiene delante, y esa pantalla no
+      // tenía copia local: sin red se quedaba a medias.
+      if (account.companyId && account.userId) void cacheClosings(account, list).catch(() => {});
     } catch (e: any) {
-      if (online) showToast(e.message, "error");
+      const local = account.companyId && account.userId ? await getOfflineClosings(account) : [];
+      if (local.length > 0) {
+        setClosings(local);
+        showToast("Sin conexión con el servidor — mostrando los cierres guardados en este dispositivo", "info");
+      } else if (online) {
+        showToast(e.message, "error");
+      }
     }
     finally { setLoading(false); }
   }, [online, account.companyId, account.userId]);
