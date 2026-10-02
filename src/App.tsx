@@ -646,7 +646,7 @@ export default function App() {
       <div className="cg-content" style={{ flex:1, overflow:"auto", padding:16, paddingBottom:80 }}>
         {view==="dashboard"    && <Dashboard user={user}/>}
         {view==="inventario"   && <Inventario user={user} showToast={showToast}/>}
-        {view==="pos"          && <POS user={user} showToast={showToast}/>}
+        {view==="pos"          && <POS user={user} showToast={showToast} onPedirCierre={()=>openModule("cierre")}/>}
         {view==="facturacion"  && <Facturacion user={user} showToast={showToast} onSyncRefresh={refreshPending} onManualSync={()=>runSync(true)} syncing={syncing}/>}
         {view==="contabilidad" && <Contabilidad user={user} showToast={showToast}/>}
         {view==="cierre"       && <CierreCaja user={user} showToast={showToast} onBeforeConfirm={empujarVentas}/>}

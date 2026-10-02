@@ -9,7 +9,7 @@ import {
 } from "@/offlineDB";
 import Icon from "@/components/shared/Icon";
 import { Modal, Field, Spinner, btn, inp, sel } from "@/components/shared/primitives";
-import { useShift, AbrirTurno, ShiftBadge, ShiftInfo } from "@/components/shared/Shift";
+import { useShift, AbrirTurno, ShiftBadge, CerrarTurno, ShiftInfo } from "@/components/shared/Shift";
 
 // ─── POS ──────────────────────────────────────────────────────────────────────
 // Impresión: al imprimir se oculta TODA la app y solo sale el recibo
@@ -26,7 +26,27 @@ const posStyles = `
   }
 }
 `;
-const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>void }) => {
+/**
+ * `onPedirCierre` lleva a la pantalla de cierre. Terminar turno ya no es un
+ * botón que cierra y ya: es contar la caja y cerrar el periodo, que es lo único
+ * que deja la cadena de turnos sin huecos. El POS no hace el cierre —lo hace el
+ * backend contra la lectura de apertura del turno—, solo lleva allí.
+ */
+const POS = ({
+  user, showToast, onPedirCierre,
+}: {
+  user: any;
+  showToast: (m:string,t:string)=>void;
+  onPedirCierre?: () => void;
+}) => {
+  // Cerrar el turno se hace AQUÍ, contra la lectura de apertura del turno. Antes
+  // el botón llamaba a /shift/end a pelo, que cerraba el turno sin foto y dejaba
+  // un hueco en la cadena que el siguiente cajero heredaba como descuadre propio.
+  //
+  // El cierre lo resuelve el backend contra la lectura del turno, así que no hace
+  // falta saltar a la pantalla de Cierres ni crear una lectura nueva.
+  const [cerrandoTurno, setCerrandoTurno] = useState(false);
+  const [cerrando, setCerrando] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [cart, setCart]         = useState<any[]>([]);
@@ -78,7 +98,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
   // El turno decide la caja. Ya no vale "la caja cuyo dueño soy", porque la
   // caja es del negocio y la pueden llevar varios cajeros: lo que dice el turno
   // abierto es con cuál estoy trabajando yo ahora mismo.
-  const { shift, cajas, cargando: cargandoTurno, aviso: avisoTurno, abrirTurno } = useShift(user);
+  const { shift, cajas, cargando: cargandoTurno, aviso: avisoTurno, abrirTurno, refresh: refrescarTurno } = useShift(user);
   const [pidiendoTurno, setPidiendoTurno] = useState(false);
   useEffect(() => {
     if (!shift) return;
@@ -453,7 +473,7 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
           la que decide a qué cierre y a qué inventario va cada venta. Por eso
           ocupa una banda con "terminar turno" y no una línea de texto. */}
       {shift
-        ? <div style={{ flexShrink:0 }}><ShiftBadge shift={shift} onCerrar={async () => { await apiFetch("/shift/end", { method: "POST" }); showToast("Turno terminado", "success"); }} /></div>
+        ? <div style={{ flexShrink:0 }}><ShiftBadge shift={shift} onPedirCierre={() => setCerrandoTurno(true)} /></div>
         : user?.role === "cajero" && (
           <div style={{ flexShrink:0, marginBottom:12, padding:"10px 14px", background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.30)", borderRadius:12, display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" as any }}>
             <span style={{ fontSize:13, color:"#7C2D12", flex:1 }}>No tienes un turno abierto, así que aún no hay caja.</span>
@@ -685,6 +705,28 @@ const POS = ({ user, showToast }: { user: any; showToast: (m:string,t:string)=>v
         onCerrar={() => setPidiendoTurno(false)}
         onListo={(s: ShiftInfo) => { setPidiendoTurno(false); showToast(`Turno abierto en ${s.locationName}`, "success"); }}
       />
+
+      {shift && (
+        <CerrarTurno
+          shift={shift}
+          visible={cerrandoTurno}
+          onCerrar={async (r) => {
+            setCerrandoTurno(false);
+            if (!r) return;   // se canceló
+            setCerrando(true);
+            try {
+              // El cierre ya está guardado en el servidor; solo hay que volver a
+              // leer el turno. Un refresh recorta, que es justo lo que se quiere
+              // cuando el turno ya terminó.
+              await refrescarTurno();
+              setCart([]);
+            } catch (e: any) {
+              showToast(e.message || "Turno cerrado, pero la pantalla no se actualizó. Recarga.", "error");
+            } finally { setCerrando(false); }
+          }}
+          showToast={showToast}
+        />
+      )}
     </div>
   );
 };
