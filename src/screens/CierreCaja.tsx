@@ -12,7 +12,12 @@ import Icon from "@/components/shared/Icon";
 import { Badge, Field, Modal, Spinner, btn, inp, sel } from "@/components/shared/primitives";
 
 // ─── CIERRE DE CAJA ───────────────────────────────────────────────────────────
-const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: string) => void }) => {
+const CierreCaja = ({ user, showToast, onBeforeConfirm }: {
+  user: any;
+  showToast: (m: string, t: string) => void;
+  /** Sube las ventas pendientes. Ver `empujarVentas` en App.tsx. */
+  onBeforeConfirm?: () => Promise<void>;
+}) => {
   const [view, setView]               = useState<"list"|"selectReading"|"validate"|"detail"|"dinero">("list");
   const [closings, setClosings]       = useState<any[]>([]);
   const [pendientes, setPendientes]   = useState<PendingClosing[]>([]);
@@ -34,6 +39,11 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
   const [validatedItems, setValidatedItems]   = useState<Record<string, number>>({});
   const [detailClosing, setDetailClosing]     = useState<any>(null);
   const [confirmReading, setConfirmReading]   = useState(false);
+  // Conteo de apertura: una fila por producto con esperado (lo que dejó el turno
+  // anterior) y lo que el cajero cuenta ahora. El esperado lo manda el servidor —
+  // es la última foto de la caja — para que no haya dos verdades distintas.
+  const [countRows, setCountRows]   = useState<{productId:string; productName:string; unit:string; esperado:number; contado:number}[]>([]);
+  const [chainInfo, setChainInfo]   = useState<any>(null);
   const [notes, setNotes]             = useState("");
 
   /**
@@ -169,6 +179,22 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
         return;
       }
 
+      // ANTES de confirmar, las ventas pendientes tienen que estar arriba. El
+      // servidor concilia el cierre contra las ventas que tenga en ese momento:
+      // si aún faltan por subir, marcaría como faltante dinero y mercancía que sí
+      // se vendieron, y quedaría un descuadre fantasma que nadie podría
+      // explicar después. El móvil no sufre esto porque su cierre viaja por la
+      // cola y siempre sale después que las ventas; aquí se hace explícito.
+      if (onBeforeConfirm) {
+        try {
+          await onBeforeConfirm();
+        } catch {
+          // Si no se pudieron subir, se confirma igual: el backend decide con lo
+          // que tiene y el cierre queda provisional, que es el mismo resultado
+          // que había antes. Lo que no se hace es impedir cerrar la caja.
+        }
+      }
+
       await apiFetch("/closing/confirm", {
         method: "POST",
         body: {
@@ -189,13 +215,55 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
     finally { setSaving(false); }
   };
 
+  /**
+   * Abrir el modal de conteo.
+   *
+   * Se pide el estado de la cadena al servidor porque el "esperado" tiene que ser
+   * la última foto de la caja tal como la ve el backend, no lo que esta pantalla
+   * tenga cacheado. Si los dos dijeran cosas distintas, el conteo se compararía
+   * contra un número que el servidor no va a usar.
+   */
+  const openReading = async (locationId: string) => {
+    try {
+      const chain: any = await apiFetch(`/closing/chain/${locationId}`);
+      const productos: any[] = await apiFetch("/products");
+      const esperadoPorProducto = new Map<string, number>(
+        (chain?.esperado?.items || []).map((x: any) => [String(x.productId), Number(x.diff || 0)]),
+      );
+      const filas = (productos || []).map((p: any) => ({
+        productId: p.id, productName: p.name, unit: p.unit || "u",
+        esperado: esperadoPorProducto.get(String(p.id)) ?? 0,
+        contado: esperadoPorProducto.get(String(p.id)) ?? 0,
+      }));
+      setCountRows(filas);
+      setChainInfo(chain);
+      setConfirmReading(true);
+    } catch (e: any) {
+      showToast("No se pudo cargar el estado de la caja: " + e.message, "error");
+    }
+  };
+
   const takeReading = async () => {
     if (!readingLocationId) return showToast("Selecciona la ubicación", "error");
     try {
       setSaving(true);
-      await apiFetch("/closing/readings", { method: "POST", body: { locationId: readingLocationId, notes: "Lectura de apertura manual" } });
-      showToast("Lectura de inventario tomada", "success");
+      await apiFetch("/closing/readings", {
+        method: "POST",
+        body: {
+          locationId: readingLocationId,
+          notes: "Conteo de apertura",
+          items: countRows.map((r) => ({ productId: r.productId, contado: Number(r.contado) || 0 })),
+          // La hora en la que se CUENTA, no la de ahora: es la que fija hasta dónde
+          // llega la foto de esta caja.
+          businessAt: new Date().toISOString(),
+        },
+      });
+      const heredada = chainInfo?.aperturaHeredada === true;
+      showToast(heredada
+        ? "Apertura registrada heredando el cierre anterior"
+        : `Conteo de apertura guardado (${countRows.length} productos)`, "success");
       setConfirmReading(false);
+      setChainInfo(null);
     } catch (e: any) { showToast(e.message, "error"); }
     finally { setSaving(false); }
   };
@@ -243,7 +311,7 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
             <Icon name="facturacion" size={15}/>Entradas y salidas
           </button>
           {isAdmin && (
-            <button style={{ ...btn("secondary"), fontSize:13 }} onClick={() => setConfirmReading(true)}>
+            <button style={{ ...btn("secondary"), fontSize:13 }} onClick={() => openReading(readingLocationId || locationId)}>
               <Icon name="refresh" size={15}/>Lectura de apertura
             </button>
           )}
@@ -325,30 +393,95 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
       )}
 
       {confirmReading && (
-        <Modal title="Tomar lectura de inventario" onClose={() => setConfirmReading(false)} width={440}>
+        <Modal title="Contar la caja para abrir el turno" onClose={() => setConfirmReading(false)} width={860}>
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
             {locations.length > 1 && (
               <Field label="Ubicación" required>
-                <select style={sel} value={readingLocationId} onChange={e=>setReadingLocationId(e.target.value)}>
+                <select
+                  style={sel}
+                  value={readingLocationId}
+                  onChange={e => { setReadingLocationId(e.target.value); void openReading(e.target.value); }}
+                >
                   {locations.map((l:any)=><option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
               </Field>
             )}
-            <div style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.30)", borderRadius:12, padding:14 }}>
-              <div style={{ fontWeight:700, color:"#C2410C", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
-                <Icon name="alert" size={16} color="#C2410C"/>Antes de continuar
+
+            {/* El eslabón que falta. Sin esto, un descuadre que en realidad es de
+                un turno anterior aparece como si fuera de este, y el cajero
+                carga con la culpa de otro. */}
+            {chainInfo?.esperado?.faltaEslabon && (
+              <div style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.30)", borderRadius:12, padding:12, fontSize:13, color:"#C2410C", fontWeight:600, display:"flex", alignItems:"flex-start", gap:8 }}>
+                <Icon name="alert" size={15}/>
+                <span>
+                  {chainInfo.esperado.eslabonFaltante || "Falta el cierre anterior de esta caja"}.
+                  Los faltantes que veas <strong>pueden ser de un turno anterior</strong>, no de este.
+                </span>
               </div>
-              <ul style={{ margin:0, paddingLeft:18, fontSize:13, color:"#7C2D12", lineHeight:1.7 }}>
-                <li>Registrará el stock actual de esa ubicación como punto de partida del próximo cierre.</li>
-                <li>Si hay ventas sin cerrar desde la última lectura, <strong>quedarán fuera del período</strong>.</li>
-                <li>Hazlo solo al abrir el negocio o al cambiar de turno.</li>
-                <li>No se puede deshacer.</li>
-              </ul>
+            )}
+
+            {chainInfo?.aperturaHeredada ? (
+              <div style={{ background:"var(--input-bg)", borderRadius:12, padding:14, fontSize:13, color:"var(--muted)", lineHeight:1.6 }}>
+                Este negocio tiene activada la opción de <strong>no contar al abrir</strong>: la apertura
+                heredará el cierre anterior y no se verificará la caja en este cambio de turno.
+                Si quieres contar, hay que desactivar el ajuste en Configuración.
+              </div>
+            ) : (
+              <div style={{ background:"var(--input-bg)", borderRadius:12, padding:14, fontSize:13, color:"var(--ink)", lineHeight:1.6 }}>
+                <strong>Instrucción:</strong> cuenta cada producto y escribe la cantidad. El
+                <em> esperado</em> es lo que dejó el turno anterior, así que ves enseguida si no cuadra.
+                <br/>
+                Los números que no cambies se quedan como estaban. Al guardar, la caja queda con este conteo como punto de partida.
+              </div>
+            )}
+
+            <div style={{ overflowX:"auto", maxHeight:420, borderRadius:12, border:"1px solid var(--line)" }}>
+              <table style={tbl}>
+                <thead>
+                  <tr style={{ background:"var(--input-bg)", position:"sticky", top:0 }}>
+                    {["Producto","Esperado","Contado","Diferencia"].map((h,i)=>(
+                      <th key={h} style={{ ...th, ...(i>0 ? { textAlign:"right" as const } : {}) }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {countRows.map((r, idx) => {
+                    const d = Math.round(((Number(r.contado)||0) - Number(r.esperado)) * 1000) / 1000;
+                    const cambia = Math.abs(d) > 0.001;
+                    return (
+                      <tr key={r.productId}>
+                        <td style={td()}>
+                          <div style={{ fontWeight:600, color:"var(--ink)" }}>{r.productName}</div>
+                        </td>
+                        <td style={{ ...td(), textAlign:"right", color:"var(--muted)" }}>{r.esperado}</td>
+                        <td style={{ ...td(), textAlign:"right" }}>
+                          <input
+                            type="number" min={0} step="0.001"
+                            value={r.contado}
+                            onChange={e => setCountRows(prev => prev.map((x,i)=> i===idx ? { ...x, contado: e.target.value === "" ? 0 : Number(e.target.value) } : x))}
+                            style={{ ...inp, width:96, padding:"5px 8px", textAlign:"right" as const }}
+                          />
+                          <span style={{ fontSize:11, color:"var(--muted)", marginLeft:4 }}>{r.unit}</span>
+                        </td>
+                        <td style={{ ...td(), textAlign:"right", fontWeight:700, color: !cambia ? "#10B981" : (d < 0 ? "#DC2626" : "#F97316") }}>
+                          {cambia ? (d < 0 ? `−${Math.abs(d)}` : `+${d}`) : "✓"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {countRows.length === 0 && (
+                <div style={{ padding:24, textAlign:"center", fontSize:13, color:"var(--muted)" }}>
+                  Esta caja no tiene productos que contar.
+                </div>
+              )}
             </div>
+
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
               <button style={btn("secondary")} onClick={() => setConfirmReading(false)}>Cancelar</button>
               <button style={{ ...btn("primary"), opacity:saving?0.6:1 }} onClick={takeReading} disabled={saving}>
-                {saving ? "Tomando lectura..." : "Tomar lectura"}
+                {saving ? "Guardando..." : "Guardar conteo y abrir"}
               </button>
             </div>
           </div>
@@ -437,6 +570,28 @@ const CierreCaja = ({ user, showToast }: { user: any; showToast: (m: string, t: 
           {sinConexion
             ? " Sin conexión solo se anota tu conteo; el faltante se calcula al enviarse, cuando el servidor tenga las ventas del período."
             : " La diferencia con el esperado quedará registrada como faltante."}
+        </div>
+
+        {/* EL DINERO VA PRIMERO, antes que la mercancía. Es lo que se cuenta con
+            las manos vacías sobre la caja, y lo que más caro sale cuando falta.
+            Este bloque faltaba por completo: `contado` se declaraba y se enviaba,
+            pero no había ningún sitio donde escribirlo, así que llegaba siempre
+            vacío y el backend guardaba el cierre sin conciliar (ver
+            `hayDineroContado` en routes/closing.ts). Todo el código de la
+            conciliación existía; solo faltaba la caja donde teclear la cifra. */}
+        <div style={{ marginBottom: 18 }}>
+          <h3 style={{ margin:"0 0 4px", fontSize:16, fontWeight:800, color:"var(--ink)" }}>
+            Contar el dinero de la caja
+          </h3>
+          <p style={{ margin:"0 0 12px", fontSize:13, color:"var(--muted)" }}>
+            Es opcional: si no escribes nada aquí, el cierre se guarda solo con la mercancía.
+          </p>
+          <DineroCierre
+            preview={preview}
+            contado={contado}
+            setContado={setContado}
+            baseCash={preview.baseCash || preview.cash?.base || {}}
+          />
         </div>
 
         <div style={{ overflowX:"auto" as const, borderRadius:14, border:"1px solid var(--line)" }}>
