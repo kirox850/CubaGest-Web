@@ -285,13 +285,33 @@ export default function App() {
       return;
     }
     const acc = account!;
+    const habia = (await getPendingSales(acc)).length > 0;
 
+    // Orden importante: ventas primero, cierres después. Un cierre se calcula
+    // con las ventas que el servidor tenga en ese momento, así que si el cierre
+    // se mandara antes, creería que no se vendió nada durante el turno y
+    // marcaría como faltante todo lo que el cajero vendió sin conexión.
+    await empujarVentas(manual);
+
+    if (!habia && manual) showToast("No hay ventas pendientes por sincronizar","info");
+    const cerrados = await syncClosingsOffline(acc);
+    if (cerrados > 0) showToast(`${cerrados} cierre(s) sin conexión enviado(s) al servidor`,"success");
+  };
+
+  /**
+   * Sube las ventas pendientes. NO toca los cierres.
+   *
+   * Va separado de `runSync` porque la pantalla de cierre necesita subirlas
+   * ANTES de confirmar, y no después. Antes, `confirmClosing` llamaba directo a
+   * `/closing/confirm` saltándose este paso: si quedaban ventas sin subir en el
+   * dispositivo, el servidor conciliaba contra un período sin ellas y el cierre
+   * salía con un faltante fantasma de lo que sí se había vendido.
+   */
+  const empujarVentas = async (manual = false) => {
+    if (!hasAccount || syncRef.current) return;
+    const acc = account!;
     const pending = await getPendingSales(acc);
-    if (pending.length === 0) {
-      if (manual) showToast("No hay ventas pendientes por sincronizar","info");
-      await syncClosingsOffline(acc);
-      return;
-    }
+    if (pending.length === 0) return;
 
     syncRef.current = true;
     setSyncing(true);
@@ -400,13 +420,6 @@ export default function App() {
       } catch { /* sin red otra vez: se reintenta en la próxima venta */ }
     }
 
-    // Los cierres van AL FINAL, y no por capricho: un cierre se calcula con las
-    // ventas que el servidor tenga en ese momento. Si se enviara antes, el
-    // cierre creería que no se vendió nada durante el turno, marcaría como
-    // faltante todo lo que el cajero vendió sin conexión, y al llegar las
-    // ventas después descontarían el stock otra vez encima del conteo.
-    const cerrados = await syncClosingsOffline(acc);
-    if (cerrados > 0) showToast(`${cerrados} cierre(s) sin conexión enviado(s) al servidor`,"success");
   };
 
   // Cada cuánto refresca la app por su cuenta, con la pestaña abierta y con red.
@@ -636,7 +649,7 @@ export default function App() {
         {view==="pos"          && <POS user={user} showToast={showToast}/>}
         {view==="facturacion"  && <Facturacion user={user} showToast={showToast} onSyncRefresh={refreshPending} onManualSync={()=>runSync(true)} syncing={syncing}/>}
         {view==="contabilidad" && <Contabilidad user={user} showToast={showToast}/>}
-        {view==="cierre"       && <CierreCaja user={user} showToast={showToast}/>}
+        {view==="cierre"       && <CierreCaja user={user} showToast={showToast} onBeforeConfirm={empujarVentas}/>}
         {view==="transferencias" && <Transferencias user={user} showToast={showToast}/>}
         {view==="usuarios"     && <Usuarios currentUser={user} showToast={showToast}/>}
         {view==="auditoria"    && <Auditoria showToast={showToast}/>}

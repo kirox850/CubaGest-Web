@@ -48,6 +48,50 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
   // El informe fiscal se muestra como capa a pantalla completa DENTRO de la
   // pantalla (no en una pestaña nueva): siempre se puede volver con "Volver".
   const [showInforme, setShowInforme] = useState(false);
+  // ── Extraer de caja (F2) ──────────────────────────────────────────────────
+  // El dinero no se queda en la caja: sale a la caja fuerte entre turnos. Si eso
+  // no se registra, la apertura del turno siguiente ve menos dinero del que
+  // esperaba y salta un faltante que no existe. Por eso el botón va AQUÍ, y no
+  // escondido en la pantalla de movimientos: es una operación de caja fuerte.
+  const [cajas, setCajas]           = useState<any[]>([]);
+  const [showRetiro, setShowRetiro] = useState(false);
+  const [retiro, setRetiro] = useState({ locationId: "", amount: "", currency: "CUP", reason: "", businessAt: "" });
+
+  const abrirRetiro = async () => {
+    try {
+      const locs: any[] = await apiFetch("/locations");
+      setCajas(locs || []);
+      setRetiro(prev => ({ ...prev, locationId: prev.locationId || locs?.[0]?.id || "" }));
+      setShowRetiro(true);
+    } catch (e: any) { showToast(e.message, "error"); }
+  };
+
+  const guardarRetiro = async () => {
+    if (!retiro.locationId) return showToast("Elige la caja de la que sale el dinero", "error");
+    if (!(Number(retiro.amount) > 0)) return showToast("La cantidad tiene que ser mayor que cero", "error");
+    if (!retiro.reason.trim()) return showToast("Escribe para qué es el retiro. Sin motivo no se puede registrar.", "error");
+    try {
+      setSaving(true);
+      await apiFetch("/cash-movements", {
+        method: "POST",
+        body: {
+          locationId: retiro.locationId,
+          type: "salida",
+          amount: Number(retiro.amount),
+          currency: retiro.currency,
+          reason: retiro.reason.trim(),
+          // CUÁNDO SALIÓ el dinero, no cuándo se registró. Si se anota al día
+          // siguiente, el retiro se contaría en el periodo equivocado.
+          businessAt: retiro.businessAt ? new Date(retiro.businessAt).toISOString() : new Date().toISOString(),
+        },
+      });
+      showToast("Retiro de caja registrado", "success");
+      setShowRetiro(false);
+      setRetiro({ locationId: retiro.locationId, amount: "", currency: "CUP", reason: "", businessAt: "" });
+      load();
+    } catch (e: any) { showToast(e.message, "error"); }
+    finally { setSaving(false); }
+  };
 
   const load = useCallback(async()=>{
     try {
@@ -146,6 +190,7 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" as any }}>
           <button style={btn("secondary")} onClick={load}><Icon name="refresh" size={15}/>Actualizar</button>
           <button style={btn("secondary")} onClick={()=>setShowInforme(true)}><Icon name="print" size={15}/>Informe Fiscal</button>
+          <button style={btn("secondary")} onClick={abrirRetiro}><Icon name="contabilidad" size={16}/>Extraer de caja</button>
           <button style={btn("primary")} onClick={()=>setModal(true)}><Icon name="plus" size={16}/>Registrar Gasto</button>
         </div>
       </div>
@@ -267,6 +312,53 @@ const Contabilidad = ({ user, showToast }: { user: any; showToast: (m:string,t:s
         </Modal>
       )}
 
+      {showRetiro && (
+      <Modal title="Extraer de caja" onClose={()=>setShowRetiro(false)} width={460}>
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          <div style={{ background:"var(--input-bg)", borderRadius:12, padding:12, fontSize:13, color:"var(--ink)", lineHeight:1.6 }}>
+            El dinero de la caja se guarda en la caja fuerte entre turnos. Si eso no queda
+            registrado, la <strong>apertura del turno siguiente</strong> verá menos dinero del que
+            espera y saldrá un faltante que no existe.
+          </div>
+          <Field label="Caja de la que sale" required>
+            <select style={sel} value={retiro.locationId} onChange={e=>setRetiro(r=>({...r,locationId:e.target.value}))}>
+              {cajas.map((c:any)=><option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+            <Field label="Cantidad" required>
+              <input style={inp} type="number" min={0} step="0.01" value={retiro.amount}
+                onChange={e=>setRetiro(r=>({...r,amount:e.target.value}))}/>
+            </Field>
+            <Field label="Moneda" required>
+              <select style={sel} value={retiro.currency} onChange={e=>setRetiro(r=>({...r,currency:e.target.value}))}>
+                {["CUP","USD","EUR"].map(c=><option key={c}>{c}</option>)}
+              </select>
+            </Field>
+          </div>
+          <Field label="Motivo" required>
+            <input style={inp} value={retiro.reason} placeholder="Depósito en caja fuerte, retiro para pagos..."
+              onChange={e=>setRetiro(r=>({...r,reason:e.target.value}))}/>
+          </Field>
+          <div>
+            <div style={{ fontSize:12, fontWeight:700, color:"var(--ink)", marginBottom:5 }}>
+              Hora real del retiro
+            </div>
+            <input style={inp} type="datetime-local" value={retiro.businessAt}
+              onChange={e=>setRetiro(r=>({...r,businessAt:e.target.value}))}/>
+            <div style={{ fontSize:11, color:"var(--muted)", marginTop:4 }}>
+              Cuándo salió el dinero de verdad. Déjalo vacío si es ahora mismo.
+            </div>
+          </div>
+          <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+            <button style={btn("secondary")} onClick={()=>setShowRetiro(false)}>Cancelar</button>
+            <button style={{ ...btn("primary"), opacity:saving?0.6:1 }} onClick={guardarRetiro} disabled={saving}>
+              {saving ? "Guardando..." : "Registrar retiro"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+      )}
       {modal && (
         <Modal title="Registrar Egreso" onClose={()=>setModal(false)} width={460}>
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
