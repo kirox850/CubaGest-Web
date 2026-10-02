@@ -634,7 +634,10 @@ export default function App() {
       <style>{`
         .cg-sidebar { display: none !important; }
         .cg-bottomnav { display: flex !important; }
-        .cg-content { padding-bottom: 96px !important; }
+        /* La barra flotante no toca el borde: ocupa desde 34px del safe-area
+           hacia arriba (~55px de alto), así que hacen falta ~90px de aire.
+           Con 96 quedaba justa en un iPhone con indicador. */
+        .cg-content { padding-bottom: 112px !important; }
         @media (min-width: 1024px) {
           .cg-sidebar { display: flex !important; }
           .cg-bottomnav { display: none !important; }
@@ -676,16 +679,33 @@ export default function App() {
         })}
       </nav>
 
-      {/* Bottom navigation (móvil) — la altura extra del safe-area ya la aporta
-          el padding-bottom del env(), el contenido respira con 96px arriba */}
-      <div className="cg-bottomnav" style={{ position:"fixed" as any, bottom:0, left:0, right:0, background:"var(--card, #ffffff)", borderTop:"1px solid var(--line, #e8e0d8)", display:"flex", zIndex:100, paddingBottom:"max(env(safe-area-inset-bottom), 4px)" }}>
-        {navItems.map(item=>(
-          <button key={item.id} onClick={()=>{ openModule(item.id); setProfileOpen(false); }} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"8px 4px 6px", border:"none", cursor:"pointer", background:"none", color:view===item.id?"var(--brand)":"var(--muted, #94A3B8)", gap:3, minWidth:0 }}>
-            <Icon name={item.icon} size={22} color={view===item.id?"var(--brand)":"#64748B"}/>
-            <span style={{ fontSize:10, fontWeight:view===item.id?700:400, whiteSpace:"nowrap" as any, overflow:"hidden", textOverflow:"ellipsis", maxWidth:"100%" }}>{item.label}</span>
-            {view===item.id && <div style={{ width:4, height:4, borderRadius:"50%", background:"var(--brand)", marginTop:2 }}/>}
+      {/* Bottom navigation (móvil) — cristal líquido.
+
+    El fondo, el borde y el difuminado NO van aquí: viven en index.css
+    (.cg-bottomnav). Un estilo en línea gana a una clase, y si el background
+    siguiera en el JSX el backdrop-filter no tendría nada que difuminar y la barra
+    se vería como una placa translúcida normal. Solo queda en línea el
+    safe-area, que depende del dispositivo y no se puede expresar en CSS aquí.
+
+    Y aquí va en `bottom`, no en `paddingBottom`: flotando, el margen del
+    indicador de inicio tiene que EMPUJAR la pastilla hacia arriba. Como relleno
+    dentro, la esquina redondeada se quedaría pegada al borde de la pantalla con
+    un hueco transparente debajo, y no parecería flotar. */}
+      <div className="cg-bottomnav" style={{ bottom:"max(env(safe-area-inset-bottom), 12px)" }}>
+        {navItems.map(item=>{
+          const on = view===item.id;
+          return (
+          <button
+            key={item.id}
+            onClick={()=>{ openModule(item.id); setProfileOpen(false); }}
+            className={on ? "cg-tab cg-tab-active" : "cg-tab"}
+            style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"10px 4px 6px", border:"none", cursor:"pointer", background:"none", gap:3, minWidth:0 }}
+          >
+            <Icon name={item.icon} size={22} color={on ? "var(--brand)" : "currentColor"}/>
+            <span style={{ fontSize:10, fontWeight:on?700:500, whiteSpace:"nowrap" as any, overflow:"hidden", textOverflow:"ellipsis", maxWidth:"100%" }}>{item.label}</span>
           </button>
-        ))}
+          );
+        })}
       </div>
 
 

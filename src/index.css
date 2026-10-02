@@ -86,6 +86,89 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
 html.dark ::placeholder { color: #64748b; }
 input, select, button, textarea { font-family: inherit; }
 
+/* ── Barra de navegación: cristal líquido flotante ────────────────────────────
+   No hay un componente "glass" en el repo ni en el sistema: esto es una
+   IMITACIÓN con backdrop-filter, como se hace en web. La refracción real del
+   vidrio no existe en CSS; blur + saturación es la aproximación estándar y es
+   la más cercana que se puede conseguir.
+
+   LO QUE HACE QUE PAREZCA VIDRIO Y NO UNA BARRA BLANCA:
+     · el saturate(180%) — sin esto el desenfoque sale apagado y plano
+     · el borde claro de 1px TODO alrededor — es el canto que hace la luz; en
+       una barra a todo ancho solo se notaba arriba, y al flotar el borde entero
+       es lo que dibuja la pastilla
+     · el fondo translúcido, nunca opaco — si fuera opaco el blur no tendría
+       nada que difuminar y se vería una placa gris
+
+   FLOTANTE, no a todo ancho. Los 16px laterales son los que la separan del
+   borde: es lo que la hace parecer suspendida en vez de empotrada. El radio de
+   24px es el del cristal de iOS y tiene que coincidir con el margen, o la
+   pastilla se ve estrecha.
+
+   La sombra proyectada hace el resto del trabajo: sin ella, una forma clara
+   translúcida sobre un fondo claro es casi invisible por el borde. */
+.cg-bottomnav {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  /* El inline lleva el safe-area; aquí solo el margen aesthetic por defecto. */
+  bottom: 12px;
+  display: flex;
+  z-index: 100;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.62);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 10px 30px rgba(15, 23, 42, 0.10);
+  /* Un punto más opaco arriba y menos abajo: da profundidad al cristal. Sin
+     esto la pastilla se ve plana contra una superficie lisa. */
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.30), transparent 55%);
+}
+
+/* Lo que hay detrás puede ser de cualquier color: un icono claro sobre un fondo
+   claro desaparece. Este gris tiene contraste suficiente contra el cristal
+   translúcido en ambos temas. */
+.cg-bottomnav .cg-tab { color: #5b6472; position: relative; }
+.cg-bottomnav .cg-tab.cg-tab-active { color: var(--brand); }
+
+/* La marca de la pestaña activa es una rayita, no un punto. El icono ya se
+   distingue por color y por peso de etiqueta; un punto más encima hace que la
+   barra se lea como app de 2015 y rompe la línea del cristal. */
+.cg-bottomnav .cg-tab-active::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--brand);
+}
+
+.dark .cg-bottomnav {
+  background: rgba(14, 14, 28, 0.55);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 30px rgba(0, 0, 0, 0.45);
+  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.06), transparent 55%);
+}
+.dark .cg-bottomnav .cg-tab { color: #94a3b8; }
+.dark .cg-bottomnav .cg-tab.cg-tab-active { color: var(--brand-light); }
+
+/* Si el navegador no sabe difuminar, el fondo translúcido dejaría el texto
+   sobre un degradado y se leería fatal. Se cae a opaco, que es feo pero legible.
+   La sombra se queda: es lo que sigue separando la barra del contenido. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .cg-bottomnav {
+    background: var(--card);
+    background-image: none;
+    border-color: var(--line);
+  }
+}
+
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
