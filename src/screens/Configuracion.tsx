@@ -89,12 +89,21 @@ export const puede = (t: { roles?: string[]; perms?: string[] }, rol: string | u
   (!t.roles || t.roles.includes(rol || '')) && (!t.perms || t.perms.some(p => perms.includes(p)));
 
 const Configuracion = ({
-  user, perms, showToast, onClose, initialGrupo,
+  user, perms, showToast, onClose, grupoId: grupoIdProp,
 }: {
   user: any; perms: string[]; showToast: (m: string, t: string) => void;
   onClose: () => void;
-  /** Qué grupo abre la barra al entrar. Si no cabe con el rol, se usa el primero. */
-  initialGrupo?: string;
+  /**
+   * Qué grupo se ve. Lo CONTROLA la barra de abajo, no este componente.
+   *
+   * Antes vivía en `useState` aquí dentro, y eso rompía: `useState` solo toma el
+   * valor en el PRIMER montaje, así que al pulsar otro grupo la prop cambiaba y el
+   * estado interno ni se enteraba — la pantalla se quedaba en Cajas para siempre.
+   * Dos sitios mandando sobre la misma cosa, que es justo cómo se desincronizan.
+   * Ahora solo manda la barra. Si el grupo no cabe con el rol, se usa el primero
+   * que sí: `grupo` de abajo ya tiene ese fallo cubierto.
+   */
+  grupoId?: string;
 }) => {
   // El grupo activo y la parte activa dentro de él.
 //
@@ -102,7 +111,7 @@ const Configuracion = ({
 // Configuración— y solo se guarda aquí la PARTE, que es lo que no pinta la barra.
 // Por eso `grupoId` viene como prop y no se calcula aquí: dos listas que se
 // puedan desincronizar acabarían mostrando una cosa yEnabled otra.
-const [grupoId] = useState<string | null>(initialGrupo ?? null);
+const grupoId = grupoIdProp ?? null;
 const [parte, setParte] = useState<TabId | null>(null);
 
 // Un grupo con todas sus partes cerradas no aparece: un botón en la barra que no

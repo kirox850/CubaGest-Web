@@ -753,7 +753,8 @@ export default function App() {
           user={user}
           perms={perms}
           showToast={showToast}
-          initialGrupo={configGrupo}
+          grupoId={configGrupo}
+          key={configGrupo}
           onClose={()=>setConfigOpen(false)}
         />
       )}
