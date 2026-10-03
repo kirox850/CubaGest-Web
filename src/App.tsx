@@ -695,10 +695,14 @@ export default function App() {
       {/* Sidebar desktop (≥1024px) — top con safe-area por si corre como PWA
           en una tablet con notch; bottom alineado al borde real */}
       <nav className="cg-sidebar" style={{ position:"fixed", top:"calc(56px + env(safe-area-inset-top))", bottom:0, left:0, width:216, background:"var(--card, #ffffff)", borderRight:"1px solid var(--line, #e8e0d8)", display:"flex", flexDirection:"column", padding:10, gap:2, zIndex:90, overflowY:"auto" }}>
-        {navItems.map(item=>{
-          const on = view===item.id;
+        {barraItems.map(item=>{
+          const on = configOpen ? configGrupo===item.id : view===item.id;
           return (
-            <button key={item.id} onClick={()=>{ openModule(item.id); setProfileOpen(false); }}
+            <button key={item.id} onClick={()=>{
+              setProfileOpen(false);
+              if (configOpen) setConfigGrupo(item.id);
+              else openModule(item.id);
+            }}
               style={{ display:"flex", alignItems:"center", gap:11, padding:"11px 14px", borderRadius:12, border:"none", cursor:"pointer", textAlign:"left" as any, fontSize:13.5, fontWeight:on?700:500, background:on?"rgba(var(--brand-rgb),0.10)":"transparent", color:on?"var(--brand)":"var(--muted, #64748B)", transition:"background 0.12s" }}>
               <Icon name={item.icon} size={19} color={on?"var(--brand)":"#64748B"}/>
               {item.label}

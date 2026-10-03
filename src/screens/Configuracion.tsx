@@ -141,7 +141,7 @@ const parteBtn = (t: typeof partes[number]) => {
     // fondo a medias, y con la barra de abajo cambiando de contenido quedaba medio
     // modal y medio página. El zIndex va por encima del contenido pero POR DEBAJO de
     // la barra flotante, que se pinta desde el shell y tiene que quedar accesible.
-    <div style={{ position: "fixed", inset: 0, background: "var(--bg)", zIndex: 900, display: "flex", flexDirection: "column" }}>
+    <div style={{ position: "fixed", top: "calc(56px + env(safe-area-inset-top))", left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 80, display: "flex", flexDirection: "column" }}>
       <style>{`
         /* Todo el layout de las pestañas vive en CSS, no en estilos inline: un
            style="" gana a la media query y el paso a lateral en pantalla
@@ -158,6 +158,11 @@ const parteBtn = (t: typeof partes[number]) => {
           .cfg-tabs { flex-direction:column; border-bottom:none; border-right:1px solid var(--line); width:216px; padding:12px; gap:2px; overflow-y:auto; }
           .cfg-tab { width:100%; }
           .cfg-body { padding:24px 26px 30px; }
+          /* El sidebar de escritorio ocupa 216px y va ENCIMA de este overlay
+             (zIndex 90 contra 80), así que el contenido tiene que apartarse igual
+             que el de la app normal. Sin esto los 216px de la izquierda quedan
+             debajo del sidebar y no se pueden leer ni pulsar. */
+          .cfg-wrap { margin-left:232px; }
         }
       `}</style>
 
