@@ -537,6 +537,27 @@ export default function App() {
     { id:"transferencias", label:"Envíos",       icon:"transferencias" },
   ].filter(n=>perms.includes(n.id));
 
+  // ── La barra solo admite 5 ──────────────────────────────────────────────
+  //
+  // Con permisos de admin son 7 iconos en una barra de 64px: se leen regular y
+  // sobre todo no se distinguen entre sí. Cinco es el número en el que cada uno
+  // todavía se reconoce de un vistazo, que es justo lo que hace una barra.
+  //
+  // El orden NO es el de la lista: es por frecuencia de uso. Punto de Venta va
+  // segundo solo porque Dashboard es la puerta de entrada.
+  const PREFERIDAS_BARRA = ["dashboard","pos","inventario","cierre","facturacion"];
+  const permitidos = navItems;
+  const barraItems = permitidos
+    .slice()
+    .sort((a,b)=>{
+      const pa = PREFERIDAS_BARRA.indexOf(a.id);
+      const pb = PREFERIDAS_BARRA.indexOf(b.id);
+      return (pa===-1?PREFERIDAS_BARRA.length:pa) - (pb===-1?PREFERIDAS_BARRA.length:pb);
+    })
+    .slice(0, PREFERIDAS_BARRA.length);
+  // Los que se quedan fuera van al menú de perfil, en el MISMO orden.
+  const desbordados = permitidos.filter(n=>!barraItems.includes(n));
+
   // Módulo efectivo: el de la URL solo si el rol lo permite (el backend
   // igualmente enforcea, pero así un deep-link ajeno no renderiza la screen).
   // Los grupos visibles, con el mismo filtro por rol que aplica dentro del
@@ -550,9 +571,9 @@ export default function App() {
   // La MISMA barra, dos contenidos: módulos o grupos de Configuración. Es la misma
   // pieza y el mismo `cg-bottomnav` porque es la misma barra; solo cambia la lista.
   // No hay dos barras superpuestas — hay una que se vacía y se rellena.
-  const barraItems = configOpen
+  const itemsDeBarra = configOpen
     ? gruposVisibles.map(g => ({ id: g.id, label: g.label, icon: g.icon }))
-    : navItems;
+    : barraItems;
 
   const allowedModules = new Set<string>([...navItems.map(n=>n.id), "dashboard"]);
   if (user.role==="admin") allowedModules.add("usuarios");
@@ -608,7 +629,19 @@ export default function App() {
                   <button onClick={()=>{setConfigOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
                     <Icon name="settings" size={16} color="#475569"/>Configuración
                   </button>
-                  <button onClick={()=>{setTourOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
+                                      {/* Los módulos que no caben en la barra. Van aquí arriba, justo
+                        después de Configuración y antes del tour: son módulos de
+                        trabajo, y dejarlos debajo de los ajustes los escondería. */}
+                    {desbordados.map(n=>(
+                      <button
+                        key={n.id}
+                        onClick={()=>{openModule(n.id);setProfileOpen(false);}}
+                        style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}
+                      >
+                        <Icon name={n.icon} size={16} color="#475569"/>{n.label}
+                      </button>
+                    ))}
+<button onClick={()=>{setTourOpen(true);setProfileOpen(false);}} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
                     <Icon name="dashboard" size={16} color="#475569"/>Ver tour de bienvenida
                   </button>
                   <button onClick={()=>setDarkMode(v=>!v)} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:12, border:"none", cursor:"pointer", background:"none", color:"var(--ink, #475569)", fontSize:14, fontWeight:600 }}>
@@ -695,7 +728,7 @@ export default function App() {
       {/* Sidebar desktop (≥1024px) — top con safe-area por si corre como PWA
           en una tablet con notch; bottom alineado al borde real */}
       <nav className="cg-sidebar" style={{ position:"fixed", top:"calc(56px + env(safe-area-inset-top))", bottom:0, left:0, width:216, background:"var(--card, #ffffff)", borderRight:"1px solid var(--line, #e8e0d8)", display:"flex", flexDirection:"column", padding:10, gap:2, zIndex:90, overflowY:"auto" }}>
-        {barraItems.map(item=>{
+        {itemsDeBarra.map(item=>{
           const on = configOpen ? configGrupo===item.id : view===item.id;
           return (
             <button key={item.id} onClick={()=>{
@@ -724,7 +757,7 @@ export default function App() {
     dentro, la esquina redondeada se quedaría pegada al borde de la pantalla con
     un hueco transparente debajo, y no parecería flotar. */}
       <div className="cg-bottomnav" style={{ bottom:"max(env(safe-area-inset-bottom), 12px)" }}>
-        {barraItems.map(item=>{
+        {itemsDeBarra.map(item=>{
           const on = configOpen ? configGrupo===item.id : view===item.id;
           return (
           <button
