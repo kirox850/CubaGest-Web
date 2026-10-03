@@ -32,7 +32,7 @@ import Transferencias from "@/screens/Transferencias";
 import Usuarios from "@/screens/Usuarios";
 import Auditoria from "@/screens/Auditoria";
 import PlanModal from "@/screens/PlanModal";
-import Configuracion from "@/screens/Configuracion";
+import Configuracion, { GRUPOS, puede } from "@/screens/Configuracion";
 import NotificationsBell from "@/components/shared/NotificationsBell";
 import DiscountsAdmin from "@/screens/DiscountsAdmin";
 import CurrenciesSettings from "@/screens/CurrenciesSettings";
@@ -98,7 +98,10 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
-  const [configTab, setConfigTab] = useState<"caja"|"monedas"|"descuentos"|"usuarios"|"auditoria"|"plan">("caja");
+  // Qué grupo de Configuración está abierto. Ahora es el grupo y no una pestaña:
+  // la barra de abajo cambia sus botones por estos cuando entras, así que quien
+  // tiene que saber cuál está activo es la barra, no la pantalla.
+  const [configGrupo, setConfigGrupo] = useState<string>("caja");
   const [discountsOpen, setDiscountsOpen] = useState(false);
   const [currenciesOpen, setCurrenciesOpen] = useState(false);
   // Tour de bienvenida: se muestra UNA sola vez (bandera persistente).
@@ -536,6 +539,21 @@ export default function App() {
 
   // Módulo efectivo: el de la URL solo si el rol lo permite (el backend
   // igualmente enforcea, pero así un deep-link ajeno no renderiza la screen).
+  // Los grupos visibles, con el mismo filtro por rol que aplica dentro del
+  // componente. Se calcula aquí porque quien los PINTA es la barra, no la
+  // pantalla: si cada uno filtrara por su cuenta, un grupo cerrado podría salir
+  // en la barra y no abrir nada.
+  const gruposVisibles = GRUPOS
+    .map(g => ({ ...g, sub: g.sub.filter(t => puede(t, user?.role, perms)) }))
+    .filter(g => g.sub.length > 0);
+
+  // La MISMA barra, dos contenidos: módulos o grupos de Configuración. Es la misma
+  // pieza y el mismo `cg-bottomnav` porque es la misma barra; solo cambia la lista.
+  // No hay dos barras superpuestas — hay una que se vacía y se rellena.
+  const barraItems = configOpen
+    ? gruposVisibles.map(g => ({ id: g.id, label: g.label, icon: g.icon }))
+    : navItems;
+
   const allowedModules = new Set<string>([...navItems.map(n=>n.id), "dashboard"]);
   if (user.role==="admin") allowedModules.add("usuarios");
   if (perms.includes("auditoria")) allowedModules.add("auditoria");
@@ -549,7 +567,17 @@ export default function App() {
           de la barra de estado del iPhone (reloj/batería); en desktop env() = 0 */}
       <div style={{ background:"#0B1220", padding:"0 16px", paddingTop:"env(safe-area-inset-top)", height:"calc(56px + env(safe-area-inset-top))", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, zIndex:10, boxShadow:"0 1px 8px rgba(0,0,0,0.12)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <BrandLogo size={32}/>
+          {configOpen ? (
+            <button
+              onClick={()=>setConfigOpen(false)}
+              aria-label="Volver"
+              style={{ display:"flex", alignItems:"center", cursor:"pointer", background:"none", border:"none", padding:2, marginLeft:-2, color:"#ffffff" }}
+            >
+              <Icon name="arrow_left" size={22}/>
+            </button>
+          ) : (
+            <BrandLogo size={32}/>
+          )}
           <div style={{ color:"#ffffff", fontWeight:800, fontSize:15 }}>CubaGest</div>
         </div>
         {/* Campanita de avisos + botón de perfil */}
@@ -667,10 +695,14 @@ export default function App() {
       {/* Sidebar desktop (≥1024px) — top con safe-area por si corre como PWA
           en una tablet con notch; bottom alineado al borde real */}
       <nav className="cg-sidebar" style={{ position:"fixed", top:"calc(56px + env(safe-area-inset-top))", bottom:0, left:0, width:216, background:"var(--card, #ffffff)", borderRight:"1px solid var(--line, #e8e0d8)", display:"flex", flexDirection:"column", padding:10, gap:2, zIndex:90, overflowY:"auto" }}>
-        {navItems.map(item=>{
-          const on = view===item.id;
+        {barraItems.map(item=>{
+          const on = configOpen ? configGrupo===item.id : view===item.id;
           return (
-            <button key={item.id} onClick={()=>{ openModule(item.id); setProfileOpen(false); }}
+            <button key={item.id} onClick={()=>{
+              setProfileOpen(false);
+              if (configOpen) setConfigGrupo(item.id);
+              else openModule(item.id);
+            }}
               style={{ display:"flex", alignItems:"center", gap:11, padding:"11px 14px", borderRadius:12, border:"none", cursor:"pointer", textAlign:"left" as any, fontSize:13.5, fontWeight:on?700:500, background:on?"rgba(var(--brand-rgb),0.10)":"transparent", color:on?"var(--brand)":"var(--muted, #64748B)", transition:"background 0.12s" }}>
               <Icon name={item.icon} size={19} color={on?"var(--brand)":"#64748B"}/>
               {item.label}
@@ -692,12 +724,16 @@ export default function App() {
     dentro, la esquina redondeada se quedaría pegada al borde de la pantalla con
     un hueco transparente debajo, y no parecería flotar. */}
       <div className="cg-bottomnav" style={{ bottom:"max(env(safe-area-inset-bottom), 12px)" }}>
-        {navItems.map(item=>{
-          const on = view===item.id;
+        {barraItems.map(item=>{
+          const on = configOpen ? configGrupo===item.id : view===item.id;
           return (
           <button
             key={item.id}
-            onClick={()=>{ openModule(item.id); setProfileOpen(false); }}
+            onClick={()=>{
+              setProfileOpen(false);
+              if (configOpen) setConfigGrupo(item.id);
+              else openModule(item.id);
+            }}
             className={on ? "cg-tab cg-tab-active" : "cg-tab"}
             style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"10px 4px 6px", border:"none", cursor:"pointer", background:"none", gap:3, minWidth:0 }}
           >
@@ -717,7 +753,8 @@ export default function App() {
           user={user}
           perms={perms}
           showToast={showToast}
-          initialTab={configTab}
+          grupoId={configGrupo}
+          key={configGrupo}
           onClose={()=>setConfigOpen(false)}
         />
       )}
